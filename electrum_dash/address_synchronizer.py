@@ -30,8 +30,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Set, Tuple, NamedTuple, Sequen
 
 from . import bitcoin, util
 from .bitcoin import COINBASE_MATURITY
-from .dash_ps import PSManager, PS_MIXING_TX_TYPES
-from .dash_tx import PSCoinRounds, tx_header_to_tx_type
+from .dash_ps import PSManager, PS_MIXING_TX_TYPES, PSCoinRounds
+from .dash_tx import tx_header_to_tx_type
 from .util import profiler, bfh, TxMinedInfo, UnrelatedTransactionException
 from .protx import ProTxManager
 from .transaction import Transaction, TxOutput, TxInput, PartialTxInput, TxOutpoint, PartialTransaction
@@ -908,6 +908,10 @@ class AddressSynchronizer(Logger):
     def get_addr_outputs(self, address: str) -> Dict[TxOutpoint, PartialTxInput]:
         coins, spent = self.get_addr_io(address)
         out = {}
+        if self.psman.enabled:
+            ps_origin_addrs = self.db.get_ps_origin_addrs()
+        else:
+            ps_origin_addrs = []
         for prevout_str, v in coins.items():
             ps_rounds = None
             ps_denom = self.db.get_ps_denom(prevout_str)
@@ -917,6 +921,9 @@ class AddressSynchronizer(Logger):
                 ps_collateral = self.db.get_ps_collateral(prevout_str)
                 if ps_collateral:
                     ps_rounds = int(PSCoinRounds.COLLATERAL)
+            if ps_rounds is None and ps_origin_addrs:
+                if address in ps_origin_addrs:
+                    ps_rounds = int(PSCoinRounds.MIX_ORIGIN)
             if ps_rounds is None:
                 ps_other = self.db.get_ps_other(prevout_str)
                 if ps_other:

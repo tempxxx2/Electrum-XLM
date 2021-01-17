@@ -53,7 +53,7 @@ from electrum_dash import (keystore, ecc, constants, util, bitcoin, commands,
                            paymentrequest)
 from electrum_dash.base_crash_reporter import BaseCrashReporter
 from electrum_dash.bitcoin import COIN, is_address
-from electrum_dash.dash_tx import DashTxError, PSCoinRounds
+from electrum_dash.dash_tx import DashTxError
 from electrum_dash.plugin import run_hook, BasePlugin
 from electrum_dash.i18n import _
 from electrum_dash.util import (format_time,

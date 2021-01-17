@@ -16,7 +16,7 @@ from . import constants, util
 from .bip32 import convert_bip32_intpath_to_strpath
 from .bitcoin import (COIN, address_to_script,
                       is_address, pubkey_to_address)
-from .dash_tx import (STANDARD_TX, PSTxTypes, SPEC_TX_NAMES, PSCoinRounds,
+from .dash_tx import (STANDARD_TX, PSTxTypes, SPEC_TX_NAMES,
                       str_ip, CTxIn, CTxOut)
 from .dash_msg import (DSPoolStatusUpdate, DSMessageIDs, ds_msg_str,
                        ds_pool_state_str, DashDsaMsg, DashDsiMsg, DashDssMsg,
@@ -36,6 +36,28 @@ ADDR_PATTERN = re.compile(
     'abcdefghijkmnopqrstuvwxyz]{20,80})')
 FILTERED_TXID = '<filtered txid>'
 FILTERED_ADDR = '<filtered address>'
+
+
+class PSCoinRounds(IntEnum):
+    '''PS Tx types'''
+    MINUSINF = -1e9
+    OTHER = -3
+    MIX_ORIGIN = -2
+    COLLATERAL = -1
+
+
+PS_COIN_ROUNDS_STR = {
+    PSCoinRounds.MINUSINF: _('Unknown'),
+    PSCoinRounds.OTHER: 'Other',
+    PSCoinRounds.MIX_ORIGIN: 'Mix Origin',
+    PSCoinRounds.COLLATERAL: 'Collateral',
+}
+
+
+def ps_coin_rounds_str(ps_rounds):
+    if ps_rounds not in PS_COIN_ROUNDS_STR:
+        return str(ps_rounds)
+    return PS_COIN_ROUNDS_STR[int(ps_rounds)]
 
 
 def filter_log_line(line):
@@ -169,7 +191,10 @@ POOL_MAX_PARTICIPANTS = 20
 PRIVATESEND_QUEUE_TIMEOUT = 30
 PRIVATESEND_SESSION_MSG_TIMEOUT = 40
 
-WAIT_FOR_MN_TXS_TIME_SEC = 120
+WAIT_FOR_MN_TXS_TIME_SEC = 120  # await tx from MN (collateral, denominate)
+
+MIN_NEW_DENOMS_DELAY = 30       # minimum delay betweeen new denoms txs
+MAX_NEW_DENOMS_DELAY = 300      # maximum delay betweeen new denoms txs
 
 
 # PSManager states
@@ -1590,6 +1615,20 @@ class PSManager(Logger):
             return _('Allow spend other PS coins')
 
     @property
+    def group_origin_coins_by_addr(self):
+        return self.wallet.db.get_ps_data('group_origin_coins_by_addr', False)
+
+    @group_origin_coins_by_addr.setter
+    def group_origin_coins_by_addr(self, group):
+        self.wallet.db.set_ps_data('group_origin_coins_by_addr', bool(group))
+
+    def group_origin_coins_by_addr_data(self, full_txt=False):
+        if full_txt:
+            return _('In new mix transactions group origin coins by address')
+        else:
+            return _('Group origin coins by address')
+
+    @property
     def ps_collateral_cnt(self):
         return len(self.wallet.db.get_ps_collaterals())
 
@@ -1759,6 +1798,14 @@ class PSManager(Logger):
         self.wallet.db.set_ps_data('last_mix_stop_time', time)
 
     @property
+    def last_denoms_tx_time(self):
+        return self.wallet.db.get_ps_data('last_denoms_tx_time', 0)  # Jan 1970
+
+    @last_denoms_tx_time.setter
+    def last_denoms_tx_time(self, time):
+        self.wallet.db.set_ps_data('last_denoms_tx_time', time)
+
+    @property
     def last_mixed_tx_time(self):
         return self.wallet.db.get_ps_data('last_mixed_tx_time', 0)  # Jan 1970
 
@@ -1837,6 +1884,11 @@ class PSManager(Logger):
 
     def warn_ps_ks_data(self):
         return _('Show warning on exit if PS Keystore contain funds')
+
+    def filter_out_hw_ks_coins(self, coins):
+        if self.is_hw_ks:
+            coins = [c for c in coins if c.is_ps_ks]
+        return coins
 
     def get_ps_data_info(self):
         res = []
@@ -2058,6 +2110,7 @@ class PSManager(Logger):
                                 excluded_addresses=w.frozen_addresses,
                                 mature_only=True)
             utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
+            utxos = self.filter_out_hw_ks_coins(utxos)
             for c in utxos:
                 if c.address not in self._keypairs_cache[KP_SPENDABLE]:
                     return True, prev_kp_state
@@ -2072,7 +2125,8 @@ class PSManager(Logger):
                     return True, prev_kp_state
 
             # check spendable ps coins keys (already saved denoms/collateral)
-            for c in w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL):
+            for c in self.filter_out_hw_ks_coins(
+                    w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL)):
                 ps_rounds = c.ps_rounds
                 if ps_rounds >= self.mix_rounds:
                     continue
@@ -2175,8 +2229,7 @@ class PSManager(Logger):
                             excluded_addresses=w.frozen_addresses,
                             mature_only=True)
         utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
-        if self.is_hw_ks:
-            utxos = [utxo for utxo in utxos if utxo.is_ps_ks]
+        utxos = self.filter_out_hw_ks_coins(utxos)
         for c in utxos:
             if self.state != PSStates.Mixing:
                 self._cleanup_unfinished_keypairs_cache()
@@ -2206,7 +2259,8 @@ class PSManager(Logger):
         w = self.wallet
         cached = 0
         ps_spendable_cache = self._keypairs_cache[KP_PS_SPENDABLE]
-        for c in w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL):
+        for c in self.filter_out_hw_ks_coins(
+                w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL)):
             if self.state != PSStates.Mixing:
                 self._cleanup_unfinished_keypairs_cache()
                 return
@@ -2534,6 +2588,7 @@ class PSManager(Logger):
                             mature_only=True, confirmed_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() > MIN_DENOM_VAL]
+        coins = self.filter_out_hw_ks_coins(coins)
         return sorted(coins, key=lambda x: (x.ps_rounds, -x.value_sats()))
 
     def check_protx_info_completeness(self):
@@ -2762,9 +2817,7 @@ class PSManager(Logger):
             elif (not self._not_enough_funds
                     and not self.ps_collateral_cnt
                     and not self.calc_need_denoms_amounts(use_cache=True)):
-                coins = w.get_utxos(None,
-                                    excluded_addresses=w.frozen_addresses)
-                coins = [c for c in coins if not w.is_frozen_coin(c)]
+                coins = await self.get_next_coins_for_mixing(for_denoms=False)
                 if not coins:
                     await asyncio.sleep(5)
                     continue
@@ -2792,9 +2845,7 @@ class PSManager(Logger):
                     await self.cleanup_new_denoms_wfl()
             elif (not self._not_enough_funds
                     and self.calc_need_denoms_amounts(use_cache=True)):
-                coins = w.get_utxos(None,
-                                    excluded_addresses=w.frozen_addresses)
-                coins = [c for c in coins if not w.is_frozen_coin(c)]
+                coins = await self.get_next_coins_for_mixing()
                 if not coins:
                     await asyncio.sleep(5)
                     continue
@@ -2970,14 +3021,71 @@ class PSManager(Logger):
             self.logger.debug(f'Remove {addr} from synchronizer')
             w.synchronizer.remove_addr(addr)
 
+    async def get_next_coins_for_mixing(self, for_denoms=True):
+        if self.group_origin_coins_by_addr:  # delay between new transactions
+            rand_interval = random.randint(MIN_NEW_DENOMS_DELAY,
+                                           MAX_NEW_DENOMS_DELAY)
+            log_info = True
+            while time.time() - self.last_denoms_tx_time < rand_interval:
+                if log_info:
+                    elapsed_time = time.time() - self.last_denoms_tx_time
+                    s = max(0, rand_interval - elapsed_time)
+                    self.logger.info(f'Waiting {s} seconds before starting'
+                                     f' new transactions workflow')
+                    log_info = False
+                await asyncio.sleep(1)
+        return self._get_next_coins_for_mixing(for_denoms=for_denoms)
+
+    def _get_next_coins_for_mixing(self, for_denoms=True):
+        w = self.wallet
+        coins = w.get_utxos(None,
+                            excluded_addresses=w.frozen_addresses,
+                            mature_only=True, confirmed_only=True,
+                            consider_islocks=True, include_ps=True)
+        coins = [c for c in coins
+                 if c.ps_rounds in [None, PSCoinRounds.MIX_ORIGIN]]
+        coins = [c for c in coins if not w.is_frozen_coin(c)]
+        coins = self.filter_out_hw_ks_coins(coins)
+        if not coins:
+            return {'total_val': 0, 'coins': []}
+
+        coins_by_address = {}
+        for c in coins:
+            if self.group_origin_coins_by_addr:
+                addr = c.address
+            else:
+                addr = 'All'
+            if addr not in coins_by_address:
+                coins_by_address[addr] = {
+                    'total_val': c.value_sats(),
+                    'coins': [c],
+                    'mix_origin': c.ps_rounds is not None}
+            else:
+                coins_by_address[addr]['total_val'] += c.value_sats()
+                coins_by_address[addr]['coins'].append(c)
+        coins = sorted(coins_by_address.values(),
+                       key=lambda x: (x['mix_origin'], x['total_val']),
+                       reverse=True)
+        if self.group_origin_coins_by_addr:
+            while coins and for_denoms:
+                if self.calc_need_denoms_amounts(coins[0]['coins'],
+                                                 use_cache=True,
+                                                 use_all_coins=False):
+                    break
+                coins = coins[1:]
+        if not coins:
+            return {'total_val': 0, 'coins': []}
+        else:
+            return coins[0]
+
     def calc_need_denoms_amounts(self, coins=None, use_cache=False,
-                                 on_keep_amount=False):
+                                 on_keep_amount=False, use_all_coins=True):
         w = self.wallet
         fee_per_kb = self.config.fee_per_kb()
         if fee_per_kb is None:
             raise NoDynamicFeeEstimates()
 
-        if coins is not None:  # calc on coins selected from GUI
+        if coins and use_all_coins:  # calc on coins selected from GUI
             return self._calc_denoms_amounts_from_coins(coins, fee_per_kb)
 
         if use_cache:
@@ -2990,10 +3098,9 @@ class PSManager(Logger):
         if need_val < old_denoms_val:  # already have need value of denoms
             return []
 
-        # calc spendable coins val
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
-                            mature_only=True)
-        coins = [c for c in coins if not w.is_frozen_coin(c)]
+        if not coins:
+            coins_data = self._get_next_coins_for_mixing()
+            coins = coins_data['coins']
         coins_val = sum([c.value_sats() for c in coins])
         if coins_val < MIN_DENOM_VAL and not on_keep_amount:
             return []  # no coins to create denoms
@@ -3188,7 +3295,7 @@ class PSManager(Logger):
             main_ks_coins_val = sum([c.value_sats() for c in main_ks_coins])
             ps_ks_coins_val = sum([c.value_sats() for c in coins if c.is_ps_ks])
 
-            outputs_amounts = self.calc_need_denoms_amounts()
+            outputs_amounts = self.calc_need_denoms_amounts(on_keep_amount=True)
             in_cnt = len(coins)
             total_need_val, outputs_amounts = \
                 self._calc_total_need_val(in_cnt, outputs_amounts, fee_per_kb)
@@ -3268,6 +3375,7 @@ class PSManager(Logger):
             addr, value = ps_collateral
             utxos = w.get_utxos([addr], min_rounds=PSCoinRounds.COLLATERAL,
                                 confirmed_only=True, consider_islocks=True)
+            utxos = self.filter_out_hw_ks_coins(utxos)
             inputs = []
             for utxo in utxos:
                 if utxo.prevout.to_str() != outpoint:
@@ -3502,6 +3610,9 @@ class PSManager(Logger):
         if self.state in self.mixing_running_states:
             return None, ('Can not create new collateral as mixing'
                           ' process is currently run.')
+        if len(coins) > 1:
+            return None, ('Can not create new collateral amount,'
+                          ' too many coins selected')
         wfl = self._start_new_collateral_wfl()
         if not wfl:
             return None, ('Can not create new collateral as other new'
@@ -3535,7 +3646,9 @@ class PSManager(Logger):
                              f' {wfl.lid}')
             return None, err
 
-    async def create_new_collateral_wfl(self, coins=None):
+    async def create_new_collateral_wfl(self):
+        coins_data = await self.get_next_coins_for_mixing(for_denoms=False)
+        coins = coins_data['coins']
         _start = self._start_new_collateral_wfl
         wfl = await self.loop.run_in_executor(None, _start)
         if not wfl:
@@ -3605,61 +3718,46 @@ class PSManager(Logger):
             if saved.uuid != wfl.uuid:
                 raise Exception('new_collateral_wfl differs from original')
 
-        # try to create new collateral tx with change outupt at first
         w = self.wallet
         fee_per_kb = self.config.fee_per_kb()
         uuid = wfl.uuid
         oaddr = self.reserve_addresses(1, data=uuid)[0]
-        if coins is None:
-            utxos = w.get_utxos(None,
-                                excluded_addresses=w.frozen_addresses,
-                                mature_only=True, confirmed_only=True,
-                                consider_islocks=True)
-            utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
-            if self.w_ks_type != 'bip32':  # filter coins from ps_keystore
-                utxos = [utxo for utxo in utxos if utxo.is_ps_ks]
-            utxos_val = sum([utxo.value_sats() for utxo in utxos])
-            # try calc fee with change output
-            new_collateral_fee = calc_tx_fee(len(utxos), 2, fee_per_kb,
-                                             max_size=True)
-            if utxos_val - new_collateral_fee < CREATE_COLLATERAL_VAL:
-                # try calc fee without change output
-                new_collateral_fee = calc_tx_fee(len(utxos), 1, fee_per_kb,
-                                                 max_size=True)
-                if utxos_val - new_collateral_fee < CREATE_COLLATERAL_VAL:
-                    # try select minimal denom utxo with mimial rounds
-                    coins = w.get_utxos(None,
-                                        mature_only=True,
-                                        confirmed_only=True,
-                                        consider_islocks=True,
-                                        min_rounds=0)
-                    coins = [c for c in coins
-                             if c.value_sats() == MIN_DENOM_VAL]
-                    if not coins:
-                        raise NotEnoughFunds()
-                    coins = sorted(coins, key=lambda x: x.ps_rounds)
-                    coins = coins[0:1]
+        if not coins:
+            # try select minimal denom utxo with mimial rounds
+            coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+                                consider_islocks=True, min_rounds=0)
+            coins = [c for c in coins if c.value_sats() == MIN_DENOM_VAL]
+            coins = self.filter_out_hw_ks_coins(coins)
+            if not coins:
+                raise NotEnoughFunds()
+            coins = sorted(coins, key=lambda x: x.ps_rounds)
+            coins = coins[0:1]
 
-        if coins is not None:
-            if len(coins) > 1:
-                raise TooManyUtxos('Not allowed multiple utxos')
-            utxos_val = coins[0].value_sats()
-            if utxos_val >= self.min_new_denoms_from_coins_val:
+        no_change = False
+        outputs = None
+        coins_val = sum([c.value_sats() for c in coins])
+        if (len(coins) == 1  # Minimal denom or PS other selected, no change
+                and coins[0].ps_rounds is not None
+                and coins[0].ps_rounds != PSCoinRounds.MIX_ORIGIN):
+            if coins_val >= self.min_new_denoms_from_coins_val:
                 raise TooLargeUtxoVal('To large utxo selected')
-            outputs = None
-            for collateral_val in CREATE_COLLATERAL_VALS[::-1]:
+            no_change = True
+
+        if no_change:
+            for val in CREATE_COLLATERAL_VALS[::-1]:
                 new_collateral_fee = calc_tx_fee(1, 1, fee_per_kb,
                                                  max_size=True)
-                if utxos_val - new_collateral_fee >= collateral_val:
-                    outputs = [PartialTxOutput.from_address_and_value(oaddr, collateral_val)]
-                    utxos = coins
-                    break
+                if coins_val - new_collateral_fee < val:
+                    continue
+                outputs = [PartialTxOutput.from_address_and_value(oaddr, val)]
+                break
             if outputs is None:
                 raise NotEnoughFunds()
         else:
-            outputs = [PartialTxOutput.from_address_and_value(oaddr, CREATE_COLLATERAL_VAL)]
+            val = CREATE_COLLATERAL_VAL
+            outputs = [PartialTxOutput.from_address_and_value(oaddr, val)]
 
-        tx = w.make_unsigned_transaction(coins=utxos, outputs=outputs)
+        tx = w.make_unsigned_transaction(coins=coins, outputs=outputs)
         inputs = tx.inputs()
         # check input addresses is in keypairs if keypairs cache available
         if self._keypairs_cache:
@@ -3671,7 +3769,7 @@ class PSManager(Logger):
                                          f' in the keypairs cache:'
                                          f' {not_found_addrs}')
 
-        if coins is not None:  # no change output
+        if no_change:
             tx = PartialTransaction.from_io(inputs[:], outputs[:], locktime=0)
             for txin in tx.inputs():
                 txin.nsequence = 0xffffffff
@@ -3680,6 +3778,10 @@ class PSManager(Logger):
             tx = w.make_unsigned_transaction(coins=inputs, outputs=outputs,
                                              change_addr=change_addr)
         tx = self.sign_transaction(tx, password)
+        estimated_fee = calc_tx_fee(len(tx.inputs()), len(tx.outputs()),
+                                    fee_per_kb, max_size=True)
+        overfee = tx.get_fee() - estimated_fee
+        assert overfee < self.min_new_collateral_from_coins_val, 'too high fee'
         txid = tx.txid()
         raw_tx = tx.serialize_to_network()
         tx_type = PSTxTypes.NEW_COLLATERAL
@@ -3866,7 +3968,8 @@ class PSManager(Logger):
         if len(coins) > 1:
             return None, ('Can not create new denoms,'
                           ' too many coins selected')
-        wfl, outputs_amounts = self._start_new_denoms_wfl(coins)
+        wfl, outputs_amounts = self._start_new_denoms_wfl(coins,
+                                                          use_all_coins=True)
         if not outputs_amounts:
             return None, ('Can not create new denoms,'
                           ' not enough coins selected')
@@ -3874,12 +3977,13 @@ class PSManager(Logger):
             return None, ('Can not create new denoms as other new'
                           ' denoms creation process is in progress')
         last_tx_idx = len(outputs_amounts) - 1
-        w = self.wallet
         for i, tx_amounts in enumerate(outputs_amounts):
             try:
+                w = self.wallet
                 txid, tx = self._make_new_denoms_tx(wfl, tx_amounts,
                                                     last_tx_idx, i,
-                                                    coins, password)
+                                                    coins, password,
+                                                    use_all_coins=True)
                 if not w.add_transaction(tx):
                     raise Exception(f'Transaction with txid: {txid}'
                                     f' conflicts with current history')
@@ -3925,8 +4029,13 @@ class PSManager(Logger):
                 return None, err
 
     async def create_new_denoms_wfl(self):
+        coins_data = await self.get_next_coins_for_mixing()
+        coins = coins_data['coins']
+        if not coins:
+            return
         _start = self._start_new_denoms_wfl
-        wfl, outputs_amounts = await self.loop.run_in_executor(None, _start)
+        wfl, outputs_amounts = await self.loop.run_in_executor(None, _start,
+                                                               coins)
         if not wfl:
             return
         last_tx_idx = len(outputs_amounts) - 1
@@ -3936,7 +4045,8 @@ class PSManager(Logger):
                 _make_tx = self._make_new_denoms_tx
                 txid, tx = await self.loop.run_in_executor(None, _make_tx,
                                                            wfl, tx_amounts,
-                                                           last_tx_idx, i)
+                                                           last_tx_idx, i,
+                                                           coins)
                 # add_transaction need run in network therad
                 if not w.add_transaction(tx):
                     raise Exception(f'Transaction with txid: {txid}'
@@ -3957,7 +4067,25 @@ class PSManager(Logger):
                             self.set_new_denoms_wfl(wfl)
                             self.logger.wfl_ok(f'Completed new denoms'
                                                f' workflow: {wfl.lid}')
-                await self.loop.run_in_executor(None, _after_create_tx)
+                    coins_data = self._get_next_coins_for_mixing()
+                    coins = coins_data['coins']
+                    txin0 = copy.deepcopy(tx.inputs()[0])
+                    txin0_addr = w.get_txin_address(txin0)
+                    if i != last_tx_idx:
+                        utxos = w.get_utxos([txin0_addr])
+                        change_outpoint = None
+                        for change_idx, o in enumerate(tx.outputs()):
+                            if o.address == txin0_addr:
+                                change_outpoint = f'{txid}:{change_idx}'
+                                break
+                        for utxo in utxos:
+                            if utxo.prevout.to_str() != change_outpoint:
+                                continue
+                            coins.append(utxo)
+                    if self.group_origin_coins_by_addr:
+                        coins = [c for c in coins if c.address == txin0_addr]
+                    return coins
+                coins = await self.loop.run_in_executor(None, _after_create_tx)
                 w.save_db()
             except Exception as e:
                 self.logger.wfl_err(f'Error creating new denoms tx:'
@@ -3981,8 +4109,10 @@ class PSManager(Logger):
                     await self.stop_mixing_from_async_thread(msg)
                 break
 
-    def _start_new_denoms_wfl(self, coins=None):
-        outputs_amounts = self.calc_need_denoms_amounts(coins=coins)
+    def _start_new_denoms_wfl(self, coins, use_all_coins=False):
+        outputs_amounts = \
+            self.calc_need_denoms_amounts(coins=coins,
+                                          use_all_coins=use_all_coins)
         if not outputs_amounts:
             return None, None
         with self.new_denoms_wfl_lock, \
@@ -3998,7 +4128,7 @@ class PSManager(Logger):
             return wfl, outputs_amounts
 
     def _make_new_denoms_tx(self, wfl, tx_amounts, last_tx_idx, i,
-                            coins=None, password=None):
+                            coins, password=None, use_all_coins=False):
         w = self.wallet
         # try to create new denoms tx with change outupt at first
         use_confirmed = (i == 0)  # for first tx use confirmed coins
@@ -4006,18 +4136,7 @@ class PSManager(Logger):
         oaddrs = self.reserve_addresses(addrs_cnt, data=wfl.uuid)
         outputs = [PartialTxOutput.from_address_and_value(addr, a)
                    for addr, a in zip(oaddrs, tx_amounts)]
-        if coins is None:
-            utxos = w.get_utxos(None,
-                                excluded_addresses=w.frozen_addresses,
-                                mature_only=True,
-                                confirmed_only=use_confirmed,
-                                consider_islocks=True)
-            utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
-            if self.w_ks_type != 'bip32':  # filter coins from ps_keystore
-                utxos = [utxo for utxo in utxos if utxo.is_ps_ks]
-        else:
-            utxos = coins
-        tx = w.make_unsigned_transaction(coins=utxos, outputs=outputs)
+        tx = w.make_unsigned_transaction(coins=coins, outputs=outputs)
         inputs = tx.inputs()
         # check input addresses is in keypairs if keypairs cache available
         if self._keypairs_cache:
@@ -4028,8 +4147,13 @@ class PSManager(Logger):
                 raise NotFoundInKeypairs(f'Input addresses is not found'
                                          f' in the keypairs cache:'
                                          f' {not_found_addrs}')
+        no_change = False
+        fee_per_kb = self.config.fee_per_kb()
+        if i == last_tx_idx:
+            if use_all_coins:
+                no_change = True
 
-        if coins and i == last_tx_idx:
+        if no_change:
             tx = PartialTransaction.from_io(inputs[:], outputs[:], locktime=0)
             for txin in tx.inputs():
                 txin.nsequence = 0xffffffff
@@ -4039,6 +4163,10 @@ class PSManager(Logger):
             tx = w.make_unsigned_transaction(coins=inputs, outputs=outputs,
                                              change_addr=in0)
         tx = self.sign_transaction(tx, password)
+        estimated_fee = calc_tx_fee(len(tx.inputs()), len(tx.outputs()),
+                                    fee_per_kb, max_size=True)
+        overfee = tx.get_fee() - estimated_fee
+        assert overfee < self.min_new_collateral_from_coins_val, 'too high fee'
         txid = tx.txid()
         raw_tx = tx.serialize_to_network()
         tx_type = PSTxTypes.NEW_DENOMS
@@ -4139,6 +4267,7 @@ class PSManager(Logger):
                     self.set_new_denoms_wfl(wfl)
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' denoms workflow: {wfl.lid}')
+                self.last_denoms_tx_time = time.time()
                 tx = Transaction(wfl.tx_data[txid].raw_tx)
                 self._process_by_new_denoms_wfl(txid, tx)
                 if not wfl.next_to_send(w):
@@ -4724,8 +4853,6 @@ class PSManager(Logger):
                 else:
                     if val == CREATE_COLLATERAL_VAL:
                         collateral_cnt += 1
-                    elif change_cnt > 0:
-                        return f'This type of tx must have no change'
                     elif icnt > 1:
                         return f'This type of tx must have one input'
                     elif txin0_tx_type not in [PSTxTypes.OTHER_PS_COINS,
@@ -4760,6 +4887,10 @@ class PSManager(Logger):
         new_others_outpoints = []
         txin0 = copy.deepcopy(tx.inputs()[0])
         txin0_addr = w.get_txin_address(txin0)
+        origin_addrs = {txin0_addr}
+        for txin in tx.inputs()[1:]:
+            origin_addrs.add(w.get_txin_address(txin))
+        origin_addrs = list(origin_addrs)
         for i, o in enumerate(outputs):
             addr = o.address
             val = o.value
@@ -4783,6 +4914,7 @@ class PSManager(Logger):
                 else:  # denom round 0
                     new_denom = (addr, val, 0)
                     self.add_ps_denom(new_outpoint, new_denom)
+            w.db.add_ps_origin_addrs(txid, origin_addrs)
         with self.others_lock:
             for new_outpoint, addr, val in new_others_outpoints:
                 w.db.add_ps_other(new_outpoint, (addr, val))
@@ -4813,6 +4945,7 @@ class PSManager(Logger):
                     w.db.pop_ps_collateral(rm_outpoint)
                 else:  # denom round 0
                     self.pop_ps_denom(rm_outpoint)
+            w.db.pop_ps_origin_addrs(txid)
         with self.others_lock:
             for rm_outpoint in rm_others_outpoints:
                 w.db.pop_ps_other(rm_outpoint)
@@ -4856,11 +4989,6 @@ class PSManager(Logger):
                         return f'This type of tx must have no change'
                     elif icnt > 1:
                         return f'This type of tx must have one input'
-                    elif txin0_tx_type not in [PSTxTypes.OTHER_PS_COINS,
-                                               PSTxTypes.NEW_DENOMS,
-                                               PSTxTypes.DENOMINATE]:
-                        return (f'This type of tx must have input from'
-                                f' ps other coins/new denoms/denominate txs')
                     else:
                         collateral_cnt += 1
             else:
@@ -4876,6 +5004,10 @@ class PSManager(Logger):
         new_others_outpoints = []
         txin0 = copy.deepcopy(tx.inputs()[0])
         txin0_addr = w.get_txin_address(txin0)
+        origin_addrs = {txin0_addr}
+        for txin in tx.inputs()[1:]:
+            origin_addrs.add(w.get_txin_address(txin))
+        origin_addrs = list(origin_addrs)
         for i, o in enumerate(outputs):
             addr = o.address
             val = o.value
@@ -4895,6 +5027,7 @@ class PSManager(Logger):
             for new_outpoint, addr, val in new_outpoints:
                 new_collateral = (addr, val)
                 w.db.add_ps_collateral(new_outpoint, new_collateral)
+            w.db.add_ps_origin_addrs(txid, origin_addrs)
         with self.others_lock:
             for new_outpoint, addr, val in new_others_outpoints:
                 w.db.add_ps_other(new_outpoint, (addr, val))
@@ -4922,6 +5055,7 @@ class PSManager(Logger):
         with self.collateral_lock:
             for rm_outpoint in rm_outpoints:
                 w.db.pop_ps_collateral(rm_outpoint)
+            w.db.pop_ps_origin_addrs(txid)
         with self.others_lock:
             for rm_outpoint in rm_others_outpoints:
                 w.db.pop_ps_other(rm_outpoint)

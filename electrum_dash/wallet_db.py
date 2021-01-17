@@ -1198,6 +1198,27 @@ class WalletDB(JsonDB):
     def get_ps_spent_collaterals(self):
         return self.ps_spent_collaterals
 
+    @modifier
+    def add_ps_origin_addrs(self, txid, data):
+        if isinstance(data, (list, tuple)):
+            self.ps_origin_addrs[txid] = data
+        else:
+            self.ps_origin_addrs[txid] = [data]
+
+    @modifier
+    def pop_ps_origin_addrs(self, txid):
+        return self.ps_origin_addrs.pop(txid, None)
+
+    @locked
+    def get_tx_ps_origin_addrs(self, txid):
+        return self.ps_origin_addrs.get(txid)
+
+    @locked
+    def get_ps_origin_addrs(self):
+        return list({addr
+                     for addrs in self.ps_origin_addrs.values()
+                     for addr in addrs})
+
     @locked
     def get_ps_addresses(self, min_rounds=None):
         '''
@@ -1495,6 +1516,7 @@ class WalletDB(JsonDB):
         self.ps_others = self.get_dict('ps_others')  # outpoint -> (addr, val)
         self.ps_spent_others = self.get_dict('ps_spent_others')  # outpoint -> (addr, val)
         self.ps_spent_collaterals = self.get_dict('ps_spent_collaterals')  # outpoint -> (addr, val)
+        self.ps_origin_addrs = self.get_dict('ps_origin_addrs')  # txid -> [addr, ...] new denoms/new collateral inputs
         self.tx_fees = self.get_dict('tx_fees')                  # type: Dict[str, TxFeesValue]
         # scripthash -> set of (outpoint, value)
         self._prevouts_by_scripthash = self.get_dict('prevouts_by_scripthash')  # type: Dict[str, Set[Tuple[str, int]]]
@@ -1536,6 +1558,7 @@ class WalletDB(JsonDB):
         self.ps_collaterals.clear()
         self.ps_spending_collaterals.clear()
         self.ps_spent_collaterals.clear()
+        self.ps_origin_addrs.clear()
         self.ps_denoms.clear()
         self.ps_spending_denoms.clear()
         self.ps_spent_denoms.clear()
