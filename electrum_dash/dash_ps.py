@@ -3081,7 +3081,6 @@ class PSManager(Logger):
         coins_cnt = len(coins)
         denoms_amounts = []
         denoms_val = 0
-        denoms_cnt = 0
         approx_found = False
 
         while not approx_found:
@@ -3097,7 +3096,6 @@ class PSManager(Logger):
                     max_total = min_total - COLLATERAL_VAL + MAX_COLLATERAL_VAL
                     if min_total < coins_val:
                         denoms_val += dval
-                        denoms_cnt += 1
                         cur_approx_amounts.append(dval)
                         if max_total > coins_val:
                             approx_found = True
