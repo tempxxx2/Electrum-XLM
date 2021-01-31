@@ -133,7 +133,6 @@ class DSPoolState(IntEnumWithCheck):
     ACCEPTING_ENTRIES = 2
     SIGNING = 3
     ERROR = 4
-    SUCCESS = 5
 
 
 DS_POOL_STATE_STR = {
@@ -142,7 +141,6 @@ DS_POOL_STATE_STR = {
     int(DSPoolState.ACCEPTING_ENTRIES): _('ACCEPTING_ENTRIES'),
     int(DSPoolState.SIGNING): _('SIGNING'),
     int(DSPoolState.ERROR): _('ERROR'),
-    int(DSPoolState.SUCCESS): _('SUCCESS'),
 }
 
 
