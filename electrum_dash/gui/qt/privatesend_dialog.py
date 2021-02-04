@@ -47,6 +47,7 @@ def protected_with_parent(func):
         if password is None:
             psman = mwin.wallet.psman
             if not psman.is_hw_ks:
+                kwargs['password'] = None
                 return func(self, *args, **kwargs)
             while psman.is_ps_ks_encrypted():
                 password = mwin.password_dialog(parent=parent)
