@@ -1,25 +1,9 @@
 #!/bin/bash
 set -ev
 
-if [[ $ELECTRUM_MAINNET == "true" ]] && [[ -z $IS_RELEASE ]]; then
-    # do not build mainnet apk if is not release
-    exit 0
-fi
-
-cd build
-if [[ -n $TRAVIS_TAG ]]; then
-    BUILD_REPO_URL=https://github.com/akhavr/electrum-dash.git
-    git clone --branch $TRAVIS_TAG $BUILD_REPO_URL electrum-dash
-else
-    git clone .. electrum-dash
-fi
-
-
-pushd electrum-dash
 ./contrib/make_locale
 find . -name '*.po' -delete
 find . -name '*.pot' -delete
-popd
 
 # patch buildozer to support APK_VERSION_CODE env
 VERCODE_PATCH_PATH=/home/buildozer/build/contrib/dash/travis
@@ -37,17 +21,17 @@ if [[ $ELECTRUM_MAINNET == "false" ]]; then
     DOCKER_CMD="$DOCKER_CMD release-testnet"
 fi
 
-sudo chown -R 1000 electrum-dash
+sudo chown -R 1000 .
 docker run --rm \
     --env APP_ANDROID_ARCH=$APP_ANDROID_ARCH \
     --env APK_VERSION_CODE=$DASH_ELECTRUM_VERSION_CODE \
-    -v $(pwd)/electrum-dash:/home/buildozer/build \
+    -v $(pwd):/home/buildozer/build \
     -t zebralucky/electrum-dash-winebuild:Kivy40x bash -c \
     "$DOCKER_CMD"
 
 FNAME_TAIL=release-unsigned.apk
 if [[ $ELECTRUM_MAINNET == "false" ]]; then
-  PATHNAME_START=electrum-dash/bin/Electrum_DASH_Testnet
+  PATHNAME_START=bin/Electrum_DASH_Testnet
 else
-  PATHNAME_START=electrum-dash/bin/Electrum_DASH
+  PATHNAME_START=bin/Electrum_DASH
 fi

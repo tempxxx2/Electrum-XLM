@@ -1,0 +1,48 @@
+name: Run tests
+
+on:
+  push:
+    branches:
+    - '*'
+  pull_request:
+    branches:
+    - '*'
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-18.04
+    name: Run tests
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y libsecp256k1-0
+          python -m pip install --upgrade pip wheel tox tox-gh-actions flake8
+      - name: Run flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Run tests
+        run: |
+          tox
+
+  notify_slack:
+    needs: [run_tests]
+    runs-on: ubuntu-18.04
+    if: always()
+    name: Notify slack
+    steps:
+      - name: Notify slack
+        uses: zebra-lucky/actions-js-slackJobsStatus@0.0.1
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          jobs: ${{ toJson(needs) }}
+          gh_ctx: ${{ toJson(github) }}
