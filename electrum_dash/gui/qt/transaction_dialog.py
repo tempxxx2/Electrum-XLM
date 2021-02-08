@@ -228,10 +228,11 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
         tx.add_info_from_wallet(self.wallet)
 
     def do_broadcast(self):
+        pr = self.main_window.payment_request
         self.main_window.push_top_level_window(self)
         self.main_window.save_pending_invoice()
         try:
-            self.main_window.broadcast_transaction(self.tx)
+            self.main_window.broadcast_transaction(self.tx, pr)
         finally:
             self.main_window.pop_top_level_window(self)
         self.saved = True
