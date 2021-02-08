@@ -40,7 +40,7 @@ except ImportError:
     sys.exit("Error: could not find paymentrequest_pb2.py. Create it with "
              "'protoc --proto_path=electrum_dash/ --python_out=electrum_dash/ electrum_dash/paymentrequest.proto'")
 
-from . import bitcoin, ecc, util, transaction, x509, rsakey
+from . import bitcoin, constants, ecc, util, transaction, x509, rsakey
 from .util import bh2u, bfh, make_aiohttp_session
 from .invoices import OnchainInvoice
 from .crypto import sha256
@@ -145,6 +145,12 @@ class PaymentRequest:
             return
         self.details = pb2.PaymentDetails()
         self.details.ParseFromString(self.data.serialized_payment_details)
+        pr_network = self.details.network
+        client_network = 'test' if constants.net.TESTNET else 'main'
+        if pr_network != client_network:
+            self.error = (f'Payment request network "{pr_network}" does not'
+                          f' match client network "{client_network}".')
+            return
         for o in self.details.outputs:
             addr = transaction.get_address_from_output_script(o.script)
             if not addr:
