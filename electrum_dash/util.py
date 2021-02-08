@@ -767,7 +767,7 @@ def time_difference(distance_in_time, include_seconds):
         return "over %d years" % (round(distance_in_minutes / 525600))
 
 mainnet_block_explorers = {
-    'Dash.org': ('https://explorer.dash.org/',
+    'Dash.org': ('https://explorer.dash.org/insight/',
                  {'tx': 'tx/', 'addr': 'address/'}),
     'Insight.dash.org': ('https://insight.dash.org/insight/',
                          {'tx': 'tx/', 'addr': 'address/'}),
