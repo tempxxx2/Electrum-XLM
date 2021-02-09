@@ -1262,9 +1262,15 @@ class ElectrumWindow(App, Logger):
             status, msg = False, _("Invoice has expired")
             Clock.schedule_once(lambda dt: on_complete(status, msg))
             return
+        need_broadcast = True if not pr or pr.need_broadcast_tx else False
+        txid = tx.txid()
         try:
-            coro = self.wallet.psman.broadcast_transaction(tx)
-            self.network.run_from_another_thread(coro)
+            if need_broadcast:
+                coro = self.wallet.psman.broadcast_transaction(tx)
+                self.network.run_from_another_thread(coro)
+            else:
+                self.logger.info(f'Do not broadcast: {txid}, send bip70'
+                                 f' Payment msg to: {pr.payment_url}')
         except TxBroadcastError as e:
             msg = e.get_message_for_gui()
         except PSPossibleDoubleSpendError as e:
@@ -1281,7 +1287,10 @@ class ElectrumWindow(App, Logger):
                 fut = asyncio.run_coroutine_threadsafe(coro, self.network.asyncio_loop)
                 ack_status, ack_msg = fut.result(timeout=20)
                 self.logger.info(f"Payment ACK: {ack_status}. Ack message: {ack_msg}")
-            status, msg = True, tx.txid()
+            if need_broadcast:
+                status, msg = True, txid
+            else:
+                status, msg = ack_status, ack_msg
         Clock.schedule_once(lambda dt: on_complete(status, msg))
 
     def broadcast(self, tx, pr=None):
