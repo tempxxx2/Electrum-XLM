@@ -2084,15 +2084,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             if pr and pr.has_expired():
                 self.payment_request = None
                 return False, _("Invoice has expired")
+            need_broadcast = True if not pr or pr.need_broadcast_tx else False
+            txid = tx.txid()
             try:
-                coro = self.wallet.psman.broadcast_transaction(tx)
-                self.network.run_from_another_thread(coro)
+                if need_broadcast:
+                    coro = self.wallet.psman.broadcast_transaction(tx)
+                    self.network.run_from_another_thread(coro)
+                else:
+                    self.logger.info(f'Do not broadcast: {txid}, send bip70'
+                                     f' Payment msg to: {pr.payment_url}')
             except TxBroadcastError as e:
                 return False, e.get_message_for_gui()
             except BestEffortRequestFailed as e:
                 return False, repr(e)
             # success
-            txid = tx.txid()
             if pr:
                 self.payment_request = None
                 refund_address = self.wallet.get_receiving_address()
@@ -2100,6 +2105,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 fut = asyncio.run_coroutine_threadsafe(coro, self.network.asyncio_loop)
                 ack_status, ack_msg = fut.result(timeout=20)
                 self.logger.info(f"Payment ACK: {ack_status}. Ack message: {ack_msg}")
+                if not need_broadcast:
+                    return ack_status, ack_msg
             return True, txid
 
         # Capture current TL window; override might be removed on return
