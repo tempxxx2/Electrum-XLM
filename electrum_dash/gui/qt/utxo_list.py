@@ -493,7 +493,9 @@ class UTXOList(MyTreeView):
             txid = utxo.prevout.txid.hex()
             outpoint = utxo.prevout.to_str()
             if (ps_rounds is not None
-                    and (ps_rounds == PSCoinRounds.OTHER or ps_rounds >= 0)):
+                    and (ps_rounds in [PSCoinRounds.OTHER,
+                                       PSCoinRounds.MIX_ORIGIN]
+                         or ps_rounds >= 0)):
                 coin_val = utxo.value_sats()
                 mwin = self.parent
                 if coin_val >= psman.min_new_denoms_from_coins_val:

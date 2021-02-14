@@ -280,7 +280,7 @@ class CoinsDialog(Factory.Popup):
         r = coins[0].ps_rounds
         if r is None:
             return
-        if r == PSCoinRounds.OTHER or r >= 0:
+        if r in [PSCoinRounds.OTHER, PSCoinRounds.MIX_ORIGIN] or r >= 0:
             coin_value = coins[0].value_sats()
             if coin_value >= psman.min_new_denoms_from_coins_val:
                 cmenu = [(_('Create New Denoms'), self.create_new_denoms)]
