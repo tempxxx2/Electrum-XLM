@@ -2,7 +2,12 @@ import asyncio
 from pprint import pprint
 
 from electrum_dash import transaction
-from electrum_dash.dash_tx import DashTxError, TxOutPoint
+from electrum_dash.dash_tx import DashTxError, TxOutPoint, ProTxBase
+from electrum_dash.dash_tx import (SPEC_PRO_REG_TX, SPEC_PRO_UP_SERV_TX,
+                                   SPEC_PRO_UP_REG_TX, SPEC_PRO_UP_REV_TX,
+                                   SPEC_CB_TX, SPEC_SUB_TX_REGISTER,
+                                   SPEC_SUB_TX_TOPUP, SPEC_SUB_TX_RESET_KEY,
+                                   SPEC_SUB_TX_CLOSE_ACCOUNT)
 from electrum_dash.transaction import BCDataStream
 from electrum_dash.util import bfh, bh2u, create_and_start_event_loop
 from electrum_dash.commands import Commands
@@ -402,6 +407,12 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == CB_TX
 
+        assert extra.to_hex_str() == CB_TX[532:]
+        extra2 = ProTxBase.from_hex_str(SPEC_CB_TX, CB_TX[532:])
+        assert extra2.version == extra.version
+        assert extra2.height == extra.height
+        assert extra2.merkleRootMNList == extra.merkleRootMNList
+
     def test_dash_tx_cb_tx_v2(self):
         tx = transaction.Transaction(CB_TX_V2)
         deser = tx.to_json()
@@ -419,6 +430,12 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         assert extra.merkleRootQuorums == bfh(CB_TX_V2_D['merkleRootQuorums'])
         ser = tx.serialize()
         assert ser == CB_TX_V2
+
+        assert extra.to_hex_str() == CB_TX_V2[532:]
+        extra2 = ProTxBase.from_hex_str(SPEC_CB_TX, CB_TX_V2[532:])
+        assert extra2.version == extra.version
+        assert extra2.height == extra.height
+        assert extra2.merkleRootMNList == extra.merkleRootMNList
 
     def test_dash_tx_pro_reg_tx(self):
         tx = transaction.Transaction(PRO_REG_TX)
@@ -453,6 +470,24 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == PRO_REG_TX
 
+        assert extra.to_hex_str() == PRO_REG_TX[980:]
+        extra2 = ProTxBase.from_hex_str(SPEC_PRO_REG_TX, PRO_REG_TX[980:])
+        assert extra2.version == extra.version
+        assert extra2.type == extra.type
+        assert extra2.mode == extra.mode
+        assert extra2.collateralOutpoint.hash == extra.collateralOutpoint.hash
+        assert extra2.collateralOutpoint.index == \
+            extra.collateralOutpoint.index
+        assert extra2.ipAddress == extra.ipAddress
+        assert extra2.port == extra.port
+        assert extra2.KeyIdOwner == extra.KeyIdOwner
+        assert extra2.PubKeyOperator == extra.PubKeyOperator
+        assert extra2.KeyIdVoting == extra.KeyIdVoting
+        assert extra2.operatorReward == extra.operatorReward
+        assert extra2.scriptPayout == extra.scriptPayout
+        assert extra2.inputsHash == extra.inputsHash
+        assert extra2.payloadSig == extra.payloadSig
+
     def test_dash_tx_pro_up_serv_tx(self):
         tx = transaction.Transaction(PRO_UP_SERV_TX)
         deser = tx.to_json()
@@ -475,6 +510,17 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         assert extra.payloadSig == bfh(PRO_UP_SERV_TX_D['payloadSig'])
         ser = tx.serialize()
         assert ser == PRO_UP_SERV_TX
+
+        assert extra.to_hex_str() == PRO_UP_SERV_TX[386:]
+        extra2 = ProTxBase.from_hex_str(SPEC_PRO_UP_SERV_TX,
+                                        PRO_UP_SERV_TX[386:])
+        assert extra2.version == extra.version
+        assert extra2.proTxHash == extra.proTxHash
+        assert extra2.ipAddress == extra.ipAddress
+        assert extra2.port == extra.port
+        assert extra2.scriptOperatorPayout == extra.scriptOperatorPayout
+        assert extra2.inputsHash == extra.inputsHash
+        assert extra2.payloadSig == extra.payloadSig
 
     def test_dash_tx_pro_up_reg_tx(self):
         tx = transaction.Transaction(PRO_UP_REG_TX)
@@ -499,6 +545,18 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == PRO_UP_REG_TX
 
+        assert extra.to_hex_str() == PRO_UP_REG_TX[384:]
+        extra2 = ProTxBase.from_hex_str(SPEC_PRO_UP_REG_TX,
+                                        PRO_UP_REG_TX[384:])
+        assert extra2.version == extra.version
+        assert extra2.proTxHash == extra.proTxHash
+        assert extra2.mode == extra.mode
+        assert extra2.PubKeyOperator == extra.PubKeyOperator
+        assert extra2.KeyIdVoting == extra.KeyIdVoting
+        assert extra2.scriptPayout == extra.scriptPayout
+        assert extra2.inputsHash == extra.inputsHash
+        assert extra2.payloadSig == extra.payloadSig
+
     def test_dash_tx_pro_up_rev_tx(self):
         tx = transaction.Transaction(PRO_UP_REV_TX)
         deser = tx.to_json()
@@ -519,6 +577,15 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == PRO_UP_REV_TX
 
+        assert extra.to_hex_str() == PRO_UP_REV_TX[384:]
+        extra2 = ProTxBase.from_hex_str(SPEC_PRO_UP_REV_TX,
+                                        PRO_UP_REV_TX[384:])
+        assert extra2.version == extra.version
+        assert extra2.proTxHash == extra.proTxHash
+        assert extra2.reason == extra.reason
+        assert extra2.inputsHash == extra.inputsHash
+        assert extra2.payloadSig == extra.payloadSig
+
     def test_dash_tx_sub_tx_register(self):
         tx = transaction.Transaction(SUB_TX_REGISTER)
         deser = tx.to_json()
@@ -537,6 +604,14 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == SUB_TX_REGISTER
 
+        assert extra.to_hex_str() == SUB_TX_REGISTER[386:]
+        extra2 = ProTxBase.from_hex_str(SPEC_SUB_TX_REGISTER,
+                                        SUB_TX_REGISTER[386:])
+        assert extra2.version == extra.version
+        assert extra2.userName == extra.userName
+        assert extra2.pubKey == extra.pubKey
+        assert extra2.payloadSig == extra.payloadSig
+
     def test_dash_tx_sub_tx_topup(self):
         tx = transaction.Transaction(SUB_TX_TOPUP)
         deser = tx.to_json()
@@ -551,6 +626,12 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         assert extra.regTxHash == bfh(SUB_TX_TOPUP_D['regTxHash'])
         ser = tx.serialize()
         assert ser == SUB_TX_TOPUP
+
+        assert extra.to_hex_str() == SUB_TX_TOPUP[386:]
+        extra2 = ProTxBase.from_hex_str(SPEC_SUB_TX_TOPUP,
+                                        SUB_TX_TOPUP[386:])
+        assert extra2.version == extra.version
+        assert extra2.regTxHash == extra.regTxHash
 
     def test_dash_tx_sub_tx_reset_key(self):
         tx = transaction.Transaction(SUB_TX_RESET_KEY)
@@ -574,6 +655,16 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         ser = tx.serialize()
         assert ser == SUB_TX_RESET_KEY
 
+        assert extra.to_hex_str() == SUB_TX_RESET_KEY[386:]
+        extra2 = ProTxBase.from_hex_str(SPEC_SUB_TX_RESET_KEY,
+                                        SUB_TX_RESET_KEY[386:])
+        assert extra2.version == extra.version
+        assert extra2.regTxHash == extra.regTxHash
+        assert extra2.hashPrevSubTx == extra.hashPrevSubTx
+        assert extra2.creditFee == extra.creditFee
+        assert extra2.newPubKey == extra.newPubKey
+        assert extra2.payloadSig == extra.payloadSig
+
     def test_dash_tx_sub_tx_close_account(self):
         tx = transaction.Transaction(SUB_TX_CLOSE_ACCOUNT)
         deser = tx.to_json()
@@ -594,6 +685,15 @@ class TestDashSpecTxSerialization(SequentialTestCase):
         assert extra.payloadSig == bfh(SUB_TX_CLOSE_ACCOUNT_D['payloadSig'])
         ser = tx.serialize()
         assert ser == SUB_TX_CLOSE_ACCOUNT
+
+        assert extra.to_hex_str() == SUB_TX_CLOSE_ACCOUNT[386:]
+        extra2 = ProTxBase.from_hex_str(SPEC_SUB_TX_CLOSE_ACCOUNT,
+                                        SUB_TX_CLOSE_ACCOUNT[386:])
+        assert extra2.version == extra.version
+        assert extra2.regTxHash == extra.regTxHash
+        assert extra2.hashPrevSubTx == extra.hashPrevSubTx
+        assert extra2.creditFee == extra.creditFee
+        assert extra2.payloadSig == extra.payloadSig
 
     def test_dash_tx_unknown_spec_tx(self):
         tx = transaction.Transaction(UNKNOWN_SPEC_TX)
