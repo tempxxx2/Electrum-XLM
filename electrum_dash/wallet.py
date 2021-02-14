@@ -28,6 +28,7 @@
 
 import os
 import sys
+import attr
 import random
 import time
 import json
@@ -74,7 +75,7 @@ from .plugin import run_hook
 from .address_synchronizer import (AddressSynchronizer, TX_HEIGHT_LOCAL,
                                    TX_HEIGHT_UNCONF_PARENT, TX_HEIGHT_UNCONFIRMED,
                                    PSCoinRounds)
-from .invoices import Invoice, OnchainInvoice
+from .invoices import Invoice, OnchainInvoice, InvoiceExt
 from .invoices import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED, PR_INFLIGHT, PR_TYPE_ONCHAIN
 from .contacts import Contacts
 from .interface import NetworkException
@@ -268,6 +269,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
         self.fiat_value            = db.get_dict('fiat_value')
         self.receive_requests      = db.get_dict('payment_requests')  # type: Dict[str, Invoice]
         self.invoices              = db.get_dict('invoices')  # type: Dict[str, Invoice]
+        self.invoices_ext          = db.get_dict('invoices_ext')  # type: Dict[str, InvoiceExt]
         self._reserved_addresses   = set(db.get('reserved_addresses', []))
 
         self._prepare_onchain_invoice_paid_detection()
@@ -718,6 +720,15 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
         )
         return invoice
 
+    def create_invoice_ext(self, key, *, is_ps=False, tx_type=0,
+                                extra_payload='') -> InvoiceExt:
+        invoice_ext = InvoiceExt(
+            is_ps=is_ps,
+            tx_type=tx_type,
+            extra_payload=extra_payload
+        )
+        return invoice_ext
+
     def save_invoice(self, invoice: Invoice) -> None:
         invoice_type = invoice.type
         if invoice_type == PR_TYPE_ONCHAIN:
@@ -733,8 +744,16 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
         self.invoices[key] = invoice
         self.save_db()
 
+    def save_invoice_ext(self, key, invoice_ext: InvoiceExt,
+                         save_db=False) -> None:
+        assert isinstance(invoice_ext, InvoiceExt)
+        self.invoices_ext[key] = invoice_ext
+        if save_db:
+            self.save_db()
+
     def clear_invoices(self):
         self.invoices = {}
+        self.invoices_ext = {}
         self.save_db()
 
     def clear_requests(self):
@@ -750,6 +769,9 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
     def get_invoice(self, key):
         return self.invoices.get(key)
 
+    def get_invoice_ext(self, key):
+        return self.invoices_ext.get(key, InvoiceExt())
+
     def import_requests(self, path):
         data = read_json_file(path)
         for x in data:
@@ -762,11 +784,28 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
     def import_invoices(self, path):
         data = read_json_file(path)
         for x in data:
+            _id = x.get('id')
+            x_ext = {}
+            for field in attr.fields(InvoiceExt):
+                name = field.name
+                if name in x:
+                    x_ext[name] = x.pop(name)
             invoice = Invoice.from_json(x)
+            invoice_ext = InvoiceExt.from_json(x_ext)
+            self.save_invoice_ext(_id, invoice_ext)
             self.save_invoice(invoice)
 
     def export_invoices(self, path):
         write_json_file(path, list(self.invoices.values()))
+
+    def export_invoices_with_ext(self, path):
+        export_list = []
+        for i in self.invoices.values():
+            i_ext = self.get_invoice_ext(i.id)
+            d_i = attr.asdict(i)
+            d_i.update(attr.asdict(i_ext))
+            export_list.append(d_i)
+        write_json_file(path, export_list)
 
     def _get_relevant_invoice_keys_for_tx(self, tx: Transaction) -> Set[str]:
         relevant_invoice_keys = set()
@@ -1698,6 +1737,8 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
         """ on-chain """
         if key in self.invoices:
             self.invoices.pop(key)
+        if key in self.invoices_ext:
+            self.invoices_ext.pop(key)
 
     def remove_payment_request(self, addr):
         if addr not in self.receive_requests:

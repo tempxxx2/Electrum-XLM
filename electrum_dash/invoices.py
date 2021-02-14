@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import attr
 
+from .dash_tx import STANDARD_TX
 from .json_db import StoredObject
 from .i18n import _
 from .util import age
@@ -130,3 +131,15 @@ class OnchainInvoice(Invoice):
             requestor=pr.get_requestor(),
             height=height,
         )
+
+
+@attr.s
+class InvoiceExt(StoredObject):
+    tx_type = attr.ib(type=int, kw_only=True, default=STANDARD_TX)  # type: Optional[int]
+    extra_payload = attr.ib(type=str, kw_only=True, default='')  # type: Optional[str]
+    is_ps = attr.ib(type=bool, kw_only=True, default=False)  # type: Optional[bool]
+
+    @classmethod
+    def from_json(cls, x: dict) -> 'InvoiceExt':
+        # note: these raise if x has extra fields
+        return InvoiceExt(**x)

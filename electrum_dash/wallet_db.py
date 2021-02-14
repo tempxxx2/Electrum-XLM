@@ -34,7 +34,7 @@ import binascii
 
 from . import util, bitcoin
 from .util import profiler, WalletFileException, multisig_type, TxMinedInfo, bfh
-from .invoices import PR_TYPE_ONCHAIN, Invoice
+from .invoices import PR_TYPE_ONCHAIN, Invoice, InvoiceExt
 from .keystore import bip44_derivation
 from .transaction import Transaction, TxOutpoint, tx_from_any, PartialTransaction, PartialTxOutput
 from .logging import Logger
@@ -1571,6 +1571,8 @@ class WalletDB(JsonDB):
             v = dict((k, tx_from_any(x, deserialize=False)) for k, x in v.items())
         if key == 'invoices':
             v = dict((k, Invoice.from_json(x)) for k, x in v.items())
+        if key == 'invoices_ext':
+            v = dict((k, InvoiceExt.from_json(x)) for k, x in v.items())
         if key == 'payment_requests':
             v = dict((k, Invoice.from_json(x)) for k, x in v.items())
         elif key == 'tx_fees':
