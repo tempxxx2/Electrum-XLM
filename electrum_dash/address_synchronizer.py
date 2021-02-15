@@ -908,7 +908,8 @@ class AddressSynchronizer(Logger):
     def get_addr_outputs(self, address: str) -> Dict[TxOutpoint, PartialTxInput]:
         coins, spent = self.get_addr_io(address)
         out = {}
-        if self.psman.enabled:
+        psman = self.psman
+        if psman.enabled:
             ps_origin_addrs = self.db.get_ps_origin_addrs()
         else:
             ps_origin_addrs = []
@@ -921,9 +922,11 @@ class AddressSynchronizer(Logger):
                 ps_collateral = self.db.get_ps_collateral(prevout_str)
                 if ps_collateral:
                     ps_rounds = int(PSCoinRounds.COLLATERAL)
-            if ps_rounds is None and ps_origin_addrs:
-                if address in ps_origin_addrs:
-                    ps_rounds = int(PSCoinRounds.MIX_ORIGIN)
+            if (psman.group_origin_coins_by_addr
+                    and ps_rounds is None
+                    and ps_origin_addrs
+                    and address in ps_origin_addrs):
+                ps_rounds = int(PSCoinRounds.MIX_ORIGIN)
             if ps_rounds is None:
                 ps_other = self.db.get_ps_other(prevout_str)
                 if ps_other:

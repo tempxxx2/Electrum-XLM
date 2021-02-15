@@ -532,6 +532,7 @@ class PSDialog(QDialog, MessageBoxMixin):
 
         def on_group_origin_state_changed(x):
             psman.group_origin_coins_by_addr = (x == Qt.Checked)
+            self.mwin.utxo_list.update()
         group_origin_cb.stateChanged.connect(on_group_origin_state_changed)
 
         i = grid.rowCount()
