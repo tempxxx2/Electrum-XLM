@@ -1786,9 +1786,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if any([(i.tx_type or i.extra_payload) for i in invoices_ext]):
             raise Exception('Can not do batch payment with DIP2'
                             ' tx type/extra payload on invoices')
-        psman = self.wallet.psman
-        min_rounds = None if not is_ps else psman.mix_rounds
-        self.pay_onchain_dialog(self.get_coins(min_rounds=min_rounds), outputs,
+        self.pay_onchain_dialog(self.get_coins(min_rounds=None), outputs,
                                 is_ps=False, tx_type=0, extra_payload=b'')
 
     def do_pay_invoice(self, invoice: 'Invoice'):
