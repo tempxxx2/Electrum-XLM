@@ -7,8 +7,8 @@ from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
 from kivy.uix.behaviors import FocusBehavior
 
-from electrum_dash.dash_ps import sort_utxos_by_ps_rounds
-from electrum_dash.dash_tx import PSCoinRounds
+from electrum_dash.dash_ps import (PSCoinRounds, ps_coin_rounds_str,
+                                   sort_utxos_by_ps_rounds)
 from electrum_dash.gui.kivy.i18n import _
 from electrum_dash.gui.kivy.uix.context_menu import ContextMenu
 
@@ -212,12 +212,8 @@ class CoinsDialog(Factory.Popup):
         ci['block_height'] = str(height)
         if ps_rounds is None:
             ci['ps_rounds'] = 'N/A'
-        elif ps_rounds == PSCoinRounds.OTHER:
-            ci['ps_rounds'] = 'Other'
-        elif ps_rounds == PSCoinRounds.COLLATERAL:
-            ci['ps_rounds'] = 'Collateral'
         else:
-            ci['ps_rounds'] = str(ps_rounds)
+            ci['ps_rounds'] = ps_coin_rounds_str(ps_rounds)
         ci['ps_rounds_orig'] = ps_rounds
         ci['prev_h'] = prev_h
         ci['prev_n'] = prev_n
@@ -284,7 +280,7 @@ class CoinsDialog(Factory.Popup):
         r = coins[0].ps_rounds
         if r is None:
             return
-        if r == PSCoinRounds.OTHER or r >= 0:
+        if r in [PSCoinRounds.OTHER, PSCoinRounds.MIX_ORIGIN] or r >= 0:
             coin_value = coins[0].value_sats()
             if coin_value >= psman.min_new_denoms_from_coins_val:
                 cmenu = [(_('Create New Denoms'), self.create_new_denoms)]

@@ -525,6 +525,19 @@ class PSDialog(QDialog, MessageBoxMixin):
         grid.addWidget(kp_timeout_label, i, 0)
         grid.addWidget(self.kp_timeout_sb, i, 2)
 
+        # group_origin_coins_by_addr
+        cb_txt = psman.group_origin_coins_by_addr_data(full_txt=True)
+        group_origin_cb = QCheckBox(cb_txt)
+        group_origin_cb.setChecked(psman.group_origin_coins_by_addr)
+
+        def on_group_origin_state_changed(x):
+            psman.group_origin_coins_by_addr = (x == Qt.Checked)
+            self.mwin.utxo_list.update()
+        group_origin_cb.stateChanged.connect(on_group_origin_state_changed)
+
+        i = grid.rowCount()
+        grid.addWidget(group_origin_cb, i, 0, 1, -1)
+
         # group_history
         group_hist_cb = QCheckBox(psman.group_history_data(full_txt=True))
         group_hist_cb.setChecked(psman.group_history)

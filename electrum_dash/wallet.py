@@ -61,7 +61,7 @@ from .bitcoin import COIN, TYPE_ADDRESS
 from .bitcoin import is_address, address_to_script, is_minikey, relayfee, dust_threshold
 from .crypto import sha256d
 from . import keystore
-from .dash_tx import SPEC_TX_NAMES, PSCoinRounds
+from .dash_tx import SPEC_TX_NAMES
 from .keystore import (load_keystore, Hardware_KeyStore, KeyStore, KeyStoreWithMPK,
                        AddressIndexGeneric, CannotDerivePubkey)
 from .util import multisig_type
@@ -72,7 +72,8 @@ from .transaction import (Transaction, TxInput, UnknownTxinType, TxOutput,
                           PartialTransaction, PartialTxInput, PartialTxOutput, TxOutpoint)
 from .plugin import run_hook
 from .address_synchronizer import (AddressSynchronizer, TX_HEIGHT_LOCAL,
-                                   TX_HEIGHT_UNCONF_PARENT, TX_HEIGHT_UNCONFIRMED)
+                                   TX_HEIGHT_UNCONF_PARENT, TX_HEIGHT_UNCONFIRMED,
+                                   PSCoinRounds)
 from .invoices import Invoice, OnchainInvoice
 from .invoices import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED, PR_INFLIGHT, PR_TYPE_ONCHAIN
 from .contacts import Contacts

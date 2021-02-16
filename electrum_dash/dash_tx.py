@@ -888,13 +888,6 @@ SPEC_TX_NAMES = {
 }
 
 
-class PSCoinRounds(IntEnum):
-    '''PS Tx types'''
-    MINUSINF = -1e9
-    OTHER = -2
-    COLLATERAL = -1
-
-
 def read_extra_payload(vds, tx_type):
     if tx_type:
         extra_payload_size = vds.read_compact_size()

@@ -1,3 +1,17 @@
+# Release 4.0.9.2
+
+ * qt: fix PayToEdit.parse_amount (#172)
+ * gui qt/kivy: add ProTx/LLMQ reset UI (#173)
+ * PS: separate new denoms/collateral txins by address (#175)
+ * qt PS Dialog: fix PS Keystore tab (#176)
+ * various DIP3 fixes (post 4.0.9.1) (#177)
+ * util.py: fix mainnet Dash.org block explorer (#180)
+ * paymentrequest: check network on PaymentRequest parse (#182)
+ * qt: fix protected_with_parent decorator (#183)
+ * GUI: fix send Payment msg from qt/kivy gui, do not broadcast tx
+   when sending Payment to Anypay (#185)
+
+
 # Release 4.0.9.1
  * Fix Transaction.input_script for size estimation (#166)
  * Fix android startup crash (#167)

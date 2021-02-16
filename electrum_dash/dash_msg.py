@@ -133,7 +133,6 @@ class DSPoolState(IntEnumWithCheck):
     ACCEPTING_ENTRIES = 2
     SIGNING = 3
     ERROR = 4
-    SUCCESS = 5
 
 
 DS_POOL_STATE_STR = {
@@ -142,7 +141,6 @@ DS_POOL_STATE_STR = {
     int(DSPoolState.ACCEPTING_ENTRIES): _('ACCEPTING_ENTRIES'),
     int(DSPoolState.SIGNING): _('SIGNING'),
     int(DSPoolState.ERROR): _('ERROR'),
-    int(DSPoolState.SUCCESS): _('SUCCESS'),
 }
 
 
@@ -182,6 +180,7 @@ class DSMessageIDs(IntEnumWithCheck):
     MSG_NOERR = 0x13
     MSG_SUCCESS = 0x14
     MSG_ENTRIES_ADDED = 0x15
+    ERR_SIZE_MISMATCH = 0x16
 
 
 DS_MSG_STR = {
@@ -211,6 +210,7 @@ DS_MSG_STR = {
     int(DSMessageIDs.MSG_NOERR): _('No errors detected.'),
     int(DSMessageIDs.MSG_SUCCESS): _('Transaction created successfully.'),
     int(DSMessageIDs.MSG_ENTRIES_ADDED): _('Your entries added successfully.'),
+    int(DSMessageIDs.ERR_SIZE_MISMATCH): _('Inputs vs outputs size mismatch.'),
 }
 
 
