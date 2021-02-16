@@ -125,11 +125,12 @@ class ActionButtonOption(NamedTuple):
 
 class TxDialog(Factory.Popup):
 
-    def __init__(self, app, tx):
+    def __init__(self, app, tx, pr=None):
         Factory.Popup.__init__(self)
         self.app = app  # type: ElectrumWindow
         self.wallet = self.app.wallet
         self.tx = tx  # type: Transaction
+        self.pr = pr
         self._action_button_fn = lambda btn: None
         self.dropdown = None
 
@@ -257,7 +258,7 @@ class TxDialog(Factory.Popup):
     def do_broadcast(self):
         if self.dropdown:
             self.dropdown.dismiss()
-        self.app.broadcast(self.tx)
+        self.app.broadcast(self.tx, self.pr)
 
     def show_qr(self):
         original_raw_tx = str(self.tx)

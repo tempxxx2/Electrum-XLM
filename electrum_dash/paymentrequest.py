@@ -59,6 +59,10 @@ _logger = get_logger(__name__)
 REQUEST_HEADERS = {'Accept': 'application/dash-paymentrequest', 'User-Agent': 'Dash-Electrum'}
 ACK_HEADERS = {'Content-Type':'application/dash-payment','Accept':'application/dash-paymentack','User-Agent':'Dash-Electrum'}
 
+BIP70_NO_BROADCAST_TX_DOMAINS = [
+    'anypayinc.com'
+]
+
 ca_path = certifi.where()
 ca_list = None
 ca_keyID = None
@@ -324,6 +328,18 @@ class PaymentRequest:
                                  f"{repr(e)} text: {error_text_received}")
             return False, error
 
+    @property
+    def need_broadcast_tx(self):
+        pay_url = self.payment_url
+        if not pay_url:
+            return True
+        u = urllib.parse.urlparse(pay_url)
+        if u.scheme not in ['https', 'http']:
+            return True
+        for h in BIP70_NO_BROADCAST_TX_DOMAINS:
+            if u.hostname.endswith(h):
+                return False
+        return True
 
 def make_unsigned_request(req: 'OnchainInvoice'):
     addr = req.get_address()
@@ -340,6 +356,8 @@ def make_unsigned_request(req: 'OnchainInvoice'):
     script = bfh(address_to_script(addr))
     outputs = [(script, amount)]
     pd = pb2.PaymentDetails()
+    if constants.net.TESTNET:
+        pd.network = 'test'
     for script, amount in outputs:
         pd.outputs.add(amount=amount, script=script)
     pd.time = time
