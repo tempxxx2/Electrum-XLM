@@ -790,7 +790,12 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
                 name = field.name
                 if name in x:
                     x_ext[name] = x.pop(name)
-            invoice = Invoice.from_json(x)
+            x_inv = {}
+            for field in attr.fields(OnchainInvoice):
+                name = field.name
+                if name in x:
+                    x_inv[name] = x.pop(name)
+            invoice = Invoice.from_json(x_inv)
             invoice_ext = InvoiceExt.from_json(x_ext)
             self.save_invoice_ext(_id, invoice_ext)
             self.save_invoice(invoice)
