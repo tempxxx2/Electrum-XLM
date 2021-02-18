@@ -2182,6 +2182,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.invoice_list.update()
 
     def payment_request_ok(self):
+        self.extra_payload.clear()
+        self.hide_extra_payload()
+        self.reset_privatesend()
         pr = self.payment_request
         if not pr:
             return
@@ -2204,6 +2207,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.amount_e.textEdited.emit("")
 
     def payment_request_error(self):
+        self.extra_payload.clear()
+        self.hide_extra_payload()
+        self.reset_privatesend()
         pr = self.payment_request
         if not pr:
             return

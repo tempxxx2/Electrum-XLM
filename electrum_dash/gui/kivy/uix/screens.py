@@ -381,6 +381,7 @@ class SendScreen(CScreen, Logger):
         amount = uri.get('amount')
         self.address = uri.get('address', '')
         self.message = uri.get('message', '')
+        self.is_ps = False
         self.ps_txt = self.privatesend_txt()
         self.amount = self.app.format_amount_and_units(amount) if amount else ''
         self.is_max = False
