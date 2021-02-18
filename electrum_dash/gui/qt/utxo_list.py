@@ -35,8 +35,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QHeaderView, QComboBox,
 
 from electrum_dash.i18n import _
 from electrum_dash.transaction import PartialTxInput
-from electrum_dash.dash_ps import sort_utxos_by_ps_rounds
-from electrum_dash.dash_tx import PSCoinRounds
+from electrum_dash.dash_ps import (PSCoinRounds, sort_utxos_by_ps_rounds,
+                                   ps_coin_rounds_str)
 from electrum_dash.logging import Logger
 from electrum_dash.util import profiler
 
@@ -178,12 +178,8 @@ class UTXOModel(QAbstractItemModel, Logger):
         is_ps_ks = coin_item['is_ps_ks']
         if ps_rounds is None:
             ps_rounds = 'N/A'
-        elif ps_rounds == PSCoinRounds.COLLATERAL:
-            ps_rounds = 'Collateral'
-        elif ps_rounds == PSCoinRounds.OTHER:
-            ps_rounds = 'Other'
         else:
-            ps_rounds = str(ps_rounds)
+            ps_rounds = ps_coin_rounds_str(ps_rounds)
         if (role == self.view.ROLE_CLIPBOARD_DATA
                 and col == UTXOColumns.OUTPOINT):
             return QVariant(outpoint)
@@ -497,7 +493,9 @@ class UTXOList(MyTreeView):
             txid = utxo.prevout.txid.hex()
             outpoint = utxo.prevout.to_str()
             if (ps_rounds is not None
-                    and (ps_rounds == PSCoinRounds.OTHER or ps_rounds >= 0)):
+                    and (ps_rounds in [PSCoinRounds.OTHER,
+                                       PSCoinRounds.MIX_ORIGIN]
+                         or ps_rounds >= 0)):
                 coin_val = utxo.value_sats()
                 mwin = self.parent
                 if coin_val >= psman.min_new_denoms_from_coins_val:

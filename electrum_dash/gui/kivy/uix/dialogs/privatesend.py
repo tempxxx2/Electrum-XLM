@@ -319,6 +319,12 @@ Builder.load_string('''
                 action: root.show_kp_timeout_popup
             CardSeparator
             SettingsItem:
+                value: ': ON' if root.group_origin else ': OFF'
+                title: root.group_origin_text + self.value
+                description: root.group_origin_help
+                action: root.toggle_group_origin
+            CardSeparator
+            SettingsItem:
                 value: ': ON' if root.group_history else ': OFF'
                 title: root.group_history_text + self.value
                 description: root.group_history_help
@@ -617,6 +623,7 @@ class PSMixingTab(BoxLayout):
     mix_prog = NumericProperty()
     dn_balance = StringProperty()
     ps_balance = StringProperty()
+    group_origin = BooleanProperty()
     group_history = BooleanProperty()
     subscribe_spent = BooleanProperty()
     allow_others = BooleanProperty()
@@ -657,6 +664,10 @@ class PSMixingTab(BoxLayout):
         self.create_sm_denoms_text = psman.create_sm_denoms_data()
         self.create_sm_denoms_help = psman.create_sm_denoms_data(full_txt=True)
 
+        self.group_origin_text = psman.group_origin_coins_by_addr_data()
+        self.group_origin_help = \
+            psman.group_origin_coins_by_addr_data(full_txt=True)
+
         self.group_history_text = psman.group_history_data()
         self.group_history_help = psman.group_history_data(full_txt=True)
 
@@ -684,6 +695,7 @@ class PSMixingTab(BoxLayout):
         self.ps_balance = app.format_amount_and_units(val)
         val = sum(wallet.get_balance(include_ps=False, min_rounds=0))
         self.dn_balance = app.format_amount_and_units(val)
+        self.group_origin = psman.group_origin_coins_by_addr
         self.group_history = psman.group_history
         self.subscribe_spent = psman.subscribe_spent
         self.allow_others = psman.allow_others
@@ -785,6 +797,11 @@ class PSMixingTab(BoxLayout):
                     self.app.create_small_denoms(denoms_by_vals)
             d = Question(q, on_q_answered)
             d.open()
+
+    def toggle_group_origin(self, *args):
+        self.psman.group_origin_coins_by_addr = \
+            not self.psman.group_origin_coins_by_addr
+        self.group_origin = self.psman.group_origin_coins_by_addr
 
     def toggle_group_history(self, *args):
         self.psman.group_history = not self.psman.group_history

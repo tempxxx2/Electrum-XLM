@@ -139,9 +139,9 @@ class CoinChooserBase(Logger):
                     if ps_rounds >= 0:  # denoms
                         max_rounds = max(max_rounds, ps_rounds)
                     else:
-                        # do not spend ps_collateral/ps_other if possible
-                        # and therefore set max_rounds to maximum
-                        max_rounds = 1e9
+                        # do not spend ps_collateral/ps_origin_addrs/ps_other
+                        # if possible and therefore set max_rounds to maximum
+                        max_rounds = 1e9 - ps_rounds
             assert min_height is not None
             # the fee estimator is typically either a constant or a linear function,
             # so the "function:" effective_value(bucket) will be homomorphic for addition

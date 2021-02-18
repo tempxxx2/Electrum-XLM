@@ -40,7 +40,7 @@ except ImportError:
     sys.exit("Error: could not find paymentrequest_pb2.py. Create it with "
              "'protoc --proto_path=electrum_dash/ --python_out=electrum_dash/ electrum_dash/paymentrequest.proto'")
 
-from . import bitcoin, ecc, util, transaction, x509, rsakey
+from . import bitcoin, constants, ecc, util, transaction, x509, rsakey
 from .util import bh2u, bfh, make_aiohttp_session
 from .invoices import OnchainInvoice
 from .crypto import sha256
@@ -58,6 +58,10 @@ _logger = get_logger(__name__)
 
 REQUEST_HEADERS = {'Accept': 'application/dash-paymentrequest', 'User-Agent': 'Dash-Electrum'}
 ACK_HEADERS = {'Content-Type':'application/dash-payment','Accept':'application/dash-paymentack','User-Agent':'Dash-Electrum'}
+
+BIP70_NO_BROADCAST_TX_DOMAINS = [
+    'anypayinc.com'
+]
 
 ca_path = certifi.where()
 ca_list = None
@@ -145,6 +149,12 @@ class PaymentRequest:
             return
         self.details = pb2.PaymentDetails()
         self.details.ParseFromString(self.data.serialized_payment_details)
+        pr_network = self.details.network
+        client_network = 'test' if constants.net.TESTNET else 'main'
+        if pr_network != client_network:
+            self.error = (f'Payment request network "{pr_network}" does not'
+                          f' match client network "{client_network}".')
+            return
         for o in self.details.outputs:
             addr = transaction.get_address_from_output_script(o.script)
             if not addr:
@@ -318,6 +328,18 @@ class PaymentRequest:
                                  f"{repr(e)} text: {error_text_received}")
             return False, error
 
+    @property
+    def need_broadcast_tx(self):
+        pay_url = self.payment_url
+        if not pay_url:
+            return True
+        u = urllib.parse.urlparse(pay_url)
+        if u.scheme not in ['https', 'http']:
+            return True
+        for h in BIP70_NO_BROADCAST_TX_DOMAINS:
+            if u.hostname.endswith(h):
+                return False
+        return True
 
 def make_unsigned_request(req: 'OnchainInvoice'):
     addr = req.get_address()
@@ -334,6 +356,8 @@ def make_unsigned_request(req: 'OnchainInvoice'):
     script = bfh(address_to_script(addr))
     outputs = [(script, amount)]
     pd = pb2.PaymentDetails()
+    if constants.net.TESTNET:
+        pd.network = 'test'
     for script, amount in outputs:
         pd.outputs.add(amount=amount, script=script)
     pd.time = time
