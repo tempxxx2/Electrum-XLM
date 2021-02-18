@@ -1770,6 +1770,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def do_pay(self):
         self.pending_invoice = self.read_invoice()
+        self.pending_invoice_ext = self.read_invoice_ext()
         if not self.pending_invoice:
             return
         self.do_pay_invoice(self.pending_invoice)
