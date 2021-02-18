@@ -31,7 +31,8 @@ from kivy.utils import platform
 from electrum_dash.util import profiler, parse_URI, format_time, InvalidPassword, NotEnoughFunds, Fiat
 from electrum_dash.invoices import (PR_TYPE_ONCHAIN, PR_DEFAULT_EXPIRATION_WHEN_CREATING,
                                     PR_PAID, PR_UNKNOWN, PR_EXPIRED, PR_INFLIGHT,
-                                    pr_expiration_values, Invoice, OnchainInvoice)
+                                    pr_expiration_values, Invoice, OnchainInvoice,
+                                    InvoiceExt)
 from electrum_dash import bitcoin, constants
 from electrum_dash.transaction import Transaction, tx_from_any, PartialTransaction, PartialTxOutput
 from electrum_dash.util import parse_URI, InvalidBitcoinURI, TxMinedInfo
@@ -380,6 +381,7 @@ class SendScreen(CScreen, Logger):
         amount = uri.get('amount')
         self.address = uri.get('address', '')
         self.message = uri.get('message', '')
+        self.is_ps = False
         self.ps_txt = self.privatesend_txt()
         self.amount = self.app.format_amount_and_units(amount) if amount else ''
         self.is_max = False
@@ -397,12 +399,17 @@ class SendScreen(CScreen, Logger):
         self.app.show_invoice(obj.key)
 
     def get_card(self, item: Invoice):
+        invoice_ext = self.app.wallet.get_invoice_ext(item.id)
         status = self.app.wallet.get_invoice_status(item)
         status_str = item.get_status_str(status)
         assert isinstance(item, OnchainInvoice)
         key = item.id
         address = item.get_address()
         is_bip70 = bool(item.bip70)
+        amount_str = self.app.format_amount_and_units(item.get_amount_sat()
+                                                      or 0)
+        if invoice_ext.is_ps:
+            amount_str = _('PrivateSend') + ' ' + amount_str
         return {
             'is_bip70': is_bip70,
             'screen': self,
@@ -411,7 +418,7 @@ class SendScreen(CScreen, Logger):
             'key': key,
             'memo': item.message or _('No Description'),
             'address': address,
-            'amount': self.app.format_amount_and_units(item.get_amount_sat() or 0),
+            'amount': amount_str,
         }
 
     def do_clear(self):
@@ -480,10 +487,17 @@ class SendScreen(CScreen, Logger):
             pr=self.payment_request,
             URI=self.parsed_URI)
 
+    def read_invoice_ext(self, key):
+        w = self.app.wallet
+        invoice_ext = w.create_invoice_ext(key,  is_ps=self.is_ps)
+        return invoice_ext
+
     def do_save(self):
         invoice = self.read_invoice()
         if not invoice:
             return
+        invoice_ext = self.read_invoice_ext(invoice.id)
+        self.save_invoice_ext(invoice.id, invoice_ext)
         self.save_invoice(invoice)
 
     def save_invoice(self, invoice):
@@ -491,21 +505,26 @@ class SendScreen(CScreen, Logger):
         self.do_clear()
         self.update()
 
+    def save_invoice_ext(self, key, invoice_ext):
+        self.app.wallet.save_invoice_ext(key, invoice_ext)
+
     def do_pay(self):
         invoice = self.read_invoice()
         if not invoice:
             return
-        self.do_pay_invoice(invoice)
+        invoice_ext = self.read_invoice_ext(invoice.id)
+        self.do_pay_invoice(invoice, invoice_ext)
 
-    def do_pay_invoice(self, invoice):
-        do_pay = lambda: self._do_pay_onchain(invoice, is_ps=self.is_ps)
+    def do_pay_invoice(self, invoice, invoice_ext):
+        do_pay = lambda: self._do_pay_onchain(invoice, invoice_ext)
         do_pay()
 
-    def _do_pay_onchain(self, invoice: OnchainInvoice, is_ps=False) -> None:
+    def _do_pay_onchain(self, invoice: OnchainInvoice,
+                        invoice_ext: InvoiceExt) -> None:
         # make unsigned transaction
         outputs = invoice.outputs
         wallet = self.app.wallet
-        mix_rounds = None if not is_ps else wallet.psman.mix_rounds
+        mix_rounds = None if not invoice_ext.is_ps else wallet.psman.mix_rounds
         include_ps = (mix_rounds is None)
         coins = wallet.get_spendable_coins(None, include_ps=include_ps,
                                            min_rounds=mix_rounds)
@@ -538,12 +557,14 @@ class SendScreen(CScreen, Logger):
         elif feerate > FEERATE_WARNING_HIGH_FEE:
             msg.append(_('Warning') + ': ' + _("The fee for this transaction seems unusually high.")
                        + f' (feerate: {feerate:.1f} duffs/kB)')
-        self.app.protected('\n'.join(msg), self.send_tx, (tx, invoice))
+        self.app.protected('\n'.join(msg), self.send_tx,
+                           (tx, invoice, invoice_ext))
 
-    def send_tx(self, tx, invoice, password):
+    def send_tx(self, tx, invoice, invoice_ext, password):
         if self.app.wallet.has_password() and password is None:
             return
         pr = self.payment_request
+        self.save_invoice_ext(invoice.id, invoice_ext)
         self.save_invoice(invoice)
         def on_success(tx):
             if tx.is_complete():

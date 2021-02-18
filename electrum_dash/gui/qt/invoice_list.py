@@ -31,6 +31,7 @@ from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QAbstractItemView
 from PyQt5.QtWidgets import QMenu, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QHeaderView
 
+from electrum_dash.dash_tx import SPEC_TX_NAMES
 from electrum_dash.i18n import _
 from electrum_dash.util import format_time
 from electrum_dash.invoices import Invoice, PR_UNPAID, PR_PAID, PR_INFLIGHT, PR_FAILED, PR_TYPE_ONCHAIN
@@ -50,17 +51,22 @@ class InvoiceList(MyTreeView):
 
     class Columns(IntEnum):
         DATE = 0
-        DESCRIPTION = 1
-        AMOUNT = 2
-        STATUS = 3
+        TX_TYPE = 1
+        DESCRIPTION = 2
+        AMOUNT = 3
+        IS_PS = 4
+        STATUS = 5
 
     headers = {
         Columns.DATE: _('Date'),
+        Columns.TX_TYPE: _('Type'),
         Columns.DESCRIPTION: _('Description'),
         Columns.AMOUNT: _('Amount'),
+        Columns.IS_PS: _('PrivateSend'),
         Columns.STATUS: _('Status'),
     }
-    filter_columns = [Columns.DATE, Columns.DESCRIPTION, Columns.AMOUNT]
+    filter_columns = [Columns.DATE, Columns.DESCRIPTION, Columns.AMOUNT,
+                      Columns.IS_PS, Columns.TX_TYPE]
 
     def __init__(self, parent):
         super().__init__(parent, self.create_menu,
@@ -95,6 +101,7 @@ class InvoiceList(MyTreeView):
         self.update_headers(self.__class__.headers)
         for idx, item in enumerate(self.parent.wallet.get_invoices()):
             key = item.id
+            invoice_ext = self.parent.wallet.get_invoice_ext(key)
             icon_name = 'dashcoin.png'
             if item.bip70:
                 icon_name = 'seal.png'
@@ -103,9 +110,13 @@ class InvoiceList(MyTreeView):
             message = item.message
             amount = item.get_amount_sat()
             timestamp = item.time or 0
+            ps_str = _('PrivateSend') if invoice_ext.is_ps else _('Regular')
+            tx_type = invoice_ext.tx_type
+            type_str = SPEC_TX_NAMES[tx_type]
             date_str = format_time(timestamp) if timestamp else _('Unknown')
             amount_str = self.parent.format_amount(amount, whitespaces=True)
-            labels = [date_str, message, amount_str, status_str]
+            labels = [date_str, type_str, message, amount_str, ps_str,
+                      status_str]
             items = [QStandardItem(e) for e in labels]
             self.set_editability(items)
             items[self.Columns.DATE].setIcon(read_QIcon(icon_name))
@@ -113,6 +124,8 @@ class InvoiceList(MyTreeView):
             items[self.Columns.DATE].setData(key, role=ROLE_REQUEST_ID)
             items[self.Columns.DATE].setData(item.type, role=ROLE_REQUEST_TYPE)
             items[self.Columns.DATE].setData(timestamp, role=ROLE_SORT_ORDER)
+            items[self.Columns.TX_TYPE].setData(type_str, role=ROLE_SORT_ORDER)
+            items[self.Columns.IS_PS].setData(ps_str, role=ROLE_SORT_ORDER)
             self.std_model.insertRow(idx, items)
         self.filter()
         self.proxy.setDynamicSortFilter(True)
@@ -130,7 +143,14 @@ class InvoiceList(MyTreeView):
         if len(items)>1:
             keys = [ item.data(ROLE_REQUEST_ID)  for item in items]
             invoices = [ wallet.invoices.get(key) for key in keys]
+            invoices_ext = [ wallet.invoices_ext.get(key) for key in keys]
             can_batch_pay = all([i.type == PR_TYPE_ONCHAIN and wallet.get_invoice_status(i) == PR_UNPAID for i in invoices])
+            if can_batch_pay:
+                if any([i.is_ps for i in invoices_ext]):
+                    can_batch_pay = False
+            if can_batch_pay:
+                if any([(i.tx_type or i.extra_payload) for i in invoices_ext]):
+                    can_batch_pay = False
             menu = QMenu(self)
             if can_batch_pay:
                 menu.addAction(_("Batch pay invoices") + "...", lambda: self.parent.pay_multiple_invoices(invoices))
