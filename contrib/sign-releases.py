@@ -299,6 +299,7 @@ class SignApp(object):
         self.count = kwargs.pop('count', None)
         self.dry_run = kwargs.pop('dry_run', False)
         self.no_ppa = kwargs.pop('no_ppa', False)
+        self.only_ppa = kwargs.pop('only_ppa', False)
         self.verbose = kwargs.pop('verbose', False)
         self.jks_keystore = kwargs.pop('jks_keystore', False)
         self.jks_alias = kwargs.pop('jks_alias', False)
@@ -339,6 +340,14 @@ class SignApp(object):
             self.zipalign_path = self.zipalign_path \
                 or self.config.get('zipalign_path', None)
 
+        if self.only_ppa and not self.tag_name:
+            print('need --tag-name, when using --only-ppa, exit')
+            sys.exit(1)
+
+        if self.only_ppa and self.no_ppa:
+            print('someting one required: --no-ppa or --only-ppa, exit')
+            sys.exit(1)
+
         if not self.repo:
             print('no repo found, exit')
             sys.exit(1)
@@ -374,7 +383,7 @@ class SignApp(object):
             while not self.passphrase:
                 self.read_passphrase()
 
-        if self.zipalign_path:
+        if self.zipalign_path and not self.only_ppa:
             try:
                 check_call(self.zipalign_path, stderr=FNULL)
             except CalledProcessError:
@@ -475,11 +484,17 @@ class SignApp(object):
                     if name == SHA_FNAME:
                         continue
 
-                    gh_asset_download(repo, tag, name)
-
                     if not self.no_ppa:
                         sdist_match = sdist_match \
                                       or SDIST_NAME_PATTERN.match(name)
+
+                    if self.only_ppa and not sdist_match:
+                        continue
+
+                    gh_asset_download(repo, tag, name)
+
+                    if self.only_ppa:
+                        break
 
                     apk_match = UNSIGNED_APK_PATTERN.match(name)
                     if apk_match:
@@ -505,13 +520,14 @@ class SignApp(object):
                     sumline = '%s %s\n' % (sha256_checksum(name), name)
                     fdw.write(sumline)
 
-            self.sign_file_name(SHA_FNAME, detach=False)
+            if not self.only_ppa:
+                self.sign_file_name(SHA_FNAME, detach=False)
 
-            gh_asset_delete(repo, tag, '%s.asc' % SHA_FNAME,
-                            dry_run=self.dry_run)
+                gh_asset_delete(repo, tag, '%s.asc' % SHA_FNAME,
+                                dry_run=self.dry_run)
 
-            gh_asset_upload(repo, tag, '%s.asc' % SHA_FNAME,
-                            dry_run=self.dry_run)
+                gh_asset_upload(repo, tag, '%s.asc' % SHA_FNAME,
+                                dry_run=self.dry_run)
 
             if sdist_match and is_newest_release:
                 self.make_ppa(sdist_match, tmpdir, tag)
@@ -580,7 +596,7 @@ class SignApp(object):
                 else:
                     changes = '\n  * Porting to ppa\n\n'
 
-            if not self.dry_run:
+            if not self.dry_run and not self.only_ppa:
                 gh_release_edit(repo, tag, name=version)
                 gh_release_edit(repo, tag, body=changes)
 
@@ -624,7 +640,10 @@ class SignApp(object):
         """Search through last 'count' releases with assets without
         .asc counterparts or releases withouth SHA256SUMS.txt.asc
         """
-        print('Sign releases on repo: %s' % self.repo)
+        if self.only_ppa:
+            print('Make lanuchpad PPA on repo: %s' % self.repo)
+        else:
+            print('Sign releases on repo: %s' % self.repo)
         print('  With key: %s, %s\n' % (self.keyid, self.uid))
         releases = get_releases(self.repo)
 
@@ -680,7 +699,7 @@ class SignApp(object):
             if not need_to_sign:
                 need_to_sign = '%s.asc' % SHA_FNAME not in asc_names
 
-            if need_to_sign or self.force:
+            if need_to_sign or self.force or self.only_ppa:
                 self.sign_release(r, other_names, asc_names, r==releases[0])
             else:
                 print('  Seems already signed, skip release\n')
@@ -709,11 +728,13 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 @click.option('-S', '--ppa-upstream-suffix',
               help='upload upstream source with version suffix (ex p1)')
 @click.option('-L', '--no-ppa', is_flag=True,
-              help='Do not make launchpad ppa')
+              help='Do not make launchpad PPA')
 @click.option('-n', '--dry-run', is_flag=True,
               help='Do not uload signed files')
 @click.option('-p', '--ask-passphrase', is_flag=True,
               help='Ask to enter passphrase')
+@click.option('-P', '--only-ppa', is_flag=True,
+              help='Only make launchpad PPA (need --tag-name)')
 @click.option('-r', '--repo',
               help='Repository in format username/reponame')
 @click.option('-s', '--sleep', type=int,
