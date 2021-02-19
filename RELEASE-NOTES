@@ -10,6 +10,8 @@
  * qt: fix protected_with_parent decorator (#183)
  * GUI: fix send Payment msg from qt/kivy gui, do not broadcast tx
    when sending Payment to Anypay (#185)
+ * invoices: add InvoiceExt with Dash extra data support, which
+   includes PrivateSend send status and DIP2 extra data/tx type (#198)
 
 
 # Release 4.0.9.1

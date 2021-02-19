@@ -95,8 +95,11 @@ class InvoiceDialog(Factory.Popup):
         self.data = data
         self.key = key
         invoice = self.app.wallet.get_invoice(key)
+        invoice_ext = self.app.wallet.get_invoice_ext(key)
         self.amount_sat = invoice.get_amount_sat()
         self.amount_str = self.app.format_amount_and_units(self.amount_sat)
+        if invoice_ext.is_ps:
+            self.amount_str += (' ' + _('PrivateSend'))
         self.description = invoice.message
         self.update_status()
         self.log = []
@@ -122,7 +125,8 @@ class InvoiceDialog(Factory.Popup):
 
     def do_pay(self):
         invoice = self.app.wallet.get_invoice(self.key)
-        self.app.send_screen.do_pay_invoice(invoice)
+        invoice_ext = self.app.wallet.get_invoice_ext(invoice.id)
+        self.app.send_screen.do_pay_invoice(invoice, invoice_ext)
         self.dismiss()
 
     def delete_dialog(self):

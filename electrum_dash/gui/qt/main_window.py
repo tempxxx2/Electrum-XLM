@@ -53,7 +53,7 @@ from electrum_dash import (keystore, ecc, constants, util, bitcoin, commands,
                            paymentrequest)
 from electrum_dash.base_crash_reporter import BaseCrashReporter
 from electrum_dash.bitcoin import COIN, is_address
-from electrum_dash.dash_tx import DashTxError
+from electrum_dash.dash_tx import DashTxError, ProTxBase, SPEC_TX_NAMES
 from electrum_dash.plugin import run_hook, BasePlugin
 from electrum_dash.i18n import _
 from electrum_dash.util import (format_time,
@@ -239,6 +239,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.showing_cert_mismatch_error = False
         self.tl_windows = []
         self.pending_invoice = None
+        self.pending_invoice_ext = None
         Logger.__init__(self)
 
         self.tx_notification_queue = queue.Queue()
@@ -861,6 +862,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         invoices_menu = wallet_menu.addMenu(_("Invoices"))
         invoices_menu.addAction(_("Import"), lambda: self.import_invoices())
         invoices_menu.addAction(_("Export"), lambda: self.export_invoices())
+        invoices_menu.addAction(_("Export With Extensions"),
+                                lambda: self.export_invoices_with_ext())
         requests_menu = wallet_menu.addMenu(_("Requests"))
         requests_menu.addAction(_("Import"), lambda: self.import_requests())
         requests_menu.addAction(_("Export"), lambda: self.export_requests())
@@ -1735,8 +1738,21 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             pr=self.payment_request,
             URI=self.payto_URI)
 
+    def read_invoice_ext(self):
+        if not self.pending_invoice:
+            return
+        w = self.wallet
+        _id = self.pending_invoice.id
+        is_ps = self.ps_cb.isChecked()
+        tx_type, extra_payload = self.extra_payload.get_extra_data()
+        extra_payload = '' if not extra_payload else extra_payload.to_hex_str()
+        invoice_ext = w.create_invoice_ext(_id,  is_ps=is_ps, tx_type=tx_type,
+                                           extra_payload=extra_payload)
+        return invoice_ext
+
     def do_save_invoice(self):
         self.pending_invoice = self.read_invoice()
+        self.pending_invoice_ext = self.read_invoice_ext()
         if not self.pending_invoice:
             return
         self.save_pending_invoice()
@@ -1745,40 +1761,50 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if not self.pending_invoice:
             return
         self.do_clear()
+        _id = self.pending_invoice.id
+        self.wallet.save_invoice_ext(_id, self.pending_invoice_ext)
         self.wallet.save_invoice(self.pending_invoice)
         self.invoice_list.update()
         self.pending_invoice = None
+        self.pending_invoice_ext = None
 
     def do_pay(self):
         self.pending_invoice = self.read_invoice()
+        self.pending_invoice_ext = self.read_invoice_ext()
         if not self.pending_invoice:
             return
-        is_ps = self.ps_cb.isChecked()
-        tx_type, extra_payload = self.extra_payload.get_extra_data()
-        self.do_pay_invoice(self.pending_invoice, is_ps=is_ps,
-                            tx_type=tx_type, extra_payload=extra_payload)
+        self.do_pay_invoice(self.pending_invoice)
 
     def pay_multiple_invoices(self, invoices):
         outputs = []
+        invoices_ext = []
         for invoice in invoices:
             outputs += invoice.outputs
-        psman = self.wallet.psman
-        is_ps = self.ps_cb.isChecked()
-        tx_type, extra_payload = self.extra_payload.get_extra_data()
-        min_rounds = None if not is_ps else psman.mix_rounds
-        self.pay_onchain_dialog(self.get_coins(min_rounds=min_rounds), outputs,
-                                is_ps=is_ps,
-                                tx_type=tx_type, extra_payload=extra_payload)
+            invoices_ext.append(self.wallet.get_invoice_ext(invoice.id))
+        if any([i.is_ps for i in invoices_ext]):
+            raise Exception('Can not do batch payment with'
+                            ' PrivateSend options on invoices')
+        if any([(i.tx_type or i.extra_payload) for i in invoices_ext]):
+            raise Exception('Can not do batch payment with DIP2'
+                            ' tx type/extra payload on invoices')
+        self.pay_onchain_dialog(self.get_coins(min_rounds=None), outputs,
+                                is_ps=False, tx_type=0, extra_payload=b'')
 
-    def do_pay_invoice(self, invoice: 'Invoice', is_ps=False,
-                       tx_type=0, extra_payload=b''):
+    def do_pay_invoice(self, invoice: 'Invoice'):
         if invoice.type == PR_TYPE_ONCHAIN:
             assert isinstance(invoice, OnchainInvoice)
             psman = self.wallet.psman
-            min_rounds = None if not is_ps else psman.mix_rounds
+            _id = invoice.id
+            invoice_ext = self.wallet.get_invoice_ext(_id)
+            is_ps = invoice_ext.is_ps
+            min_rounds = psman.mix_rounds if is_ps else None
+            tx_type = invoice_ext.tx_type
+            extra_payload = invoice_ext.extra_payload
+            extra_payload = ProTxBase.from_hex_str(tx_type, extra_payload)
             self.pay_onchain_dialog(self.get_coins(min_rounds=min_rounds),
                                     invoice.outputs, is_ps=is_ps,
-                                    tx_type=tx_type, extra_payload=extra_payload)
+                                    tx_type=tx_type,
+                                    extra_payload=extra_payload)
         else:
             raise Exception('unknown invoice type')
 
@@ -2156,6 +2182,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.invoice_list.update()
 
     def payment_request_ok(self):
+        self.extra_payload.clear()
+        self.hide_extra_payload()
+        self.reset_privatesend()
         pr = self.payment_request
         if not pr:
             return
@@ -2178,6 +2207,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.amount_e.textEdited.emit("")
 
     def payment_request_error(self):
+        self.extra_payload.clear()
+        self.hide_extra_payload()
+        self.reset_privatesend()
         pr = self.payment_request
         if not pr:
             return
@@ -2348,31 +2380,45 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.update_completions()
 
     def show_onchain_invoice(self, invoice: OnchainInvoice):
+        invoice_ext = self.wallet.get_invoice_ext(invoice.id)
         amount_str = self.format_amount(invoice.amount_sat) + ' ' + self.base_unit()
         d = WindowModalDialog(self, _("Onchain Invoice"))
+        d.setMinimumWidth(650)
         vbox = QVBoxLayout(d)
         grid = QGridLayout()
         grid.addWidget(QLabel(_("Amount") + ':'), 1, 0)
+        if invoice_ext.is_ps:
+            amount_str = '%s %s' % (amount_str, _('PrivateSend'))
         grid.addWidget(QLabel(amount_str), 1, 1)
+        tx_type = invoice_ext.tx_type
+        type_str = SPEC_TX_NAMES[tx_type]
+        grid.addWidget(QLabel(_('Type') + ':'), 2, 0)
+        grid.addWidget(QLabel(type_str), 2, 1)
         if len(invoice.outputs) == 1:
-            grid.addWidget(QLabel(_("Address") + ':'), 2, 0)
-            grid.addWidget(QLabel(invoice.get_address()), 2, 1)
+            grid.addWidget(QLabel(_("Address") + ':'), 3, 0)
+            grid.addWidget(QLabel(invoice.get_address()), 3, 1)
         else:
             outputs_str = '\n'.join(map(lambda x: x.address + ' : ' + self.format_amount(x.value)+ self.base_unit(), invoice.outputs))
-            grid.addWidget(QLabel(_("Outputs") + ':'), 2, 0)
-            grid.addWidget(QLabel(outputs_str), 2, 1)
-        grid.addWidget(QLabel(_("Description") + ':'), 3, 0)
-        grid.addWidget(QLabel(invoice.message), 3, 1)
+            grid.addWidget(QLabel(_("Outputs") + ':'), 3, 0)
+            grid.addWidget(QLabel(outputs_str), 3, 1)
+        grid.addWidget(QLabel(_("Description") + ':'), 4, 0)
+        grid.addWidget(QLabel(invoice.message), 4, 1)
         if invoice.exp:
-            grid.addWidget(QLabel(_("Expires") + ':'), 4, 0)
-            grid.addWidget(QLabel(format_time(invoice.exp + invoice.time)), 4, 1)
+            grid.addWidget(QLabel(_("Expires") + ':'), 5, 0)
+            grid.addWidget(QLabel(format_time(invoice.exp + invoice.time)), 5, 1)
+        extra_payload = invoice_ext.extra_payload
+        extra_payload = ProTxBase.from_hex_str(tx_type, extra_payload)
+        if tx_type and extra_payload:
+            epw = ExtraPayloadWidget(self)
+            epw.set_extra_data(tx_type, extra_payload)
+            grid.addWidget(epw, 6, 0, 1, -1)
         if invoice.bip70:
             pr = paymentrequest.PaymentRequest(bytes.fromhex(invoice.bip70))
             pr.verify(self.contacts)
-            grid.addWidget(QLabel(_("Requestor") + ':'), 5, 0)
-            grid.addWidget(QLabel(pr.get_requestor()), 5, 1)
-            grid.addWidget(QLabel(_("Signature") + ':'), 6, 0)
-            grid.addWidget(QLabel(pr.get_verify_status()), 6, 1)
+            grid.addWidget(QLabel(_("Requestor") + ':'), 7, 0)
+            grid.addWidget(QLabel(pr.get_requestor()), 7, 1)
+            grid.addWidget(QLabel(_("Signature") + ':'), 8, 0)
+            grid.addWidget(QLabel(pr.get_verify_status()), 8, 1)
             def do_export():
                 key = pr.get_id()
                 name = str(key) + '.bip70'
@@ -3115,6 +3161,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def export_invoices(self):
         export_meta_gui(self, _('invoices'), self.wallet.export_invoices)
+
+    def export_invoices_with_ext(self):
+        export_meta_gui(self, _('invoices_with_ext'),
+                        self.wallet.export_invoices_with_ext)
 
     def import_requests(self):
         import_meta_gui(self, _('requests'), self.wallet.import_requests, self.request_list.update)

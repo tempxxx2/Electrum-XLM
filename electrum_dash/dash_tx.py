@@ -230,6 +230,27 @@ class ProTxBase:
             d[f] = v
         return d
 
+    @classmethod
+    def from_hex_str(cls, tx_type, hex_str):
+        if tx_type == STANDARD_TX:
+            return b''
+        spec_tx_class = SPEC_TX_HANDLERS.get(tx_type)
+        if not spec_tx_class:
+            return bfh(hex_str)
+        from .transaction import BCDataStream
+        vds = BCDataStream()
+        vds.write(bfh(hex_str))
+        read_method = getattr(spec_tx_class, 'read_vds', None)
+        if not read_method:
+            raise NotImplementedError('%s has no read_vds method' %
+                                      spec_tx_class)
+        extra_payload = read_method(vds)
+        assert isinstance(extra_payload, spec_tx_class)
+        return extra_payload
+
+    def to_hex_str(self):
+        return bh2u(self.serialize())
+
     def update_with_tx_data(self, *args, **kwargs):
         '''Update spec tx data based on main tx data inputs/outputs changes'''
 
