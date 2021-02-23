@@ -14,7 +14,7 @@ from kivy.uix.button import Button
 from .question import Question
 from electrum_dash.gui.kivy.i18n import _
 
-from electrum_dash.dash_tx import SPEC_TX_NAMES, tx_header_to_tx_type
+from electrum_dash.dash_tx import SPEC_TX_NAMES
 from electrum_dash.util import InvalidPassword, bfh
 from electrum_dash.address_synchronizer import TX_HEIGHT_LOCAL
 from electrum_dash.transaction import Transaction, PartialTransaction
@@ -144,8 +144,7 @@ class TxDialog(Factory.Popup):
         self.update()
 
     def update(self):
-        raw_tx = str(self.tx)
-        tx_type = tx_header_to_tx_type(bfh(raw_tx[:8]))
+        tx_type = self.tx.tx_type
         if tx_type == 0:
             txid = self.tx.txid()
             tx_type, completed = self.wallet.db.get_ps_tx(txid)
