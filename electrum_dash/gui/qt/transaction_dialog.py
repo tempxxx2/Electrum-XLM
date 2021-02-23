@@ -483,11 +483,12 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
         else:
             self.save_button.setToolTip(_("Transaction already saved or not yet signed."))
 
-        if self.tx.tx_type == 0:
+        tx_type = self.tx.tx_type
+        if tx_type == 0:
             txid = self.tx.txid()
-            tx_type, completed = self.wallet.db.get_ps_tx(txid)
+            if txid:
+                tx_type, completed = self.wallet.db.get_ps_tx(txid)
         else:
-            tx_type = self.tx.tx_type
             if tx_type:
                 extra_payload = self.tx.extra_payload
                 self.extra_pld.set_extra_data(tx_type, extra_payload)

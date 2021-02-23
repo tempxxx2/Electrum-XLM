@@ -147,7 +147,8 @@ class TxDialog(Factory.Popup):
         tx_type = self.tx.tx_type
         if tx_type == 0:
             txid = self.tx.txid()
-            tx_type, completed = self.wallet.db.get_ps_tx(txid)
+            if txid:
+                tx_type, completed = self.wallet.db.get_ps_tx(txid)
         self.title = '%s %s' % (SPEC_TX_NAMES[tx_type], _('Transaction'))
         format_amount = self.app.format_amount_and_units
         tx_details = self.wallet.get_tx_info(self.tx)
