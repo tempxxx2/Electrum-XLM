@@ -485,18 +485,17 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
 
         tx_type = self.tx.tx_type
         if tx_type == 0:
+            self.extra_pld_lb.hide()
+            self.extra_pld.hide()
+
             txid = self.tx.txid()
             if txid:
                 tx_type, completed = self.wallet.db.get_ps_tx(txid)
         else:
-            if tx_type:
-                extra_payload = self.tx.extra_payload
-                self.extra_pld.set_extra_data(tx_type, extra_payload)
-                self.extra_pld_lb.show()
-                self.extra_pld.show()
-            else:
-                self.extra_pld_lb.hide()
-                self.extra_pld.hide()
+            extra_payload = self.tx.extra_payload
+            self.extra_pld.set_extra_data(tx_type, extra_payload)
+            self.extra_pld_lb.show()
+            self.extra_pld.show()
         tx_type_name = '%s: %s, ' % (_('Type'), SPEC_TX_NAMES[tx_type])
         self.txid_lb.setText(tx_type_name + _('Transaction ID:'))
 
