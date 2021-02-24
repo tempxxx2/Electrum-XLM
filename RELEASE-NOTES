@@ -1,3 +1,10 @@
+# Release 4.0.9.3
+
+ * kivy: fix history screen tx_type processing (#207)
+ * qt: pass InvoiceExt data to do_pay_invoice (#209)
+ * kivy/qt: fix tx_type handling (#210)
+
+
 # Release 4.0.9.2
 
  * qt: fix PayToEdit.parse_amount (#172)
