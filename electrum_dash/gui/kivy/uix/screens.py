@@ -243,7 +243,7 @@ class HistoryScreen(CScreen):
         self.context_menu = ContextMenu(data, menu_actions)
         self.cmbox.add_widget(self.context_menu)
 
-    def get_card(self, tx_item):
+    def get_card(self, tx_item, show_dip2):
         timestamp = tx_item['timestamp']
         islock = tx_item['islock']
         key = tx_item.get('txid')
@@ -260,7 +260,7 @@ class HistoryScreen(CScreen):
         fee_text = '' if fee is None else 'fee: %d duffs'%fee
         ri = {}
         ri['screen'] = self
-        ri['tx_type'] = tx_item['tx_type']
+        ri['tx_type'] = tx_item['tx_type'] if show_dip2 else ''
         ri['key'] = key
         ri['icon'] = icon
         ri['group_icn'] = tx_item['group_icon']
@@ -352,7 +352,12 @@ class HistoryScreen(CScreen):
             selected_node = len(history) - 1 - selected_node
         history = reversed(history)
         history_card = self.ids.history_container
-        history_card.data = [self.get_card(item) for item in history]
+        psman = self.app.wallet.psman
+        config = self.app.electrum_config
+        def_dip2 = not psman.unsupported
+        show_dip2 = config.get('show_dip2_tx_type', def_dip2)
+        history_card.data = [self.get_card(item, show_dip2)
+                             for item in history]
         if selected_node is not None:
             history_card.layout_manager.select_node(selected_node)
 
