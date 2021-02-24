@@ -64,7 +64,9 @@ from electrum_dash.util import (format_time,
                                 InvalidBitcoinURI, NotEnoughFunds, FILE_OWNER_MODE,
                                 NoDynamicFeeEstimates, MultipleSpendMaxTxOutputs,
                                 DASH_BIP21_URI_SCHEME, PAY_BIP21_URI_SCHEME)
-from electrum_dash.invoices import PR_TYPE_ONCHAIN, PR_DEFAULT_EXPIRATION_WHEN_CREATING, Invoice
+from electrum_dash.invoices import (PR_TYPE_ONCHAIN,
+                                    PR_DEFAULT_EXPIRATION_WHEN_CREATING,
+                                    Invoice, InvoiceExt)
 from electrum_dash.invoices import PR_PAID, PR_FAILED, pr_expiration_values, OnchainInvoice
 from electrum_dash.transaction import (Transaction, PartialTxInput,
                                        PartialTransaction, PartialTxOutput)
@@ -1773,7 +1775,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.pending_invoice_ext = self.read_invoice_ext()
         if not self.pending_invoice:
             return
-        self.do_pay_invoice(self.pending_invoice)
+        self.do_pay_invoice(self.pending_invoice, self.pending_invoice_ext)
 
     def pay_multiple_invoices(self, invoices):
         outputs = []
@@ -1790,12 +1792,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.pay_onchain_dialog(self.get_coins(min_rounds=None), outputs,
                                 is_ps=False, tx_type=0, extra_payload=b'')
 
-    def do_pay_invoice(self, invoice: 'Invoice'):
+    def do_pay_invoice(self, invoice: 'Invoice',
+                       invoice_ext: 'InvoiceExt' = None):
         if invoice.type == PR_TYPE_ONCHAIN:
             assert isinstance(invoice, OnchainInvoice)
             psman = self.wallet.psman
-            _id = invoice.id
-            invoice_ext = self.wallet.get_invoice_ext(_id)
+            if invoice_ext is None:
+                _id = invoice.id
+                invoice_ext = self.wallet.get_invoice_ext(_id)
             is_ps = invoice_ext.is_ps
             min_rounds = psman.mix_rounds if is_ps else None
             tx_type = invoice_ext.tx_type
