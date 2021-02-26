@@ -354,7 +354,11 @@ class OpenWalletDialog(PasswordDialog):
             if db.upgrade_done:
                 self.storage.backup_old_version()
                 self.app.show_backup_msg()
-            wallet = Wallet(db, self.storage, config=self.app.electrum_config)
-            self.require_password = wallet.has_password()
-            self.pw_check = wallet.check_password
-            self.message = self.enter_pw_message if self.require_password else _('Wallet not encrypted')
+            if db.check_unfinished_multisig():
+                self.require_password = False
+            else:
+                wallet = Wallet(db, self.storage, config=self.app.electrum_config)
+                self.require_password = wallet.has_password()
+                self.pw_check = wallet.check_password
+            self.message = (self.enter_pw_message if self.require_password
+                            else _('Wallet not encrypted'))
