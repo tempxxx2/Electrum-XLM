@@ -1078,7 +1078,7 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                 lines.append([item['txid'],
                               item.get('label', ''),
                               item['confirmations'],
-                              item['value'],
+                              item['bc_value'],
                               item.get('fiat_value', ''),
                               item.get('fee', ''),
                               item.get('fiat_fee', ''),
