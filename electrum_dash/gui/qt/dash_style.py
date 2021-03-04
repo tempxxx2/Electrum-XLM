@@ -754,17 +754,20 @@ QDialog QScrollArea {
     background: transparent;
 }
 
-QDialog QTabWidget {
+QDialog QTabWidget,
+QTabWidget QTabWidget {
     border-bottom:1px solid #333;
 }
 
-QDialog QTabWidget::pane {
+QDialog QTabWidget::pane,
+QTabWidget QTabWidget::pane {
     border: 1px solid #d7d7d7;
     color:#818181;
     background:qradialgradient(cx:0.5, cy:0.5, radius: 0.5, fx:0.5, fy:0.5, stop:0 rgba(255, 255, 255, 255), stop: 1 rgba(246, 246, 246, 255));
 }
 
-QDialog QTabWidget QTabBar::tab {
+QDialog QTabWidget QTabBar::tab,
+QTabWidget QTabWidget QTabBar::tab {
     background-color:#f2f0f0;
     color:#333;
     padding-left:10px;
@@ -774,17 +777,66 @@ QDialog QTabWidget QTabBar::tab {
     border-top: 1px solid #d7d7d7;
 }
 
-QDialog QTabWidget QTabBar::tab:first {
+QDialog QTabWidget QTabBar::tab:first,
+QTabWidget QTabWidget QTabBar::tab:first {
     border-left: 1px solid #d7d7d7;
 }
 
-QDialog QTabWidget QTabBar::tab:last {
+QDialog QTabWidget QTabBar::tab:last,
+QTabWidget QTabWidget QTabBar::tab:last {
     border-right: 1px solid #d7d7d7;
 }
 
-QDialog QTabWidget QTabBar::tab:selected, QDialog QTabWidget QTabBar::tab:hover {
+QDialog QTabWidget QTabBar::tab:selected,
+QDialog QTabWidget QTabBar::tab:hover,
+QTabWidget QTabWidget QTabBar::tab:selected,
+QTabWidget QTabWidget QTabBar::tab:hover {
     background-color:#ffffff;
     color:#333;
+}
+
+QDialog QTabWidget QTabBar::tear,
+QTabWidget QTabWidget QTabBar::tear {
+    width: 0px;
+    border: none;
+    border-right: 1px solid #d7d7d7;
+}
+
+QDialog QTabWidget QTabBar::scroller,
+QTabWidget QTabWidget QTabBar::scroller {
+    width: 36;
+}
+
+QDialog QTabWidget QTabBar QToolButton,
+QTabWidget QTabWidget QTabBar QToolButton {
+    background-color: #f2f0f0;
+    border: 1px solid #d7d7d7;
+    border-bottom: none;
+}
+
+QDialog QTabWidget QTabBar QToolButton:hover,
+QTabWidget QTabWidget QTabBar QToolButton:hover {
+    background-color: #ffffff;
+}
+
+QDialog QTabWidget QTabBar QToolButton::left-arrow,
+QTabWidget QTabWidget QTabBar QToolButton::left-arrow {
+    image: url({pkg_dir}/gui/icons/dash_leftArrow_small.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::left-arrow:disabled,
+QTabWidget QTabWidget QTabBar QToolButton::left-arrow:disabled {
+    image: url({pkg_dir}/gui/icons/dash_leftArrow_small_disabled.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::right-arrow,
+QTabWidget QTabWidget QTabBar QToolButton::right-arrow {
+    image: url({pkg_dir}/gui/icons/dash_rightArrow_small.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::right-arrow:disabled,
+QTabWidget QTabWidget QTabBar QToolButton::right-arrow:disabled {
+    image: url({pkg_dir}/gui/icons/dash_rightArrow_small_disabled.png);
 }
 
 QDialog HelpButton {
