@@ -209,7 +209,7 @@ QValidatedLineEdit:read-only, QLineEdit:read-only, PayToEdit:read-only {
 }
 
 PayToEdit {
-    padding: 6px;
+    padding: 1px;
 }
 
 ButtonsLineEdit {
