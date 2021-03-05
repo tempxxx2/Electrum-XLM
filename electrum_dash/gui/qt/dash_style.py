@@ -62,6 +62,24 @@ QGroupBox::title {
     background: url({pkg_dir}/gui/icons/navlogo.png) no-repeat left top;
 }
 
+#main_window_nav_bar > QTabBar::tear {
+    width: 126px;
+    height: 48px;
+    background: url({pkg_dir}/gui/icons/navlogo.png) no-repeat left top;
+}
+
+#main_window_nav_bar > QTabBar::scroller {
+    width: 64;
+}
+
+#main_window_nav_bar > QTabBar QToolButton {
+    background-color: #1e75b4;
+}
+
+#main_window_nav_bar > QTabBar QToolButton:hover {
+    background-color: #0d436e;
+}
+
 QTabWidget#main_window_nav_bar::tab-bar {
     alignment: left;
 }
