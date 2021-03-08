@@ -246,6 +246,8 @@ async def run_offline_command(config, config_options, plugins: 'Plugins'):
                 config_options['password'] = password
             storage.decrypt(password)
         db = WalletDB(storage.read(), manual_upgrades=False)
+        if db.upgrade_done:
+            storage.backup_old_version()
         wallet = Wallet(db, storage, config=config)
         config_options['wallet'] = wallet
     else:
