@@ -28,10 +28,3 @@ docker run --rm \
     -v $(pwd):/home/buildozer/build \
     -t zebralucky/electrum-dash-winebuild:Kivy40x bash -c \
     "$DOCKER_CMD"
-
-FNAME_TAIL=release-unsigned.apk
-if [[ $ELECTRUM_MAINNET == "false" ]]; then
-  PATHNAME_START=bin/Electrum_DASH_Testnet
-else
-  PATHNAME_START=bin/Electrum_DASH
-fi
