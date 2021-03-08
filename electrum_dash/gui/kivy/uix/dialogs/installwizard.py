@@ -509,9 +509,10 @@ Builder.load_string('''
 
 <ShowXpubDialog>
     xpub: ''
-    message: _('Here is your master public key. Share it with your cosigners.')
+    message: ''
+    title: ''
     BigLabel:
-        text: "MASTER PUBLIC KEY"
+        text: root.title
     GridLayout
         cols: 1
         padding: 0, '12dp'
@@ -1083,6 +1084,14 @@ class ShowXpubDialog(WizardDialog):
     def __init__(self, wizard, **kwargs):
         WizardDialog.__init__(self, wizard, **kwargs)
         self.xpub = kwargs['xpub']
+        hw_info = kwargs.get('hw_info')
+        self.title = (_('Hardware Wallet Public Key') if hw_info else
+                      _('Master Public Key')).upper()
+        self.message = ' '.join([
+            _("Here is your {} public key.").format(hw_info) if hw_info else
+            _("Here is your master public key."),
+            _("Please share it with your cosigners.")
+        ])
         self.ids.next.disabled = False
         self.ids.save_btn.visible = True
 
