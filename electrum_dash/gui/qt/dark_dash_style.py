@@ -62,6 +62,24 @@ QGroupBox::title {
     background: url({pkg_dir}/gui/icons/navlogo.png) no-repeat left top;
 }
 
+#main_window_nav_bar > QTabBar::tear {
+    width: 126px;
+    height: 48px;
+    background: url({pkg_dir}/gui/icons/navlogo.png) no-repeat left top;
+}
+
+#main_window_nav_bar > QTabBar::scroller {
+    width: 64;
+}
+
+#main_window_nav_bar > QTabBar QToolButton {
+    background-color: #1e75b4;
+}
+
+#main_window_nav_bar > QTabBar QToolButton:hover {
+    background-color: #0d436e;
+}
+
 QTabWidget#main_window_nav_bar::tab-bar {
     alignment: left;
 }
@@ -209,7 +227,7 @@ QValidatedLineEdit:read-only, QLineEdit:read-only, PayToEdit:read-only {
 }
 
 PayToEdit {
-    padding: 6px;
+    padding: 1px;
 }
 
 ButtonsLineEdit {
@@ -754,17 +772,20 @@ QDialog QScrollArea {
     background: transparent;
 }
 
-QDialog QTabWidget {
+QDialog QTabWidget,
+QTabWidget QTabWidget {
     border-bottom:1px solid #333;
 }
 
-QDialog QTabWidget::pane {
+QDialog QTabWidget::pane,
+QTabWidget QTabWidget::pane {
     border: 1px solid #53565b;
     color: #ccc;
     background-color: #232629;
 }
 
-QDialog QTabWidget QTabBar::tab {
+QDialog QTabWidget QTabBar::tab,
+QTabWidget QTabWidget QTabBar::tab {
     background-color: #232629;
     color: #ccc;
     padding-left:10px;
@@ -774,17 +795,66 @@ QDialog QTabWidget QTabBar::tab {
     border-top: 1px solid #53565b;
 }
 
-QDialog QTabWidget QTabBar::tab:first {
+QDialog QTabWidget QTabBar::tab:first,
+QTabWidget QTabWidget QTabBar::tab:first {
     border-left: 1px solid #53565b;
 }
 
-QDialog QTabWidget QTabBar::tab:last {
+QDialog QTabWidget QTabBar::tab:last,
+QTabWidget QTabWidget QTabBar::tab:last {
     border-right: 1px solid #53565b;
 }
 
-QDialog QTabWidget QTabBar::tab:selected, QDialog QTabWidget QTabBar::tab:hover {
+QDialog QTabWidget QTabBar::tab:selected,
+QDialog QTabWidget QTabBar::tab:hover,
+QTabWidget QTabWidget QTabBar::tab:selected,
+QTabWidget QTabWidget QTabBar::tab:hover {
     background-color: #53565b;
     color: #ccc;
+}
+
+QDialog QTabWidget QTabBar::tear,
+QTabWidget QTabWidget QTabBar::tear {
+    width: 0px;
+    border: none;
+    border-right: 1px solid #53565b;
+}
+
+QDialog QTabWidget QTabBar::scroller,
+QTabWidget QTabWidget QTabBar::scroller {
+    width: 36;
+}
+
+QDialog QTabWidget QTabBar QToolButton,
+QTabWidget QTabWidget QTabBar QToolButton {
+    background-color: #232629;
+    border: 1px solid #53565b;
+    border-bottom: none;
+}
+
+QDialog QTabWidget QTabBar QToolButton:hover,
+QTabWidget QTabWidget QTabBar QToolButton:hover {
+    background-color: #53565b;
+}
+
+QDialog QTabWidget QTabBar QToolButton::left-arrow,
+QTabWidget QTabWidget QTabBar QToolButton::left-arrow {
+    image: url({pkg_dir}/gui/icons/dash_leftArrow_small.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::left-arrow:disabled,
+QTabWidget QTabWidget QTabBar QToolButton::left-arrow:disabled {
+    image: url({pkg_dir}/gui/icons/dash_leftArrow_small_disabled.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::right-arrow,
+QTabWidget QTabWidget QTabBar QToolButton::right-arrow {
+    image: url({pkg_dir}/gui/icons/dash_rightArrow_small.png);
+}
+
+QDialog QTabWidget QTabBar QToolButton::right-arrow:disabled,
+QTabWidget QTabWidget QTabBar QToolButton::right-arrow:disabled {
+    image: url({pkg_dir}/gui/icons/dash_rightArrow_small_disabled.png);
 }
 
 QDialog HelpButton {

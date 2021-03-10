@@ -71,7 +71,6 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
         self.document().contentsChanged.connect(self.update_size)
         self.heightMin = 0
         self.heightMax = 250
-        self.document().setDocumentMargin(0)
         self.c = None
         self.textChanged.connect(self.check_text)
         self.outputs = []  # type: List[PartialTxOutput]
