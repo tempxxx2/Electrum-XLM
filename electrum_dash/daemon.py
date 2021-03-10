@@ -458,6 +458,11 @@ class Daemon(Logger):
         db = WalletDB(storage.read(), manual_upgrades=manual_upgrades)
         if db.upgrade_done:
             storage.backup_old_version()
+        if getattr(storage, 'backup_message', None):
+            log_backup_msg = ' '.join(storage.backup_message.split('\n'))
+            self.logger.info(f'{log_backup_msg}')
+            if not self.config.get('detach'):
+                util.print_stderr(f'{storage.backup_message}\n')
         if db.requires_split():
             return
         if db.requires_upgrade():
