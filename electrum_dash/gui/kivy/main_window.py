@@ -397,6 +397,7 @@ class ElectrumWindow(App, Logger):
         self._periodic_update_status_during_sync = Clock.schedule_interval(self.update_wallet_synchronizing_progress, .5)
 
         # cached dialogs
+        self._plugins_dialog = None
         self._settings_dialog = None
         self._dash_net_dialog = None
         self._addresses_dialog = None
@@ -760,6 +761,13 @@ class ElectrumWindow(App, Logger):
         d = WalletDialog(dirname, self.load_wallet_by_name)
         d.open()
 
+    def plugins_dialog(self):
+        from .uix.dialogs.plugins import PluginsDialog
+        if self._plugins_dialog is None:
+            self._plugins_dialog = PluginsDialog(self)
+        self._plugins_dialog.update()
+        self._plugins_dialog.open()
+
     def dash_net_dialog(self):
         from .uix.dialogs.dash_net import DashNetDialog
         if self._dash_net_dialog is None:
@@ -777,6 +785,8 @@ class ElectrumWindow(App, Logger):
     def popup_dialog(self, name):
         if name == 'settings':
             self.settings_dialog()
+        elif name == 'plugins':
+            self.plugins_dialog()
         elif name == 'dash_net':
             self.dash_net_dialog()
         elif name == 'privatesend':

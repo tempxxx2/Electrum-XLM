@@ -492,6 +492,9 @@ BoxLayout:
                         # when widget overflow drop down is shown, adjust the width
                         parent = args[1]
                         if parent: ao._dropdown.width = sp(200)
+                ActionOvrButton:
+                    name: 'plugins'
+                    text: _('Plugins')
 
     ScreenManager:
         id: manager
