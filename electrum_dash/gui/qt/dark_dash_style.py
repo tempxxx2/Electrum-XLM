@@ -127,44 +127,54 @@ QCheckBox {
     spacing: 5px;
 }
 
-QCheckBox::indicator {
+QCheckBox::indicator,
+QTreeWidget::indicator {
     width: 16px;
     height: 16px;
 }
 
-QCheckBox::indicator:unchecked {
+QCheckBox::indicator:unchecked,
+QTreeWidget::indicator:unchecked {
     image:url({pkg_dir}/gui/icons/checkbox/unchecked-dark.png);
 }
 
-QCheckBox::indicator:unchecked:disabled {
+QCheckBox::indicator:unchecked:disabled,
+QTreeWidget::indicator:unchecked:disabled {
     image:url({pkg_dir}/gui/icons/checkbox/unchecked_disabled-dark.png);
 }
 
-QCheckBox::indicator:unchecked:pressed {
+QCheckBox::indicator:unchecked:pressed,
+QTreeWidget::indicator:unchecked:pressed {
     image:url({pkg_dir}/gui/icons/checkbox/checked.png);
 }
 
-QCheckBox::indicator:checked {
+QCheckBox::indicator:checked,
+QTreeWidget::indicator:checked {
     image:url({pkg_dir}/gui/icons/checkbox/checked.png);
 }
 
-QCheckBox::indicator:checked:disabled {
+QCheckBox::indicator:checked:disabled,
+QTreeWidget::indicator:checked:disabled {
     image:url({pkg_dir}/gui/icons/checkbox/checked_disabled.png);
 }
 
-QCheckBox::indicator:checked:pressed {
+QCheckBox::indicator:checked:pressed,
+QTreeWidget::indicator:checked:pressed {
     image:url({pkg_dir}/gui/icons/checkbox/unchecked-dark.png);
 }
 
-QCheckBox::indicator:indeterminate {
+QCheckBox::indicator:indeterminate,
+QTreeWidget::indicator:indeterminate {
     image:url({pkg_dir}/gui/icons/checkbox/indeterminate.png);
 }
 
-QCheckBox::indicator:indeterminate:disabled {
+QCheckBox::indicator:indeterminate:disabled,
+QTreeWidget::indicator:indeterminate:disabled {
     image:url({pkg_dir}/gui/icons/checkbox/indeterminate_disabled.png);
 }
 
-QCheckBox::indicator:indeterminate:pressed {
+QCheckBox::indicator:indeterminate:pressed,
+QTreeWidget::indicator:indeterminate:pressed {
     image:url({pkg_dir}/gui/icons/checkbox/checked.png);
 }
 
