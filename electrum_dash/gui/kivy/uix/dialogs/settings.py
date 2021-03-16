@@ -1,6 +1,6 @@
 from kivy.app import App
 from kivy.factory import Factory
-from kivy.properties import ObjectProperty
+from kivy.properties import ObjectProperty, BooleanProperty
 from kivy.lang import Builder
 
 from electrum_dash.util import base_units_list
@@ -56,7 +56,7 @@ Builder.load_string('''
                     action: partial(root.fx_dialog, self)
                 CardSeparator
                 SettingsItem:
-                    status: 'ON' if bool(app.plugins.get('labels')) else 'OFF'
+                    status: 'ON' if root.labels_plugin_on else 'OFF'
                     title: _('Labels Sync') + ': ' + self.status
                     description: _("Save and synchronize your labels.")
                     action: partial(root.plugin_dialog, 'labels', self)
@@ -93,6 +93,8 @@ Builder.load_string('''
 
 class SettingsDialog(Factory.Popup):
 
+    labels_plugin_on = BooleanProperty(False)
+
     def __init__(self, app):
         self.app = app
         self.plugins = self.app.plugins
@@ -111,6 +113,7 @@ class SettingsDialog(Factory.Popup):
         self.wallet = self.app.wallet
         self.use_encryption = self.wallet.has_password() if self.wallet else False
         self.has_pin_code = self.app.has_pin_code()
+        self.labels_plugin_on = bool(self.app.plugins.get('labels'))
 
     def get_language_name(self):
         return languages.get(self.config.get('language', 'en_UK'), '')
@@ -192,7 +195,7 @@ class SettingsDialog(Factory.Popup):
         from .checkbox_dialog import CheckBoxDialog
         def callback(status):
             self.plugins.enable(name) if status else self.plugins.disable(name)
-            label.status = 'ON' if status else 'OFF'
+            self.labels_plugin_on = status
         status = bool(self.plugins.get(name))
         dd = self.plugins.descriptions.get(name)
         descr = dd.get('description')
