@@ -50,6 +50,9 @@ class ElectrumGui:
         db = WalletDB(storage.read(), manual_upgrades=False)
         if db.upgrade_done:
             storage.backup_old_version()
+        if db.check_unfinished_multisig():
+            print('Can not open unfinished multisig wallet')
+            exit()
 
         if getattr(storage, 'backup_message', None):
             print(f'{storage.backup_message}\n')
