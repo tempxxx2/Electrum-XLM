@@ -3422,7 +3422,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 cb = QCheckBox(descr['fullname'])
                 plugin_is_loaded = p is not None
                 cb_enabled = (not plugin_is_loaded and plugins.is_available(name, self.wallet)
-                              or plugin_is_loaded and p.can_user_disable())
+                              or plugin_is_loaded and p.is_available() and p.can_user_disable())
                 cb.setEnabled(cb_enabled)
                 cb.setChecked(plugin_is_loaded and p.is_enabled())
                 grid.addWidget(cb, i, 0)
