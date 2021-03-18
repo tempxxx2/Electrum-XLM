@@ -23,9 +23,11 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
+import math
 from typing import Optional, List, Dict, Sequence, Set
 from enum import IntEnum
-import copy
+from functools import partial
 
 from PyQt5.QtCore import (pyqtSignal, Qt, QModelIndex, QVariant,
                           QAbstractItemModel, QItemSelectionModel)
@@ -38,7 +40,7 @@ from electrum_dash.transaction import PartialTxInput
 from electrum_dash.dash_ps import (PSCoinRounds, sort_utxos_by_ps_rounds,
                                    ps_coin_rounds_str)
 from electrum_dash.logging import Logger
-from electrum_dash.util import profiler
+from electrum_dash.util import profiler, format_time
 
 from .util import MyTreeView, ColorScheme, MONOSPACE_FONT, EnterButton, GetDataThread
 
@@ -75,16 +77,18 @@ class KeystoreFilter(IntEnum):
 
 
 class UTXOColumns(IntEnum):
-    OUTPOINT = 0
-    ADDRESS = 1
-    LABEL = 2
-    AMOUNT = 3
-    HEIGHT = 4
-    PS_ROUNDS = 5
-    KEYSTORE_TYPE = 6
+    DATE = 0
+    OUTPOINT = 1
+    ADDRESS = 2
+    LABEL = 3
+    AMOUNT = 4
+    HEIGHT = 5
+    PS_ROUNDS = 6
+    KEYSTORE_TYPE = 7
 
 
 UTXOHeaders = {
+    UTXOColumns.DATE: _('Date'),
     UTXOColumns.ADDRESS: _('Address'),
     UTXOColumns.LABEL: _('Label'),
     UTXOColumns.PS_ROUNDS: _('PS Rounds'),
@@ -102,6 +106,7 @@ class UTXOModel(QAbstractItemModel, Logger):
     SELECT_ROWS = QItemSelectionModel.Rows | QItemSelectionModel.Select
 
     SORT_KEYS = {
+        UTXOColumns.DATE: lambda x: x['prevout_timestamp'],
         UTXOColumns.ADDRESS: lambda x: x['address'],
         UTXOColumns.LABEL: lambda x: x['label'],
         UTXOColumns.PS_ROUNDS: lambda x: x['ix'],
@@ -125,6 +130,7 @@ class UTXOModel(QAbstractItemModel, Logger):
 
     def set_view(self, utxo_list):
         self.view = utxo_list
+        self.set_visibility_of_columns()
 
     def headerData(self, section, orientation, role):
         if role != Qt.DisplayRole:
@@ -170,6 +176,12 @@ class UTXOModel(QAbstractItemModel, Logger):
         is_frozen_addr = coin_item['is_frozen_addr']
         is_frozen_coin = coin_item['is_frozen_coin']
         height = coin_item['height']
+        time_str = ''
+        if self.view.config.get('show_utxo_time', False):
+            prevout_timestamp = coin_item['prevout_timestamp']
+            time_str = (format_time(prevout_timestamp)
+                        if prevout_timestamp < math.inf
+                        else _('unknown'))
         outpoint = coin_item['outpoint']
         out_short = coin_item['out_short']
         label = coin_item['label']
@@ -197,8 +209,9 @@ class UTXOModel(QAbstractItemModel, Logger):
                 return QVariant(outpoint)
         elif role not in (Qt.DisplayRole, Qt.EditRole):
             if role == Qt.TextAlignmentRole:
-                if col in [UTXOColumns.AMOUNT, UTXOColumns.HEIGHT,
-                           UTXOColumns.PS_ROUNDS, UTXOColumns.KEYSTORE_TYPE]:
+                if col in [UTXOColumns.DATE, UTXOColumns.AMOUNT,
+                           UTXOColumns.HEIGHT, UTXOColumns.PS_ROUNDS,
+                           UTXOColumns.KEYSTORE_TYPE]:
                     return QVariant(Qt.AlignRight | Qt.AlignVCenter)
                 else:
                     return QVariant(Qt.AlignVCenter)
@@ -211,6 +224,8 @@ class UTXOModel(QAbstractItemModel, Logger):
                     return QVariant(ColorScheme.BLUE.as_color(True))
                 elif outpoint in (self.view._spend_set or set()):
                     return QVariant(ColorScheme.GREEN.as_color(True))
+        elif col == UTXOColumns.DATE:
+            return QVariant(time_str)
         elif col == UTXOColumns.OUTPOINT:
             return QVariant(out_short)
         elif col == UTXOColumns.ADDRESS:
@@ -235,15 +250,19 @@ class UTXOModel(QAbstractItemModel, Logger):
         show_ps = self.view.show_ps
         show_ps_ks = self.view.show_ps_ks
         w = self.wallet
+        if self.view.config.get('show_utxo_time', False):
+            get_utxos = partial(w.get_utxos, prevout_timestamp=True)
+        else:
+            get_utxos = w.get_utxos
         if show_ps == PSStateFilter.ALL:
-            utxos = w.get_utxos(include_ps=True)
+            utxos = get_utxos(include_ps=True)
         elif show_ps == PSStateFilter.PS:
-            utxos = w.get_utxos(min_rounds=PSCoinRounds.COLLATERAL)
+            utxos = get_utxos(min_rounds=PSCoinRounds.COLLATERAL)
         elif show_ps == PSStateFilter.PS_OTHER:
-            utxos = w.get_utxos(min_rounds=PSCoinRounds.MINUSINF)
+            utxos = get_utxos(min_rounds=PSCoinRounds.MINUSINF)
             utxos = [c for c in utxos if c.ps_rounds <= PSCoinRounds.OTHER]
         else:  # Regular
-            utxos = w.get_utxos()
+            utxos = get_utxos()
         if show_ps_ks == KeystoreFilter.PS_KS:
             utxos = [c for c in utxos if c.is_ps_ks]
         elif show_ps_ks == KeystoreFilter.MAIN:
@@ -256,6 +275,11 @@ class UTXOModel(QAbstractItemModel, Logger):
             value = utxo.value_sats()
             prev_h = utxo.prevout.txid.hex()
             prev_n = utxo.prevout.out_idx
+            prevout_timestamp = 0
+            if self.view.config.get('show_utxo_time', False):
+                prevout_timestamp = utxo.prevout_timestamp
+                if not prevout_timestamp:
+                    prevout_timestamp = utxo.islock or math.inf
             outpoint = utxo.prevout.to_str()
             self.view._utxo_dict[outpoint] = utxo
             label = w.get_label_for_txid(prev_h) or w.get_label(address)
@@ -264,6 +288,7 @@ class UTXOModel(QAbstractItemModel, Logger):
                 'value': value,
                 'prevout_n': prev_n,
                 'prevout_hash': prev_h,
+                'prevout_timestamp': prevout_timestamp,
                 'height': utxo.block_height,
                 'coinbase': utxo.is_coinbase_output(),
                 'islock': utxo.islock,
@@ -279,6 +304,13 @@ class UTXOModel(QAbstractItemModel, Logger):
                 'balance': self.parent.format_amount(value, whitespaces=True),
             })
         return coin_items
+
+    def set_visibility_of_columns(self):
+        col = UTXOColumns.DATE
+        if self.view.config.get('show_utxo_time', False):
+            self.view.showColumn(col)
+        else:
+            self.view.hideColumn(col)
 
     @profiler
     def process_changes(self, coin_items):
@@ -313,6 +345,7 @@ class UTXOModel(QAbstractItemModel, Logger):
 
     def on_get_data(self):
         self.refresh(self.get_data_thread.res)
+        self.set_visibility_of_columns()
 
     @profiler
     def refresh(self, coin_items, force=False):

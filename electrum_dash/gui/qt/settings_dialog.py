@@ -178,6 +178,15 @@ class SettingsDialog(WindowModalDialog):
         show_dip2_cb.stateChanged.connect(on_dip2_state_changed)
         gui_widgets.append((show_dip2_cb, None))
 
+        show_utxo_time_cb = QCheckBox(_('Show UTXO timestamp/islock time'))
+        show_utxo_time_cb.setChecked(self.config.get('show_utxo_time', False))
+        def on_show_utxo_time_changed(x):
+            show_utxo_time = (x == Qt.Checked)
+            self.config.set_key('show_utxo_time', show_utxo_time, True)
+            self.window.utxo_list.update()
+        show_utxo_time_cb.stateChanged.connect(on_show_utxo_time_changed)
+        gui_widgets.append((show_utxo_time_cb, None))
+
         updatecheck_cb = QCheckBox(_("Automatically check for software updates"))
         updatecheck_cb.setChecked(bool(self.config.get('check_updates', False)))
         def on_set_updatecheck(v):
