@@ -205,8 +205,7 @@ class AddressSynchronizer(Logger):
             util.register_callback(self.on_blockchain_updated, ['blockchain_updated'])
             self.protx_manager.on_network_start(self.network)
             self.psman.on_network_start(self.network)
-            dash_net = self.network.dash_net
-            dash_net.register_callback(self.on_dash_islock, ['dash-islock'])
+            util.register_callback(self.on_dash_islock, ['dash-islock'])
 
     def on_blockchain_updated(self, event, *args):
         self._get_addr_balance_cache = {}  # invalidate cache
@@ -245,8 +244,7 @@ class AddressSynchronizer(Logger):
                 self.verifier = None
             util.unregister_callback(self.on_blockchain_updated)
             self.psman.on_stop_threads()
-            dash_net = self.network.dash_net
-            dash_net.unregister_callback(self.on_dash_islock)
+            util.unregister_callback(self.on_dash_islock)
             self.db.put('stored_height', self.get_local_height())
 
     def add_address(self, address, ps_ks=False):

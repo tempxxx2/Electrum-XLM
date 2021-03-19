@@ -895,9 +895,6 @@ class PSManager(Logger):
         self._keypairs_state = KPStates.Empty
         self._keypairs_cache = {}
 
-        self.callback_lock = threading.Lock()
-        self.callbacks = defaultdict(list)
-
         self.mix_sessions_lock = asyncio.Lock()
         self.mix_sessions = {}  # dict peer -> PSMixSession
         self.recent_mixes_mns = deque([], 10)  # added from mixing sessions
@@ -956,7 +953,7 @@ class PSManager(Logger):
         if self.enabled:
             return
         self.state = PSStates.Initializing
-        self.trigger_callback('ps-state-changes', self.wallet, None, None)
+        util.trigger_callback('ps-state-changes', self.wallet, None, None)
         _load_and_cleanup = self.load_and_cleanup
         await self.loop.run_in_executor(None, _load_and_cleanup)
         await self.find_untracked_ps_txs()
@@ -1258,25 +1255,6 @@ class PSManager(Logger):
             self.unsubscribe_spent_addr(addr, hist)
         self._fix_uncompleted_ps_txs()
 
-    def register_callback(self, callback, events):
-        with self.callback_lock:
-            for event in events:
-                self.callbacks[event].append(callback)
-
-    def unregister_callback(self, callback):
-        with self.callback_lock:
-            for callbacks in self.callbacks.values():
-                if callback in callbacks:
-                    callbacks.remove(callback)
-
-    def trigger_callback(self, event, *args):
-        try:
-            with self.callback_lock:
-                callbacks = self.callbacks[event][:]
-            [callback(event, *args) for callback in callbacks]
-        except Exception as e:
-            self.logger.info(f'Error in trigger_callback: {str(e)}')
-
     def postpone_notification(self, event, *args):
         self.postponed_notifications[event] = args
 
@@ -1287,7 +1265,7 @@ class PSManager(Logger):
                 for event in list(self.postponed_notifications.keys()):
                     args = self.postponed_notifications.pop(event, None)
                     if args is not None:
-                        self.trigger_callback(event, *args)
+                        util.trigger_callback(event, *args)
 
     def on_network_start(self, network):
         self.network = network
@@ -2620,7 +2598,7 @@ class PSManager(Logger):
         if msg:
             msg, inf = msg
             self.logger.info(f'Can not start PrivateSend Mixing: {msg}')
-            self.trigger_callback('ps-state-changes', w, msg, inf)
+            util.trigger_callback('ps-state-changes', w, msg, inf)
             return
 
         coro = self.find_untracked_ps_txs()
@@ -2642,11 +2620,11 @@ class PSManager(Logger):
             else:
                 msg = self.UNKNOWN_STATE_MSG.format(self.state)
         if msg:
-            self.trigger_callback('ps-state-changes', w, msg, None)
+            util.trigger_callback('ps-state-changes', w, msg, None)
             self.logger.info(f'Can not start PrivateSend Mixing: {msg}')
             return
         else:
-            self.trigger_callback('ps-state-changes', w, None, None)
+            util.trigger_callback('ps-state-changes', w, None, None)
 
         fut = asyncio.run_coroutine_threadsafe(self._start_mixing(password),
                                                self.loop)
@@ -2688,7 +2666,7 @@ class PSManager(Logger):
         self.last_mix_start_time = time.time()
         self.logger.info('Started PrivateSend Mixing')
         w = self.wallet
-        self.trigger_callback('ps-state-changes', w, None, None)
+        util.trigger_callback('ps-state-changes', w, None, None)
 
     async def stop_mixing_from_async_thread(self, msg, msg_type=None):
         await self.loop.run_in_executor(None, self.stop_mixing, msg, msg_type)
@@ -2702,7 +2680,7 @@ class PSManager(Logger):
                 return
             else:
                 msg = self.MIXING_NOT_RUNNING_MSG
-                self.trigger_callback('ps-state-changes', w, msg, 'inf')
+                util.trigger_callback('ps-state-changes', w, msg, 'inf')
                 self.logger.info(f'Can not stop PrivateSend Mixing: {msg}')
                 return
         if msg:
@@ -2710,10 +2688,10 @@ class PSManager(Logger):
             if not msg_type or not msg_type.startswith('inf'):
                 stopped_prefix = _('PrivateSend mixing is stopping!')
                 msg = f'{stopped_prefix}\n\n{msg}'
-            self.trigger_callback('ps-state-changes', w, msg, msg_type)
+            util.trigger_callback('ps-state-changes', w, msg, msg_type)
         else:
             self.logger.info('Stopping PrivateSend Mixing')
-            self.trigger_callback('ps-state-changes', w, None, None)
+            util.trigger_callback('ps-state-changes', w, None, None)
 
         self.last_mix_stop_time = time.time()  # write early if later time lost
         fut = asyncio.run_coroutine_threadsafe(self._stop_mixing(), self.loop)
@@ -2754,7 +2732,7 @@ class PSManager(Logger):
         with self.state_lock:
             self.state = PSStates.Ready
         w = self.wallet
-        self.trigger_callback('ps-state-changes', w, None, None)
+        util.trigger_callback('ps-state-changes', w, None, None)
 
     async def _check_all_mixed(self):
         while not self.main_taskgroup.closed():
@@ -5636,7 +5614,7 @@ class PSManager(Logger):
                     return
                 else:
                     self.state = PSStates.Cleaning
-                    self.trigger_callback('ps-state-changes', w, None, None)
+                    util.trigger_callback('ps-state-changes', w, None, None)
                     self.logger.info(f'Clearing PrivateSend wallet data')
                     w.db.clear_ps_data()
                     self.state = PSStates.Ready
@@ -5644,9 +5622,9 @@ class PSManager(Logger):
             return msg
         msg = await self.loop.run_in_executor(None, _do_clear_ps_data)
         if msg:
-            self.trigger_callback('ps-state-changes', w, msg, None)
+            util.trigger_callback('ps-state-changes', w, msg, None)
         else:
-            self.trigger_callback('ps-state-changes', w, None, None)
+            util.trigger_callback('ps-state-changes', w, None, None)
             self.postpone_notification('ps-data-changes', w)
             w.save_db()
 
@@ -5664,7 +5642,7 @@ class PSManager(Logger):
         if not self.state == PSStates.FindingUntracked:
             return found
         else:
-            self.trigger_callback('ps-state-changes', w, None, None)
+            util.trigger_callback('ps-state-changes', w, None, None)
         try:
             logged_awaiting = False
             while not self.can_find_untracked():
@@ -5690,7 +5668,7 @@ class PSManager(Logger):
             with self.state_lock:
                 if self.state != PSStates.Errored:
                     self.state = PSStates.Ready
-            self.trigger_callback('ps-state-changes', w, None, None)
+            util.trigger_callback('ps-state-changes', w, None, None)
         return found
 
     def _fix_uncompleted_ps_txs(self):

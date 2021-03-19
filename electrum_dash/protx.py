@@ -147,9 +147,7 @@ class ProTxManager(Logger):
         self.wallet = wallet
         self.network = None
         self.mns = {}  # Wallet MNs
-        self.callback_lock = threading.Lock()
         self.manager_lock = threading.Lock()
-        self.callbacks = defaultdict(list)
         self.alias_updated = ''
 
     def with_manager_lock(func):
@@ -158,29 +156,13 @@ class ProTxManager(Logger):
                 return func(self, *args, **kwargs)
         return func_wrapper
 
-    def register_callback(self, callback, events):
-        with self.callback_lock:
-            for event in events:
-                self.callbacks[event].append(callback)
-
-    def unregister_callback(self, callback):
-        with self.callback_lock:
-            for callbacks in self.callbacks.values():
-                if callback in callbacks:
-                    callbacks.remove(callback)
-
-    def trigger_callback(self, event, *args):
-        with self.callback_lock:
-            callbacks = self.callbacks[event][:]
-        [callback(event, *args) for callback in callbacks]
-
     def notify(self, key):
         if key == 'manager-alias-updated':
             value = self.alias_updated
             self.alias_updated = ''
         else:
             value = None
-        self.trigger_callback(key, value)
+        util.trigger_callback(key, value)
 
     def on_network_start(self, network):
         self.network = network

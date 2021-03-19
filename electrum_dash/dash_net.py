@@ -39,7 +39,7 @@ from bls_py import bls
 from collections import defaultdict, deque
 from typing import Optional, Dict
 
-from . import constants
+from . import constants, util
 from .constants import CHUNK_SIZE
 from .blockchain import MissingHeader
 from .dash_peer import DashPeer
@@ -204,12 +204,8 @@ class DashNet(Logger):
 
         # locks
         self.restart_lock = asyncio.Lock()
-        self.callback_lock = threading.Lock()
         self.banlist_lock = threading.Lock()
         self.peers_lock = threading.Lock()  # for mutating/iterating self.peers
-
-        # callbacks set by the GUI
-        self.callbacks = defaultdict(list)  # note: needs self.callback_lock
 
         # set of peers we have an ongoing connection with
         self.peers = {}  # type: Dict[str, DashPeer]
@@ -285,28 +281,6 @@ class DashNet(Logger):
                 return func(self, *args, **kwargs)
         return func_wrapper
 
-    def register_callback(self, callback, events):
-        with self.callback_lock:
-            for event in events:
-                self.callbacks[event].append(callback)
-
-    def unregister_callback(self, callback):
-        with self.callback_lock:
-            for callbacks in self.callbacks.values():
-                if callback in callbacks:
-                    callbacks.remove(callback)
-
-    def trigger_callback(self, event, *args):
-        with self.callback_lock:
-            callbacks = self.callbacks[event][:]
-        for callback in callbacks:
-            # FIXME: if callback throws, we will lose the traceback
-            if asyncio.iscoroutinefunction(callback):
-                asyncio.run_coroutine_threadsafe(callback(event, *args),
-                                                 self.loop)
-            else:
-                self.loop.call_soon_threadsafe(callback, event, *args)
-
     def _read_banlist(self):
         if not self.data_dir:
             return {}
@@ -340,14 +314,14 @@ class DashNet(Logger):
             'ua': dash_peer.version.user_agent.decode('utf-8'),
         }
         self._save_banlist()
-        self.trigger_callback('dash-banlist-updated', 'added', peer)
+        util.trigger_callback('dash-banlist-updated', 'added', peer)
 
     @with_banlist_lock
     def _remove_banned_peer(self, peer):
         if peer in self.banlist:
             del self.banlist[peer]
             self._save_banlist()
-            self.trigger_callback('dash-banlist-updated', 'removed', peer)
+            util.trigger_callback('dash-banlist-updated', 'removed', peer)
 
     def status_icon(self):
         if self.run_dash_net:
@@ -381,7 +355,7 @@ class DashNet(Logger):
                                         quorum,
                                         request_id))
         self.clear_recent_islocks()
-        self.trigger_callback('dash-islock', txid)
+        util.trigger_callback('dash-islock', txid)
 
     def verify_on_recent_islocks(self, txid):
         found = list(filter(lambda x: x[0] == txid, self.recent_islocks))
@@ -484,7 +458,7 @@ class DashNet(Logger):
                 self.logger.exception('')
                 raise e
         asyncio.run_coroutine_threadsafe(main(), self.loop)
-        self.trigger_callback('dash-net-updated', 'enabled')
+        util.trigger_callback('dash-net-updated', 'enabled')
 
     def start(self):
         asyncio.run_coroutine_threadsafe(self._start(), self.loop)
@@ -506,7 +480,7 @@ class DashNet(Logger):
         self.connecting.clear()
         self.peers_queue = None
         if not full_shutdown:
-            self.trigger_callback('dash-net-updated', 'disabled')
+            util.trigger_callback('dash-net-updated', 'disabled')
 
     def stop(self):
         assert self._loop_thread != threading.current_thread(), NET_THREAD_MSG
@@ -621,10 +595,10 @@ class DashNet(Logger):
             if read_time < new_read_time or write_time < new_write_time:
                 read_time = new_read_time
                 write_time = new_write_time
-                self.trigger_callback('dash-net-activity')
+                util.trigger_callback('dash-net-activity')
             if set_spork_time < new_set_spork_time:
                 set_spork_time = new_set_spork_time
-                self.trigger_callback('sporks-activity')
+                util.trigger_callback('sporks-activity')
 
     async def _maintain_peers(self):
         async def launch_already_queued_up_new_peers():
@@ -660,7 +634,7 @@ class DashNet(Logger):
         with self.peers_lock:
             if self.peers.get(peer) == dash_peer:
                 self.peers.pop(peer)
-                self.trigger_callback('dash-peers-updated', 'removed', peer)
+                util.trigger_callback('dash-peers-updated', 'removed', peer)
         dash_peer.close()
 
     async def connection_down(self, dash_peer):
@@ -693,7 +667,7 @@ class DashNet(Logger):
             except KeyError:
                 pass
 
-        self.trigger_callback('dash-peers-updated', 'added', peer)
+        util.trigger_callback('dash-peers-updated', 'added', peer)
 
     @ignore_exceptions
     @log_exceptions
@@ -749,7 +723,7 @@ class DashNet(Logger):
             err = f'getmnlistd(get_mns={get_mns} params={params}): cancelled'
         except Exception as e:
             err = f'getmnlistd(get_mns={get_mns} params={params}): {repr(e)}'
-        self.trigger_callback('mnlistdiff', {'error': err,
+        util.trigger_callback('mnlistdiff', {'error': err,
                                              'result': res,
                                              'params': params})
 

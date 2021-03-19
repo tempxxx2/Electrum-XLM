@@ -333,9 +333,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.console.showMessage(self.network.banner)
 
             # dash net callbacks
-            self.network.dash_net.register_callback(self.on_dash_net,
-                                                    ['dash-net-updated',
-                                                     'dash-peers-updated'])
+            util.register_callback(self.on_dash_net,
+                                   ['dash-net-updated',
+                                    'dash-peers-updated'])
             self.update_dash_net_status_btn()
 
         # update fee slider in case we missed the callback
@@ -347,15 +347,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.show_backup_msg()
         # PrivateSend manager callbacks
         self.ps_signal.connect(self.on_ps_signal)
-        self.wallet.psman.register_callback(self.on_ps_callback,
-                                            ['ps-log-changes',
-                                             'ps-wfl-changes',
-                                             'ps-not-enough-sm-denoms',
-                                             'ps-other-coins-arrived',
-                                             'ps-keypairs-changes',
-                                             'ps-reserved-changes',
-                                             'ps-data-changes',
-                                             'ps-state-changes'])
+        util.register_callback(self.on_ps_callback,
+                               ['ps-log-changes',
+                                'ps-wfl-changes',
+                                'ps-not-enough-sm-denoms',
+                                'ps-other-coins-arrived',
+                                'ps-keypairs-changes',
+                                'ps-reserved-changes',
+                                'ps-data-changes',
+                                'ps-state-changes'])
 
         # If the option hasn't been set yet
         if config.get('check_updates') is None:
@@ -3350,12 +3350,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def clean_up(self):
         hide_ps_dialog(self)
         self.dip3_tab.unregister_callbacks()
-        self.wallet.psman.unregister_callback(self.on_ps_callback)
+        util.unregister_callback(self.on_ps_callback)
         self.wallet.thread.stop()
         util.unregister_callback(self.on_network)
         if self.network:
             self.wallet.protx_manager.clean_up()
-            self.network.dash_net.unregister_callback(self.on_dash_net)
+            util.unregister_callback(self.on_dash_net)
         self.config.set_key("is_maximized", self.isMaximized())
         if not self.isMaximized():
             g = self.geometry()

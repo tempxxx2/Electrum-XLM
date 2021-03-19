@@ -1,5 +1,6 @@
 import time
 
+from electrum_dash import util
 from electrum_dash.dash_ps import filter_log_line, PSLogSubCat, PSStates
 
 from kivy.clock import Clock
@@ -937,13 +938,13 @@ class PSDialog(Popup):
 
     def open(self):
         super(PSDialog, self).open()
-        self.psman.register_callback(self.on_ps_callback,
-                                     ['ps-log-changes',
-                                      'ps-wfl-changes',
-                                      'ps-keypairs-changes',
-                                      'ps-reserved-changes',
-                                      'ps-data-changes',
-                                      'ps-state-changes'])
+        util.register_callback(self.on_ps_callback,
+                               ['ps-log-changes',
+                                'ps-wfl-changes',
+                                'ps-keypairs-changes',
+                                'ps-reserved-changes',
+                                'ps-data-changes',
+                                'ps-state-changes'])
         if self.psman.show_warn_electrumx:
             mixing_tab = self.mixing_tab
             Clock.schedule_once(lambda dt: mixing_tab.show_warn_electrumx())
@@ -951,7 +952,7 @@ class PSDialog(Popup):
     def dismiss(self):
         super(PSDialog, self).dismiss()
         self.log_tab.log_handler.notify = False
-        self.psman.unregister_callback(self.on_ps_callback)
+        util.unregister_callback(self.on_ps_callback)
 
     def on_ps_callback(self, event, *args):
         Clock.schedule_once(lambda dt: self.on_ps_event(event, *args))
