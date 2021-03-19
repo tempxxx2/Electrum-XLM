@@ -13,16 +13,17 @@ from electrum_dash import dash_ps, ecc
 from electrum_dash.address_synchronizer import (TX_HEIGHT_LOCAL,
                                                 TX_HEIGHT_UNCONF_PARENT,
                                                 TX_HEIGHT_UNCONFIRMED)
-from electrum_dash.dash_ps import (COLLATERAL_VAL, PSPossibleDoubleSpendError,
-                                   CREATE_COLLATERAL_VAL, to_duffs, PSTxData,
-                                   PSTxWorkflow, PSDenominateWorkflow,
-                                   PSMinRoundsCheckFailed, PS_DENOMS_VALS,
-                                   filter_log_line, KPStates, KP_ALL_TYPES,
-                                   KP_SPENDABLE, KP_PS_COINS,
-                                   KP_PS_CHANGE, PSStates, calc_tx_size,
-                                   calc_tx_fee, FILTERED_TXID, FILTERED_ADDR,
-                                   CREATE_COLLATERAL_VALS, MIN_DENOM_VAL,
-                                   PSCoinRounds, ps_coin_rounds_str)
+from electrum_dash.dash_ps_util import (COLLATERAL_VAL, CREATE_COLLATERAL_VAL,
+                                        CREATE_COLLATERAL_VALS, PS_DENOMS_VALS,
+                                        MIN_DENOM_VAL, PSMinRoundsCheckFailed,
+                                        PSPossibleDoubleSpendError,
+                                        PSStates, PSTxWorkflow, PSTxData,
+                                        PSDenominateWorkflow, filter_log_line,
+                                        FILTERED_TXID, FILTERED_ADDR,
+                                        PSCoinRounds, ps_coin_rounds_str,
+                                        calc_tx_size, calc_tx_fee, to_duffs)
+from electrum_dash.dash_ps_wallet import (KPStates, KP_ALL_TYPES, KP_SPENDABLE,
+                                          KP_PS_COINS, KP_PS_CHANGE)
 from electrum_dash.dash_tx import PSTxTypes, SPEC_TX_NAMES
 from electrum_dash import keystore
 from electrum_dash.simple_config import SimpleConfig
@@ -76,8 +77,6 @@ class WalletGetTxHeigthMock:
 class PSWalletTestCase(TestCaseForTestnet):
 
     def setUp(self):
-        dash_ps.MIN_NEW_DENOMS_DELAY = 0
-        dash_ps.MAX_NEW_DENOMS_DELAY = 0
         super(PSWalletTestCase, self).setUp()
         self.user_dir = tempfile.mkdtemp()
         self.wallet_path = os.path.join(self.user_dir, 'wallet_ps1')
@@ -96,6 +95,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         self.w_db.upgrade()  # wallet_ps1 have version 18
         self.wallet = Wallet(self.w_db, self.storage, config=self.config)
         psman = self.wallet.psman
+        psman.MIN_NEW_DENOMS_DELAY = 0
+        psman.MAX_NEW_DENOMS_DELAY = 0
         psman.state = PSStates.Ready
         psman.loop = asyncio.get_event_loop()
         psman.can_find_untracked = lambda: True
@@ -745,7 +746,7 @@ class PSWalletTestCase(TestCaseForTestnet):
 
     def test_keep_amount(self):
         psman = self.wallet.psman
-        assert psman.keep_amount == dash_ps.DEFAULT_KEEP_AMOUNT
+        assert psman.keep_amount == psman.DEFAULT_KEEP_AMOUNT
 
         psman.keep_amount = psman.min_keep_amount - 0.1
         assert psman.keep_amount == psman.min_keep_amount
@@ -762,7 +763,7 @@ class PSWalletTestCase(TestCaseForTestnet):
 
     def test_mix_rounds(self):
         psman = self.wallet.psman
-        assert psman.mix_rounds == dash_ps.DEFAULT_MIX_ROUNDS
+        assert psman.mix_rounds == psman.DEFAULT_MIX_ROUNDS
 
         psman.mix_rounds = psman.min_mix_rounds - 1
         assert psman.mix_rounds == psman.min_mix_rounds
@@ -1987,11 +1988,10 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert 183014 == calc_tx_fee(1000, 1000, 1000, max_size=True)
 
     def test_get_next_coins_for_mixing(self):
-        dash_ps.MIN_NEW_DENOMS_DELAY = 3
-        dash_ps.MAX_NEW_DENOMS_DELAY = 3
-
         w = self.wallet
         psman = w.psman
+        psman.MIN_NEW_DENOMS_DELAY = 3
+        psman.MAX_NEW_DENOMS_DELAY = 3
 
         now = time.time()
         psman.last_denoms_tx_time = now
@@ -2015,11 +2015,11 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert len(coins) == 0
 
     def test_get_next_coins_for_mixing_group_origin_by_addr(self):
-        dash_ps.MIN_NEW_DENOMS_DELAY = 3
-        dash_ps.MAX_NEW_DENOMS_DELAY = 3
-
         w = self.wallet
         psman = w.psman
+        psman.MIN_NEW_DENOMS_DELAY = 3
+        psman.MAX_NEW_DENOMS_DELAY = 3
+
         psman.group_origin_coins_by_addr = True
 
         now = time.time()

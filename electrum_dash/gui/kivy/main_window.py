@@ -9,8 +9,8 @@ import threading
 import asyncio
 from typing import TYPE_CHECKING, Optional, Union, Callable, Sequence
 
-from electrum_dash.dash_ps import (PSPossibleDoubleSpendError,
-                                   PSSpendToPSAddressesError)
+from electrum_dash.dash_ps_util import (PSPossibleDoubleSpendError,
+                                        PSSpendToPSAddressesError)
 from electrum_dash.storage import WalletStorage, StorageReadWriteError
 from electrum_dash.wallet_db import WalletDB
 from electrum_dash.wallet import Wallet, InternalAddressCorruption, Abstract_Wallet

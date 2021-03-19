@@ -1,7 +1,7 @@
 import time
 
 from electrum_dash import util
-from electrum_dash.dash_ps import filter_log_line, PSLogSubCat, PSStates
+from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat, PSStates
 
 from kivy.clock import Clock
 from kivy.properties import (NumericProperty, StringProperty, BooleanProperty,

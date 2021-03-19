@@ -30,7 +30,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Set, Tuple, NamedTuple, Sequen
 
 from . import bitcoin, util
 from .bitcoin import COINBASE_MATURITY
-from .dash_ps import PSManager, PS_MIXING_TX_TYPES, PSCoinRounds
+from .dash_ps import PSManager
+from .dash_ps_util import PSCoinRounds, PS_MIXING_TX_TYPES
 from .dash_tx import tx_header_to_tx_type
 from .util import profiler, bfh, TxMinedInfo, UnrelatedTransactionException
 from .protx import ProTxManager

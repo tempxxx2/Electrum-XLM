@@ -44,7 +44,7 @@ from .constants import CHUNK_SIZE
 from .blockchain import MissingHeader
 from .dash_peer import DashPeer
 from .dash_msg import SporkID, LLMQType
-from .dash_ps import PSDenoms, PRIVATESEND_QUEUE_TIMEOUT
+from .dash_ps_net import PSDenoms, PRIVATESEND_QUEUE_TIMEOUT
 from .dash_tx import str_ip
 from .i18n import _
 from .logging import Logger

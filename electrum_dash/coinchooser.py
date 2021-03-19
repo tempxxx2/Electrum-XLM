@@ -28,7 +28,7 @@ from typing import NamedTuple, List, Callable, Optional, Sequence, Union, Dict, 
 from decimal import Decimal
 
 from .bitcoin import sha256, COIN, is_address
-from .dash_ps import PS_DENOMS_VALS
+from .dash_ps_util import PS_DENOMS_VALS
 from .transaction import Transaction, TxOutput, PartialTransaction, PartialTxInput, PartialTxOutput
 from .util import NotEnoughFunds
 from .logging import Logger
