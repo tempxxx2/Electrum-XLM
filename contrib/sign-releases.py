@@ -138,6 +138,7 @@ PPA_SERIES = {
     'bionic': '18.04.1',
     'focal': '20.04.1',
     'groovy': '20.10.1',
+    'hirsute': '21.04.1',
 }
 PEP440_PUBVER_PATTERN = re.compile('^((\d+)!)?'
                                    '((\d+)(\.\d+)*)'
