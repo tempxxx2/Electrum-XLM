@@ -1008,7 +1008,8 @@ class AddressSynchronizer(Logger):
     def get_utxos(self, domain=None, *, excluded_addresses=None,
                   mature_only: bool = False, confirmed_only: bool = False,
                   nonlocal_only: bool = False, consider_islocks=False,
-                  include_ps=False, min_rounds=None) -> Sequence[PartialTxInput]:
+                  include_ps=False, min_rounds=None,
+                  prevout_timestamp=False) -> Sequence[PartialTxInput]:
         coins = []
         ps_ks_domain = self.psman.get_addresses()
         if domain is None:
@@ -1047,6 +1048,11 @@ class AddressSynchronizer(Logger):
                 if (mature_only and utxo.is_coinbase_output()
                         and utxo.block_height + COINBASE_MATURITY > mempool_height):
                     continue
+                if prevout_timestamp:
+                    txid = utxo.prevout.txid.hex()
+                    tx_mined_status = self.get_tx_height(txid)
+                    if tx_mined_status.conf > 0:
+                        utxo.prevout_timestamp = tx_mined_status.timestamp
                 coins.append(utxo)
                 continue
         return coins

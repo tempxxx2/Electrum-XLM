@@ -1051,6 +1051,7 @@ class PartialTxInput(TxInput, PSBTSection):
         self.islock = None  # type: Optional[int]  # islock for TXO; None means unknown
         self.ps_rounds = None  # type: Optional[int]  # ps_rounds for TXO; None means unknown
         self.is_ps_ks = False # type: Optional[bool]  # is PS keystore for TXO
+        self.prevout_timestamp = None # type: Optional[int]  # mined info timestamp
 
     @property
     def utxo(self):
@@ -1077,6 +1078,7 @@ class PartialTxInput(TxInput, PSBTSection):
             'islock': self.islock,
             'ps_rounds': self.ps_rounds,
             'is_ps_ks': self.is_ps_ks,
+            'prevout_timestamp': self.prevout_timestamp,
         })
         return d
 
