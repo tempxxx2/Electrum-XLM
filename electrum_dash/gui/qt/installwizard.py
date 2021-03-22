@@ -786,16 +786,19 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
         return line.text()
 
     @wizard_dialog
-    def show_xpub_dialog(self, xpub, run_next):
+    def show_xpub_dialog(self, xpub, run_next, hw_info=None):
         self.save_button.show()
+        title = (_('Hardware Wallet Public Key') if hw_info else
+                 _('Master Public Key'))
         msg = ' '.join([
+            _("Here is your {} public key.").format(hw_info) if hw_info else
             _("Here is your master public key."),
             _("Please share it with your cosigners.")
         ])
         vbox = QVBoxLayout()
         layout = SeedLayout(xpub, title=msg, icon=False, for_seed_words=False)
         vbox.addLayout(layout.layout())
-        self.exec_layout(vbox, _('Master Public Key'))
+        self.exec_layout(vbox, title)
         return None
 
     def init_network(self, network: 'Network'):
