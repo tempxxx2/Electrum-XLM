@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import time
+from functools import partial
 
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QColor, QPainter, QTextCursor, QIcon, QPixmap
@@ -9,10 +10,11 @@ from PyQt5.QtWidgets import (QPlainTextEdit, QCheckBox, QSpinBox, QVBoxLayout,
                              QTabWidget, QWidget, QProgressBar, QHBoxLayout,
                              QMessageBox, QStyle, QStyleOptionSpinBox, QAction,
                              QApplication, QWizardPage, QWizard, QRadioButton,
-                             QButtonGroup, QGroupBox, QLineEdit)
+                             QButtonGroup, QGroupBox, QLineEdit, QComboBox)
 
 from electrum_dash import mnemonic
-from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat, PSStates
+from electrum_dash.dash_ps_util import (filter_log_line, PSLogSubCat, PSStates,
+                                        PS_DENOMS_VALS)
 from electrum_dash.i18n import _
 from electrum_dash.util import InvalidPassword
 
@@ -264,6 +266,7 @@ class PSDialog(QDialog, MessageBoxMixin):
         self.setMinimumSize(900, 480)
         self.setWindowIcon(read_QIcon('electrum-dash.png'))
         self.mwin = mwin
+        self.format_amount = mwin.format_amount
         self.wallet = mwin.wallet
         self.psman = mwin.wallet.psman
         title = '%s - %s' % (_('PrivateSend'), str(self.wallet))
@@ -281,8 +284,13 @@ class PSDialog(QDialog, MessageBoxMixin):
         layout.addWidget(b, 1, 1)
 
         self.add_mixing_tab()
+        self.add_denoms_tab()
         self.update_mixing_status()
         self.update_balances()
+        self.denoms_tab_controls_update()
+        self.update_abs_cnt()
+        self.update_denoms_cnt()
+        self.update_keep_amount()
         self.add_info_tab()
         self.info_update()
         self.info_data_buttons_update()
@@ -354,11 +362,13 @@ class PSDialog(QDialog, MessageBoxMixin):
             if wallet == self.wallet:
                 self.update_balances()
                 self.info_update()
+                self.update_denoms_cnt()
         elif event == 'ps-state-changes':
             wallet, msg, msg_type = args
             if wallet == self.wallet:
                 self.update_mixing_status()
                 self.info_data_buttons_update()
+                self.denoms_tab_controls_update()
 
     def add_mixing_tab(self):
         self.mixing_tab = QWidget()
@@ -391,15 +401,20 @@ class PSDialog(QDialog, MessageBoxMixin):
         self.keep_amount_sb.setMinimum(psman.min_keep_amount)
         self.keep_amount_sb.setMaximum(psman.max_keep_amount)
         self.keep_amount_sb.setValue(psman.keep_amount)
+        self.keep_amount_lb = QLineEdit()
+        self.keep_amount_lb.setAlignment(Qt.AlignRight)
+        self.keep_amount_lb.setEnabled(False)
 
         def on_keep_amount_change():
             psman.keep_amount = self.keep_amount_sb.value()
             self.update_balances()
+            self.update_keep_amount()
         self.keep_amount_sb.valueChanged.connect(on_keep_amount_change)
 
         i = grid.rowCount()
         grid.addWidget(keep_amount_label, i, 0)
         grid.addWidget(self.keep_amount_sb, i, 2)
+        grid.addWidget(self.keep_amount_lb, i, 2)
 
         # mix_rounds
         mix_rounds_text = psman.mix_rounds_data()
@@ -628,6 +643,118 @@ class PSDialog(QDialog, MessageBoxMixin):
                     continue
         self.wallet.psman.start_mixing(password)
 
+    def add_denoms_tab(self):
+        self.denoms_tab = QWidget()
+        psman = self.psman
+        g = QGridLayout()
+
+        method_help = psman.calc_denoms_method_data(full_txt=True)
+        method_lb_txt = psman.calc_denoms_method_data()
+        method_hlb = HelpLabel(method_lb_txt + ':', method_help)
+        self.method_cb = QComboBox()
+        for m in psman.CalcDenomsMethod:
+            m_str = psman.calc_denoms_method_str(m)
+            self.method_cb.addItem(m_str, m)
+        self.method_cb.setCurrentIndex(psman.calc_denoms_method)
+
+        def on_method_changed(x):
+            psman.calc_denoms_method = method = self.method_cb.currentData()
+            self.update_abs_cnt()
+            self.update_keep_amount()
+        self.method_cb.currentIndexChanged.connect(on_method_changed)
+
+        g.addWidget(method_hlb, 0, 0, 1, 2)
+        g.addWidget(self.method_cb, 0, 2, 1, -1)
+
+        keep_amount_help = psman.keep_amount_data(full_txt=True)
+        keep_amount_txt = psman.keep_amount_data()
+        keep_amount_label = HelpLabel(keep_amount_txt + ':', keep_amount_help)
+        self.keep_amount_sb2 = DashSpinBox()
+        self.keep_amount_sb2.setMinimum(psman.min_keep_amount)
+        self.keep_amount_sb2.setMaximum(psman.max_keep_amount)
+        self.keep_amount_sb2.setValue(psman.keep_amount)
+        self.keep_amount_lb2 = QLineEdit()
+        self.keep_amount_lb2.setAlignment(Qt.AlignRight)
+        self.keep_amount_lb2.setEnabled(False)
+
+        def on_keep_amount_change():
+            psman.keep_amount = self.keep_amount_sb2.value()
+            self.update_balances()
+            self.update_keep_amount()
+        self.keep_amount_sb2.valueChanged.connect(on_keep_amount_change)
+
+        g.addWidget(keep_amount_label, 1, 0, 1, 2)
+        g.addWidget(self.keep_amount_sb2, 1, 2, 1, -1)
+        g.addWidget(self.keep_amount_lb2, 1, 2, 1, -1)
+
+        denoms_help = _('Count of denoms by value')
+        denoms_lb_txt = _('Denoms count')
+        denoms_hlb = HelpLabel(denoms_lb_txt + ':', denoms_help)
+        g.addWidget(denoms_hlb, 2, 0, 1, 2)
+
+        h_lb = QLabel(_('Existing count:'))
+        g.addWidget(h_lb, 3, 3)
+        self.abs_h_lb = QLabel(_('Absolute count:'))
+        g.addWidget(self.abs_h_lb, 3, 4)
+
+        self.denoms_le = {}
+        self.abs_sb = {}
+
+        def on_abs_sb_changed(d, val):
+            abs_cnt = psman.abs_denoms_cnt
+            if abs_cnt[d] == val:
+                return
+            abs_cnt[d] = val
+            psman.abs_denoms_cnt = abs_cnt
+            self.update_keep_amount()
+
+        for i, d in enumerate(PS_DENOMS_VALS[::-1]):
+            d_le = QLineEdit(self.format_amount(d) + ' DASH')
+            d_le.setAlignment(Qt.AlignRight)
+            d_le.setEnabled(False)
+            g.addWidget(d_le, 4 + i, 2)
+            d_le = QLineEdit('0')
+            d_le.setEnabled(False)
+            self.denoms_le[d] = d_le
+            g.addWidget(d_le, 4 + i, 3)
+            abs_sb = QSpinBox()
+            abs_sb.setMinimum(0)
+            abs_sb.setValue(0)
+            abs_sb.valueChanged.connect(partial(on_abs_sb_changed, d))
+            self.abs_sb[d] = abs_sb
+            g.addWidget(abs_sb, 4 + i, 4)
+
+        g.setRowStretch(20, 10)
+        self.denoms_tab.setLayout(g)
+        self.tabs.addTab(self.denoms_tab, _('Denoms'))
+
+    def update_denoms_cnt(self):
+        psman = self.psman
+        denoms = psman.calc_denoms_by_values()
+        for d in PS_DENOMS_VALS:
+            self.denoms_le[d].setText(str(denoms[d]) if denoms else '0')
+
+    def update_abs_cnt(self):
+        psman = self.psman
+        method = psman.calc_denoms_method
+        show_abs = (method == psman.CalcDenomsMethod.ABS)
+
+        self.abs_h_lb.show() if show_abs else self.abs_h_lb.hide()
+        for sb in self.abs_sb.values():
+            sb.show() if show_abs else sb.hide()
+
+        if show_abs:
+            abs_cnt = psman.abs_denoms_cnt
+            for d in PS_DENOMS_VALS:
+                self.abs_sb[d].setValue(abs_cnt[d])
+
+    def denoms_tab_controls_update(self):
+        psman = self.psman
+        mix_running = (psman.state in psman.mixing_running_states)
+        for d in PS_DENOMS_VALS:
+            self.abs_sb[d].setEnabled(not mix_running)
+        self.method_cb.setEnabled(not mix_running)
+
     def add_info_tab(self):
         self.ps_info_tab = QWidget()
         self.ps_info_view = QPlainTextEdit()
@@ -781,14 +908,39 @@ class PSDialog(QDialog, MessageBoxMixin):
         else:
             self.mixing_ctl_btn.setEnabled(False)
         if psman.state in psman.mixing_running_states:
-            self.keep_amount_sb.setEnabled(False)
             self.mix_rounds_sb.setEnabled(False)
             self.create_sm_denoms_bnt.setEnabled(False)
         else:
-            self.keep_amount_sb.setEnabled(True)
             self.mix_rounds_sb.setEnabled(True)
             self.create_sm_denoms_bnt.setEnabled(True)
         self.mixing_ctl_btn.setText(psman.mixing_control_data())
+        self.update_keep_amount()
+
+    def update_keep_amount(self):
+        psman = self.psman
+        if (psman.calc_denoms_method == psman.CalcDenomsMethod.ABS
+                or psman.state in psman.mixing_running_states):
+            self.keep_amount_sb.setEnabled(False)
+            self.keep_amount_sb2.setEnabled(False)
+        else:
+            self.keep_amount_sb.setEnabled(True)
+            self.keep_amount_sb2.setEnabled(True)
+        if psman.calc_denoms_method == psman.CalcDenomsMethod.ABS:
+            self.keep_amount_lb.setText(f'{psman.keep_amount} DASH')
+            self.keep_amount_lb2.setText(f'{psman.keep_amount} DASH')
+            self.keep_amount_sb.hide()
+            self.keep_amount_sb2.hide()
+            self.keep_amount_lb.show()
+            self.keep_amount_lb2.show()
+        else:
+            if self.keep_amount_sb.value() != psman.keep_amount:
+                self.keep_amount_sb.setValue(psman.keep_amount)
+            if self.keep_amount_sb2.value() != psman.keep_amount:
+                self.keep_amount_sb2.setValue(psman.keep_amount)
+            self.keep_amount_lb.hide()
+            self.keep_amount_lb2.hide()
+            self.keep_amount_sb.show()
+            self.keep_amount_sb2.show()
 
     def update_balances(self):
         wallet = self.wallet
