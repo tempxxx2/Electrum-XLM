@@ -23,7 +23,8 @@ from electrum_dash.dash_ps_util import (COLLATERAL_VAL, CREATE_COLLATERAL_VAL,
                                         PSCoinRounds, ps_coin_rounds_str,
                                         calc_tx_size, calc_tx_fee, to_duffs)
 from electrum_dash.dash_ps_wallet import (KPStates, KP_ALL_TYPES, KP_SPENDABLE,
-                                          KP_PS_COINS, KP_PS_CHANGE)
+                                          KP_PS_COINS, KP_PS_CHANGE,
+                                          PSKsInternalAddressCorruption)
 from electrum_dash.dash_tx import PSTxTypes, SPEC_TX_NAMES
 from electrum_dash import keystore
 from electrum_dash.simple_config import SimpleConfig
@@ -100,6 +101,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.state = PSStates.Ready
         psman.loop = asyncio.get_event_loop()
         psman.can_find_untracked = lambda: True
+        psman.is_unittest_run = True
 
     def tearDown(self):
         super(PSWalletTestCase, self).tearDown()
@@ -4228,3 +4230,77 @@ class PSWalletTestCase(TestCaseForTestnet):
                 for txin in tx.inputs():
                     found += 1 if txin.value_sats() in PS_DENOMS_VALS else 0
                 assert found > 0
+
+    def test_PSKsInternalAddressCorruption(self):
+        e = PSKsInternalAddressCorruption()
+        assert len(str(e)) > 0
+
+    def test_on_wallet_password_set(self):
+        w = self.wallet
+        psman = w.psman
+        psman.state = PSStates.Mixing
+
+        async def test_coro():
+            psman.on_wallet_password_set()
+        asyncio.get_event_loop().run_until_complete(test_coro())
+
+    def test_clean_keypairs_on_timeout(self):
+        w = self.wallet
+        psman = w.psman
+        psman.state = PSStates.Mixing
+        psman._cache_keypairs(password=None)
+        psman.state = PSStates.Ready
+        psman.keypairs_state = KPStates.Unused
+        psman.last_mix_stop_time = time.time()
+        coro = psman.clean_keypairs_on_timeout()
+        asyncio.get_event_loop().run_until_complete(coro)
+
+    def test_make_keypairs_cache(self):
+        w = self.wallet
+        psman = w.psman
+        psman.state = PSStates.Mixing
+        psman.keypairs_state = KPStates.NeedCache
+        coro = psman._make_keypairs_cache(None)
+        asyncio.get_event_loop().run_until_complete(coro)
+        coro = psman._make_keypairs_cache('')
+        asyncio.get_event_loop().run_until_complete(coro)
+
+    @enable_ps_ks
+    @synchronize_ps_ks
+    def test_get_address_path_str(self):
+        w = self.wallet
+        psman = w.psman
+        addr = psman.get_unused_addresses()[0]
+        assert psman.get_address_path_str(addr) == r'm/2/0'
+        assert psman.get_address_path_str('unknownaddr') is None
+
+    @enable_ps_ks
+    @synchronize_ps_ks
+    def test_get_public_key(self):
+        w = self.wallet
+        psman = w.psman
+        addr = psman.get_unused_addresses()[0]
+        assert psman.get_public_key(addr).startswith('03248abb6109f7')
+
+    @enable_ps_ks
+    @synchronize_ps_ks
+    def test_get_public_keys(self):
+        w = self.wallet
+        psman = w.psman
+        addr = psman.get_unused_addresses()[0]
+        assert psman.get_public_keys(addr)[0].startswith('03248abb6109f7')
+
+    @enable_ps_ks
+    @synchronize_ps_ks
+    def test_check_address(self):
+        w = self.wallet
+        psman = w.psman
+        addr = psman.get_unused_addresses()[0]
+        psman.check_address(addr)
+
+    @enable_ps_ks
+    @synchronize_ps_ks
+    def test_get_all_known_addresses_beyond_gap_limit(self):
+        w = self.wallet
+        psman = w.psman
+        psman.get_all_known_addresses_beyond_gap_limit()

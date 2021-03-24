@@ -115,6 +115,8 @@ class KeyPairsMixin:
                         and self.mix_stop_secs_ago >= self.kp_timeout * 60):
                     await self.loop.run_in_executor(None, _clean_kp_on_timeout)
             await asyncio.sleep(1)
+            if getattr(self, 'is_unittest_run', False):
+                break
 
     async def _make_keypairs_cache(self, password):
         _make_cache = self._cache_keypairs
