@@ -367,13 +367,13 @@ class DashNetDataFlowDialog(Factory.Popup):
 
     def open(self, *args, **kwargs):
         super(DashNetDataFlowDialog, self).open(*args, **kwargs)
-        self.dn_dlg.dash_net.register_callback(self.update_cb,
-                                               ['dash-net-activity',
-                                                'dash-peers-updated'])
+        util.register_callback(self.update_cb,
+                               ['dash-net-activity',
+                                'dash-peers-updated'])
 
     def dismiss(self, *args, **kwargs):
         super(DashNetDataFlowDialog, self).dismiss(*args, **kwargs)
-        self.dn_dlg.dash_net.unregister_callback(self.update_cb)
+        util.unregister_callback(self.update_cb)
 
     def update_cb(self, event, *args):
         Clock.schedule_once(lambda dt: self.update())
@@ -402,17 +402,13 @@ class ProTxStatsDialog(Factory.Popup):
 
     def open(self, *args, **kwargs):
         super(ProTxStatsDialog, self).open(*args, **kwargs)
-        net = self.dn_dlg.net
-        mn_list = net.mn_list
-        mn_list.register_callback(self.update_cb, ['mn-list-diff-updated',
-                                                   'mn-list-info-updated'])
+        util.register_callback(self.update_cb, ['mn-list-diff-updated',
+                                                'mn-list-info-updated'])
         util.register_callback(self.update_cb, ['network_updated'])
 
     def dismiss(self, *args, **kwargs):
         super(ProTxStatsDialog, self).dismiss(*args, **kwargs)
-        net = self.dn_dlg.net
-        mn_list = net.mn_list
-        mn_list.unregister_callback(self.update_cb)
+        util.unregister_callback(self.update_cb)
         util.unregister_callback(self.update_cb)
 
     def update_cb(self, event, *args):
@@ -678,28 +674,28 @@ class DashNetDialog(Factory.Popup):
 
     def open(self, *args, **kwargs):
         super(DashNetDialog, self).open(*args, **kwargs)
-        self.dash_net.register_callback(self.on_dash_net_activity_cb,
-                                        ['dash-net-activity'])
-        self.dash_net.register_callback(self.on_sporks_activity_cb,
-                                        ['sporks-activity'])
-        self.dash_net.register_callback(self.on_dash_peers_updated_cb,
-                                        ['dash-peers-updated'])
-        self.dash_net.register_callback(self.on_dash_banlist_updated_cb,
-                                        ['dash-banlist-updated'])
-        self.mn_list.register_callback(self.on_mn_list_diff_updated_cb,
-                                       ['mn-list-diff-updated'])
-        self.mn_list.register_callback(self.on_mn_list_info_updated_cb,
-                                       ['mn-list-info-updated'])
+        util.register_callback(self.on_dash_net_activity_cb,
+                               ['dash-net-activity'])
+        util.register_callback(self.on_sporks_activity_cb,
+                               ['sporks-activity'])
+        util.register_callback(self.on_dash_peers_updated_cb,
+                               ['dash-peers-updated'])
+        util.register_callback(self.on_dash_banlist_updated_cb,
+                               ['dash-banlist-updated'])
+        util.register_callback(self.on_mn_list_diff_updated_cb,
+                               ['mn-list-diff-updated'])
+        util.register_callback(self.on_mn_list_info_updated_cb,
+                               ['mn-list-info-updated'])
         util.register_callback(self.on_network_updated_cb, ['network_updated'])
 
     def dismiss(self, *args, **kwargs):
         super(DashNetDialog, self).dismiss(*args, **kwargs)
-        self.dash_net.unregister_callback(self.on_dash_net_activity_cb)
-        self.dash_net.unregister_callback(self.on_sporks_activity_cb)
-        self.dash_net.unregister_callback(self.on_dash_peers_updated_cb)
-        self.dash_net.unregister_callback(self.on_dash_banlist_updated_cb)
-        self.mn_list.unregister_callback(self.on_mn_list_diff_updated_cb)
-        self.mn_list.unregister_callback(self.on_mn_list_info_updated_cb)
+        util.unregister_callback(self.on_dash_net_activity_cb)
+        util.unregister_callback(self.on_sporks_activity_cb)
+        util.unregister_callback(self.on_dash_peers_updated_cb)
+        util.unregister_callback(self.on_dash_banlist_updated_cb)
+        util.unregister_callback(self.on_mn_list_diff_updated_cb)
+        util.unregister_callback(self.on_mn_list_info_updated_cb)
         util.unregister_callback(self.on_network_updated_cb)
 
     def on_dash_net_activity_cb(self, event, *args):

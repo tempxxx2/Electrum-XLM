@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QPlainTextEdit, QCheckBox, QSpinBox, QVBoxLayout,
                              QButtonGroup, QGroupBox, QLineEdit)
 
 from electrum_dash import mnemonic
-from electrum_dash.dash_ps import filter_log_line, PSLogSubCat, PSStates
+from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat, PSStates
 from electrum_dash.i18n import _
 from electrum_dash.util import InvalidPassword
 

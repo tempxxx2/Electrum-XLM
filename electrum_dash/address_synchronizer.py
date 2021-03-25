@@ -30,7 +30,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Set, Tuple, NamedTuple, Sequen
 
 from . import bitcoin, util
 from .bitcoin import COINBASE_MATURITY
-from .dash_ps import PSManager, PS_MIXING_TX_TYPES, PSCoinRounds
+from .dash_ps import PSManager
+from .dash_ps_util import PSCoinRounds, PS_MIXING_TX_TYPES
 from .dash_tx import tx_header_to_tx_type
 from .util import profiler, bfh, TxMinedInfo, UnrelatedTransactionException
 from .protx import ProTxManager
@@ -205,8 +206,7 @@ class AddressSynchronizer(Logger):
             util.register_callback(self.on_blockchain_updated, ['blockchain_updated'])
             self.protx_manager.on_network_start(self.network)
             self.psman.on_network_start(self.network)
-            dash_net = self.network.dash_net
-            dash_net.register_callback(self.on_dash_islock, ['dash-islock'])
+            util.register_callback(self.on_dash_islock, ['dash-islock'])
 
     def on_blockchain_updated(self, event, *args):
         self._get_addr_balance_cache = {}  # invalidate cache
@@ -245,8 +245,7 @@ class AddressSynchronizer(Logger):
                 self.verifier = None
             util.unregister_callback(self.on_blockchain_updated)
             self.psman.on_stop_threads()
-            dash_net = self.network.dash_net
-            dash_net.unregister_callback(self.on_dash_islock)
+            util.unregister_callback(self.on_dash_islock)
             self.db.put('stored_height', self.get_local_height())
 
     def add_address(self, address, ps_ks=False):

@@ -1196,7 +1196,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             err = f'request_protx_diff(), params={params}: cancelled'
         except Exception as e:
             err = f'request_protx_diff(), params={params}: {repr(e)}'
-        self.trigger_callback('protx-diff', {'error': err,
+        util.trigger_callback('protx-diff', {'error': err,
                                              'result': res,
                                              'params': params})
 

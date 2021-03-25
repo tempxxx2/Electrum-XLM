@@ -466,15 +466,15 @@ class Dip3TabWidget(QTabWidget):
 
         if self.mn_list:
             self.tab_bar.update_stats(self.get_stats())
-            self.mn_list.register_callback(self.on_mn_list_diff_updated,
-                                           ['mn-list-diff-updated'])
-            self.mn_list.register_callback(self.on_mn_list_info_updated,
-                                           ['mn-list-info-updated'])
+            util.register_callback(self.on_mn_list_diff_updated,
+                                   ['mn-list-diff-updated'])
+            util.register_callback(self.on_mn_list_info_updated,
+                                   ['mn-list-info-updated'])
         if self.gui.network:
             util.register_callback(self.on_cb_network_updated,
                                    ['network_updated'])
-        self.manager.register_callback(self.on_manager_alias_updated,
-                                       ['manager-alias-updated'])
+        util.register_callback(self.on_manager_alias_updated,
+                               ['manager-alias-updated'])
         self.alias_updated.connect(self.on_alias_updated)
         self.diff_updated.connect(self.on_diff_updated)
         self.info_updated.connect(self.on_info_updated)
@@ -482,11 +482,11 @@ class Dip3TabWidget(QTabWidget):
 
     def unregister_callbacks(self):
         if self.mn_list:
-            self.mn_list.unregister_callback(self.on_mn_list_diff_updated)
-            self.mn_list.unregister_callback(self.on_mn_list_info_updated)
+            util.unregister_callback(self.on_mn_list_diff_updated)
+            util.unregister_callback(self.on_mn_list_info_updated)
         if self.gui.network:
             util.unregister_callback(self.on_cb_network_updated)
-        self.manager.unregister_callback(self.on_manager_alias_updated)
+        util.unregister_callback(self.on_manager_alias_updated)
 
     def get_stats(self):
         mn_list = self.mn_list
@@ -993,10 +993,10 @@ class Dip3MNInfoDialog(QDialog):
             mn_list = self.mn_list
             sml_entry = mn_list.protx_mns.get(self.protx_hash, {})
             self.diff_info = sml_entry.as_dict() if sml_entry else {}
-            self.mn_list.register_callback(self.on_mn_list_diff_updated,
-                                           ['mn-list-diff-updated'])
-            self.mn_list.register_callback(self.on_mn_list_info_updated,
-                                           ['mn-list-info-updated'])
+            util.register_callback(self.on_mn_list_diff_updated,
+                                   ['mn-list-diff-updated'])
+            util.register_callback(self.on_mn_list_info_updated,
+                                   ['mn-list-info-updated'])
             self.info = mn_list.protx_info.get(self.protx_hash, {})
             if not self.info and self.gui.network.is_connected():
                 self.gui.network.run_from_another_thread(
@@ -1081,8 +1081,8 @@ class Dip3MNInfoDialog(QDialog):
     def closeEvent(self, event):
         event.accept()
         if self.mn_list and self.protx_hash:
-            self.mn_list.unregister_callback(self.on_mn_list_diff_updated)
-            self.mn_list.unregister_callback(self.on_mn_list_info_updated)
+            util.unregister_callback(self.on_mn_list_diff_updated)
+            util.unregister_callback(self.on_mn_list_info_updated)
         try:
             mn_info_dialogs.remove(self)
         except ValueError:

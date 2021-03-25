@@ -109,8 +109,6 @@ class MNList(Logger):
         self.dash_net_enabled = config.get('run_dash_net', True)
         self.load_mns = config.get('protx_load_mns', True)
 
-        self.callbacks = defaultdict(list)
-        self.callback_lock = threading.Lock()
         self.recent_list_lock = threading.Lock()
         self.recent_list = recent_list = self._read_recent_list()
         self.protx_info = self._read_protx_info()
@@ -315,29 +313,6 @@ class MNList(Logger):
             coro = self.network.request_protx_diff()
         asyncio.run_coroutine_threadsafe(coro, self.network.asyncio_loop)
 
-    def register_callback(self, callback, events):
-        with self.callback_lock:
-            for event in events:
-                self.callbacks[event].append(callback)
-
-    def unregister_callback(self, callback):
-        with self.callback_lock:
-            for callbacks in self.callbacks.values():
-                if callback in callbacks:
-                    callbacks.remove(callback)
-
-    def trigger_callback(self, event, *args):
-        with self.callback_lock:
-            callbacks = self.callbacks[event][:]
-        for callback in callbacks:
-            # FIXME: if callback throws, we will lose the traceback
-            if asyncio.iscoroutinefunction(callback):
-                asyncio.run_coroutine_threadsafe(callback(event, *args),
-                                                 self.network.asyncio_loop)
-            else:
-                self.network.asyncio_loop.call_soon_threadsafe(callback,
-                                                               event, *args)
-
     def notify(self, key):
         if key == 'mn-list-diff-updated':
             value = {
@@ -352,7 +327,7 @@ class MNList(Logger):
             self.info_hash = ''
         else:
             value = None
-        self.trigger_callback(key, value)
+        util.trigger_callback(key, value)
 
     async def on_network_status(self, event):
         if not self.wallet_updated:
@@ -411,11 +386,10 @@ class MNList(Logger):
         util.register_callback(self.on_network_updated, ['network_updated'])
         util.register_callback(self.on_wallet_updated, ['wallet_updated'])
         # dash_net
-        self.dash_net.register_callback(self.on_dash_net_updated,
-                                        ['dash-net-updated'])
-        self.dash_net.register_callback(self.on_mnlistdiff, ['mnlistdiff'])
+        util.register_callback(self.on_dash_net_updated, ['dash-net-updated'])
+        util.register_callback(self.on_mnlistdiff, ['mnlistdiff'])
         # MNList
-        self.register_callback(self.on_network_error, ['network-error'])
+        util.register_callback(self.on_network_error, ['network-error'])
 
     def stop(self):
         # network
@@ -425,10 +399,10 @@ class MNList(Logger):
         util.unregister_callback(self.on_network_status)
         util.unregister_callback(self.on_wallet_updated)
         # dash_net
-        self.dash_net.unregister_callback(self.on_dash_net_updated)
-        self.dash_net.unregister_callback(self.on_mnlistdiff)
+        util.unregister_callback(self.on_dash_net_updated)
+        util.unregister_callback(self.on_mnlistdiff)
         # MNList
-        self.unregister_callback(self.on_network_error)
+        util.unregister_callback(self.on_network_error)
 
     def get_random_mn(self):
         valid = [sml_entry for sml_entry in self.protx_mns.values()

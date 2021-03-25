@@ -14,7 +14,7 @@ from electrum_dash.bitcoin import is_address, COIN
 from electrum_dash.transaction import PartialTxOutput
 from electrum_dash.network import TxBroadcastError, BestEffortRequestFailed
 from electrum_dash.logging import console_stderr_handler
-from electrum_dash.dash_ps import filter_log_line, PSLogSubCat
+from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat
 from electrum_dash.dash_tx import SPEC_TX_NAMES
 
 _ = lambda x:x  # i18n

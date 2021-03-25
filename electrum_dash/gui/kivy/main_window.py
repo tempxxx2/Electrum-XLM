@@ -9,8 +9,8 @@ import threading
 import asyncio
 from typing import TYPE_CHECKING, Optional, Union, Callable, Sequence
 
-from electrum_dash.dash_ps import (PSPossibleDoubleSpendError,
-                                   PSSpendToPSAddressesError)
+from electrum_dash.dash_ps_util import (PSPossibleDoubleSpendError,
+                                        PSSpendToPSAddressesError)
 from electrum_dash.storage import WalletStorage, StorageReadWriteError
 from electrum_dash.wallet_db import WalletDB
 from electrum_dash.wallet import Wallet, InternalAddressCorruption, Abstract_Wallet
@@ -719,7 +719,7 @@ class ElectrumWindow(App, Logger):
 
     def stop_wallet(self):
         if self.wallet:
-            self.wallet.psman.unregister_callback(self.on_ps_callback)
+            util.unregister_callback(self.on_ps_callback)
             self.daemon.stop_wallet(self.wallet.storage.path)
             self.wallet = None
 
@@ -998,14 +998,14 @@ class ElectrumWindow(App, Logger):
         if self.wallet:
             self.stop_wallet()
         self.wallet = wallet
-        self.wallet.psman.register_callback(self.on_ps_callback,
-                                            ['ps-data-changes',
-                                             'ps-reserved-changes',
-                                             'ps-not-enough-sm-denoms',
-                                             'ps-other-coins-arrived',
-                                             'ps-wfl-changes',
-                                             'ps-keypairs-changes',
-                                             'ps-state-changes'])
+        util.register_callback(self.on_ps_callback,
+                               ['ps-data-changes',
+                                'ps-reserved-changes',
+                                'ps-not-enough-sm-denoms',
+                                'ps-other-coins-arrived',
+                                'ps-wfl-changes',
+                                'ps-keypairs-changes',
+                                'ps-state-changes'])
         self.wallet_name = wallet.basename()
         self.update_wallet()
         # Once GUI has been initialized check if we want to announce something

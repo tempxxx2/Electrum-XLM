@@ -37,8 +37,8 @@ from PyQt5.QtWidgets import (QAbstractItemView, QHeaderView, QComboBox,
 
 from electrum_dash.i18n import _
 from electrum_dash.transaction import PartialTxInput
-from electrum_dash.dash_ps import (PSCoinRounds, sort_utxos_by_ps_rounds,
-                                   ps_coin_rounds_str)
+from electrum_dash.dash_ps_util import (PSCoinRounds, sort_utxos_by_ps_rounds,
+                                        ps_coin_rounds_str)
 from electrum_dash.logging import Logger
 from electrum_dash.util import profiler, format_time
 

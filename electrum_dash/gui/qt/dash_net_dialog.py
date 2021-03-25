@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QGridLayout, QDialog, QVBoxLayout, QCheckBox,
                              QTabWidget, QWidget, QLabel, QSpinBox, QLineEdit,
                              QTreeWidget, QTreeWidgetItem, QMenu, QHeaderView)
 
-from electrum_dash import constants
+from electrum_dash import constants, util
 from electrum_dash.dash_net import MIN_PEERS_LIMIT, MAX_PEERS_LIMIT
 from electrum_dash.i18n import _
 from electrum_dash.logging import get_logger
@@ -441,17 +441,17 @@ class DashNetDialog(QDialog):
     def show(self):
         super(DashNetDialog, self).show()
         if self.network:
-            self.network.dash_net.register_callback(self.on_dash_net,
-                                                    ['dash-peers-updated',
-                                                     'dash-net-activity',
-                                                     'sporks-activity',
-                                                     'dash-banlist-updated'])
+            util.register_callback(self.on_dash_net,
+                                   ['dash-peers-updated',
+                                    'dash-net-activity',
+                                    'sporks-activity',
+                                    'dash-banlist-updated'])
 
     def closeEvent(self, e):
         if self.dnlayout.err_label.text():
             e.ignore()
         if self.network:
-            self.network.dash_net.unregister_callback(self.on_dash_net)
+            util.unregister_callback(self.on_dash_net)
 
     def on_dash_net(self, event, *args):
         self.dash_net_sobj.dlg.emit(event, args)
