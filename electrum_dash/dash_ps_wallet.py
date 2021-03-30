@@ -1455,7 +1455,6 @@ class PSDataMixin:
         if not full_check:
             return
 
-        dval_cnt = 0
         collateral_cnt = 0
         denoms_cnt = 0
         last_denom_val = MIN_DENOM_VAL  # must start with minimal denom
@@ -1493,12 +1492,7 @@ class PSDataMixin:
                 if val < last_denom_val:  # must increase or be the same
                     return (f'Unsuitable denom value={val}, must be'
                             f' {last_denom_val} or greater')
-                elif val == last_denom_val:
-                    dval_cnt += 1
-                    if dval_cnt > 11:  # max 11 times of same denom val
-                        return f'To many denoms of value={val}'
-                else:
-                    dval_cnt = 1
+                elif val > last_denom_val:
                     last_denom_val = val
                 denoms_cnt += 1
             else:
