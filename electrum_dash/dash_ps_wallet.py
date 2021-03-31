@@ -172,16 +172,16 @@ class KeyPairsMixin:
     def calc_need_new_keypairs_cnt(self):
         new_denoms_amounts_real = self.calc_need_denoms_amounts()
         new_denoms_cnt_real = sum([len(a) for a in new_denoms_amounts_real])
-
-        if self.calc_denoms_method != self.CalcDenomsMethod.DEF:
-            need_sign_cnt, need_sign_change_cnt = \
-                self.calc_need_sign_cnt(new_denoms_cnt_real)[0:2]
-            return need_sign_cnt, need_sign_change_cnt, False
-
         new_denoms_val_real = sum([sum(a) for a in new_denoms_amounts_real])
         new_denoms_amounts = self.calc_need_denoms_amounts(on_keep_amount=True)
         new_denoms_val = sum([sum(a) for a in new_denoms_amounts])
-        if new_denoms_val > new_denoms_val_real:
+        small_mix_funds = (new_denoms_val > new_denoms_val_real)
+
+        if self.calc_denoms_method == self.CalcDenomsMethod.ABS:
+            new_denoms_cnt = sum([len(a) for a in new_denoms_amounts])
+            need_sign_cnt, need_sign_change_cnt = \
+                self.calc_need_sign_cnt(new_denoms_cnt)[0:2]
+        elif small_mix_funds:
             part_val = ceil(new_denoms_val / KP_MAX_INCOMING_TXS)
             part_amounts = self.find_denoms_approx(part_val)
             part_amounts_cnt = sum([len(a) for a in part_amounts])
@@ -189,11 +189,10 @@ class KeyPairsMixin:
                 self.calc_need_sign_cnt(part_amounts_cnt)[0:2]
             need_sign_cnt *= KP_MAX_INCOMING_TXS
             need_sign_change_cnt *= KP_MAX_INCOMING_TXS
-            return need_sign_cnt, need_sign_change_cnt, True
         else:
             need_sign_cnt, need_sign_change_cnt = \
                 self.calc_need_sign_cnt(new_denoms_cnt_real)[0:2]
-            return need_sign_cnt, need_sign_change_cnt, False
+        return need_sign_cnt, need_sign_change_cnt, small_mix_funds
 
     def check_need_new_keypairs(self):
         w = self.wallet
@@ -1105,7 +1104,8 @@ class PSDataMixin:
                                                          min_rounds=0))
 
         need_val = to_duffs(self.keep_amount)
-        if self.calc_denoms_method != self.CalcDenomsMethod.ABS:
+        calc_method = self.calc_denoms_method
+        if calc_method != self.CalcDenomsMethod.ABS:
             need_val += CREATE_COLLATERAL_VAL
         if need_val < old_denoms_val:  # already have need value of denoms
             return []
@@ -1118,8 +1118,11 @@ class PSDataMixin:
             return []  # no coins to create denoms
 
         in_cnt = len(coins)
-        approx_val = need_val - old_denoms_val
-        outputs_amounts = self.find_denoms_approx(approx_val)
+        if calc_method == self.CalcDenomsMethod.ABS and on_keep_amount:
+            outputs_amounts = self.find_denoms_approx(need_val)
+        else:
+            approx_val = need_val - old_denoms_val
+            outputs_amounts = self.find_denoms_approx(approx_val)
         total_need_val, outputs_amounts = \
             self._calc_total_need_val(in_cnt, outputs_amounts, fee_per_kb)
         if on_keep_amount or coins_val >= total_need_val:

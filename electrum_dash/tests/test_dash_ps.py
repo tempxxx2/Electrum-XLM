@@ -2052,6 +2052,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         abs_cnt[PS_DENOMS_VALS[4]] = 1
         psman.abs_denoms_cnt = abs_cnt
 
+        coins_data = psman._get_next_coins_for_mixing()
+        assert coins_data['total_val'] > psman.keep_amount*COIN + MIN_DENOM_VAL
         assert psman.keep_amount == 12.300123
         res = psman.calc_need_denoms_amounts()
         total_val = sum(v for amnts in res for v in amnts)
@@ -2061,9 +2063,24 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert cnt[PS_DENOMS_VALS[4]] == 1
         assert total_val - 40000 == psman.keep_amount*COIN
 
+        # check with on_keep_amount=True
+        abs_cnt[PS_DENOMS_VALS[4]] = 10
+        psman.abs_denoms_cnt = abs_cnt
+        assert psman.keep_amount == 102.301023
+
+        res = psman.calc_need_denoms_amounts(on_keep_amount=True)
+        total_val = sum(v for amnts in res for v in amnts)
+        assert total_val - 40000 == psman.keep_amount*COIN
+        assert coins_data['total_val'] < psman.keep_amount*COIN
+
+        # find untracked ps data
         coro = psman.find_untracked_ps_txs(log=False)
         asyncio.get_event_loop().run_until_complete(coro)
+
+        abs_cnt[PS_DENOMS_VALS[4]] = 1
+        psman.abs_denoms_cnt = abs_cnt
         assert psman.keep_amount == 12.300123
+
         res = psman.calc_need_denoms_amounts()
         total_val = sum(v for amnts in res for v in amnts)
         assert total_val == 0
@@ -2073,6 +2090,11 @@ class PSWalletTestCase(TestCaseForTestnet):
         coins_data = psman._get_next_coins_for_mixing()
         assert coins_data['total_val'] < PS_DENOMS_VALS[4]
         assert found_cnt[PS_DENOMS_VALS[4]] == 0  # not enough funds
+
+        # check with on_keep_amount=True
+        res = psman.calc_need_denoms_amounts(on_keep_amount=True)
+        total_val = sum(v for amnts in res for v in amnts)
+        assert total_val == 1000010000
 
     def test_calc_tx_size(self):
         # average sizes
