@@ -2466,12 +2466,15 @@ class PSKeystoreMixin:
 
     async def _prepare_funds_from_hw_wallet(self):
         while True:
+            while self.new_denoms_wfl:
+                await asyncio.sleep(5)  # wait for prev new denoms wfl finish
             tx = self.prepare_funds_from_hw_wallet()
             if tx:
                 await self.broadcast_transaction(tx)
                 self.logger.info(f'Broadcasted PS Keystore'
                                  f' fund tx {tx.txid()}')
-            await asyncio.sleep(30)
+                await asyncio.sleep(10)  # wait for new denoms wfl start
+            await asyncio.sleep(5)  # wait for new coins on hw wallet
 
     def prepare_funds_from_ps_keystore(self, password):
         w = self.wallet
