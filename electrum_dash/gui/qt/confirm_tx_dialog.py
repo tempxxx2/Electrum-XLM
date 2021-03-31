@@ -195,7 +195,11 @@ class ConfirmTxDialog(TxEditor, WindowModalDialog):
                 self.main_window.show_error(_("Password required"), parent=self)
                 return
             try:
-                self.wallet.check_password(password)
+                psman = self.wallet.psman
+                if psman.is_hw_ks and psman.is_ps_ks_encrypted():
+                    psman.ps_keystore.check_password(password)
+                else:
+                    self.wallet.check_password(password)
             except Exception as e:
                 self.main_window.show_error(str(e), parent=self)
                 return
