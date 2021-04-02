@@ -63,7 +63,7 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
 
     def __init__(self, win: 'ElectrumWindow'):
         CompletionTextEdit.__init__(self)
-        ScanQRTextEdit.__init__(self)
+        ScanQRTextEdit.__init__(self, config=win.config)
         Logger.__init__(self)
         self.win = win
         self.amount_edit = win.amount_e
@@ -162,7 +162,7 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
             # try bip21 URI
             data_l = data.lower()
             if (data_l.startswith(DASH_BIP21_URI_SCHEME + ':')
-                or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
+                    or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
                 self.win.pay_to_URI(data)
                 return
             # try "address, amount" on-chain format
@@ -257,7 +257,7 @@ class PayToEdit(CompletionTextEdit, ScanQRTextEdit, Logger):
         data = super(PayToEdit,self).qr_input()
         data_l = data.lower()
         if (data_l.startswith(DASH_BIP21_URI_SCHEME + ':')
-            or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
+                or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
             self.win.pay_to_URI(data)
             # TODO: update fee
 

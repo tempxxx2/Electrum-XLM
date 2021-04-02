@@ -431,7 +431,7 @@ class DashNet(Logger):
                     or self.run_dash_net != run_dash_net
                     or self.use_static_peers != use_static_peers
                     or self.dash_peers != dash_peers):
-                await self._stop()
+                await self.stop()
                 await self._start()
 
     async def _start(self):
@@ -464,7 +464,7 @@ class DashNet(Logger):
         asyncio.run_coroutine_threadsafe(self._start(), self.loop)
 
     @log_exceptions
-    async def _stop(self, full_shutdown=False):
+    async def stop(self, full_shutdown=False):
         if not self.main_taskgroup:
             return
 
@@ -481,15 +481,6 @@ class DashNet(Logger):
         self.peers_queue = None
         if not full_shutdown:
             util.trigger_callback('dash-net-updated', 'disabled')
-
-    def stop(self):
-        assert self._loop_thread != threading.current_thread(), NET_THREAD_MSG
-        fut = asyncio.run_coroutine_threadsafe(self._stop(full_shutdown=True),
-                                               self.loop)
-        try:
-            fut.result(timeout=2)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
-            pass
 
     def run_from_another_thread(self, coro):
         assert self._loop_thread != threading.current_thread(), NET_THREAD_MSG

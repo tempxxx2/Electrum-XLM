@@ -38,14 +38,13 @@ version.filename = %(source.dir)s/electrum_dash/version.py
 requirements =
     six,
     setuptools,
-    # note: re python3.8, see #6147
-    hostpython3==3.7.9,
-    python3==3.7.9,
+    hostpython3==3.8.8,
+    python3==3.8.8,
     android,
     openssl,
     plyer,
-    # kivy 1.11.1
-    kivy==39c17457bae91baf8fe710dc989791e45879f136,
+    # kivy master 2020-12-10 (2.0.0 plus a few bugfixes)
+    kivy==2debbc3b1484b14824112986cb03b1072a60fbfc,
     libffi,
     libsecp256k1,
     cryptography,

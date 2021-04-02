@@ -1075,7 +1075,7 @@ class PSUtilsMixin:
     def get_biggest_denoms_by_min_round(self):
         w = self.wallet
         coins = w.get_utxos(None,
-                            mature_only=True, confirmed_only=True,
+                            mature_only=True, confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() > MIN_DENOM_VAL]
         coins = self.filter_out_hw_ks_coins(coins)

@@ -275,16 +275,16 @@ class SafeTPlugin(HW_PluginBase):
         return xpub
 
     def get_safet_input_script_type(self, electrum_txin_type: str):
-        if electrum_txin_type in ('p2pkh', ):
+        if electrum_txin_type in ('p2pkh',):
             return self.types.InputScriptType.SPENDADDRESS
-        if electrum_txin_type in ('p2sh', ):
+        if electrum_txin_type in ('p2sh',):
             return self.types.InputScriptType.SPENDMULTISIG
         raise ValueError('unexpected txin type: {}'.format(electrum_txin_type))
 
     def get_safet_output_script_type(self, electrum_txin_type: str):
-        if electrum_txin_type in ('p2pkh', ):
+        if electrum_txin_type in ('p2pkh',):
             return self.types.OutputScriptType.PAYTOADDRESS
-        if electrum_txin_type in ('p2sh', ):
+        if electrum_txin_type in ('p2sh',):
             return self.types.OutputScriptType.PAYTOMULTISIG
         raise ValueError('unexpected txin type: {}'.format(electrum_txin_type))
 

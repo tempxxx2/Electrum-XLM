@@ -32,8 +32,6 @@ Popup:
                     BoxLabel:
                         text: _("Balance") + ':'
                         value: app.format_amount_and_units(root.confirmed + root.unconfirmed + root.unmatured)
-
-
                 GridLayout:
                     cols: 1
                     height: self.minimum_height
@@ -69,7 +67,6 @@ Popup:
                 size_hint: 0.5, None
                 height: '48dp'
                 text: _('Export Backup')
-                disabled: not app.android_backups
                 on_release:
                     root.dismiss()
                     app.save_backup()

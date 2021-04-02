@@ -383,7 +383,7 @@ class DashProRegTx(ProTxBase):
         if self.payloadSig == b'':
             return
         coins = wallet.get_utxos(domain=None, excluded_addresses=False,
-                                 mature_only=True, confirmed_only=True)
+                                 mature_only=True, confirmed_funding_only=True)
 
         c_hash = bh2u(self.collateralOutpoint.hash[::-1])
         c_index = self.collateralOutpoint.index

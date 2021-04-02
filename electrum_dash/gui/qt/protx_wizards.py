@@ -318,7 +318,8 @@ class ImportLegacyWizardPage(QWizardPage):
         if not address:
             wallet = self.parent.wallet
             coins = wallet.get_utxos(domain=None, excluded_addresses=None,
-                                     mature_only=True, confirmed_only=True)
+                                     mature_only=True,
+                                     confirmed_funding_only=True)
             coins = filter(lambda x: (x.prevout.txid.hex() == prevout_hash
                                       and x.prevout.out_idx == prevout_n),
                            coins)
@@ -1202,9 +1203,10 @@ class CollateralWizardPage(QWizardPage):
         if self.frozen_cb.isChecked():
             excluded = None
         else:
-            excluded = wallet.frozen_addresses
+            with wallet._freeze_lock:
+                excluded = wallet._frozen_addresses.copy()
         coins = wallet.get_utxos(domain=None, excluded_addresses=excluded,
-                                 mature_only=True, confirmed_only=True)
+                                 mature_only=True, confirmed_funding_only=True)
         if not self.frozen_cb.isChecked():
             coins = [c for c in coins if not wallet.is_frozen_coin(c)]
         coins = list(filter(lambda x: (x.value_sats() == (1000 * COIN)),
@@ -1762,7 +1764,8 @@ class Dip3MasternodeWizard(QWizard):
             return prevout_hash, prevout_n, addr
 
         coins = self.wallet.get_utxos(domain=None, excluded_addresses=None,
-                                      mature_only=True, confirmed_only=True)
+                                      mature_only=True,
+                                      confirmed_funding_only=True)
 
         coins = filter(lambda x: (x.prevout.txid.hex() == prevout_hash
                                   and x.prevout.out_idx == prevout_n),

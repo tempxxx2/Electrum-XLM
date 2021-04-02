@@ -99,8 +99,8 @@ class InvoiceList(MyTreeView):
         self.proxy.setDynamicSortFilter(False)  # temp. disable re-sorting after every change
         self.std_model.clear()
         self.update_headers(self.__class__.headers)
-        for idx, item in enumerate(self.parent.wallet.get_invoices()):
-            key = item.id
+        for idx, item in enumerate(self.parent.wallet.get_unpaid_invoices()):
+            key = self.parent.wallet.get_key_for_outgoing_invoice(item)
             invoice_ext = self.parent.wallet.get_invoice_ext(key)
             icon_name = 'dashcoin.png'
             if item.bip70:
@@ -141,8 +141,8 @@ class InvoiceList(MyTreeView):
         wallet = self.parent.wallet
         items = self.selected_in_column(0)
         if len(items)>1:
-            keys = [ item.data(ROLE_REQUEST_ID)  for item in items]
-            invoices = [ wallet.invoices.get(key) for key in keys]
+            keys = [item.data(ROLE_REQUEST_ID) for item in items]
+            invoices = [wallet.invoices.get(key) for key in keys]
             invoices_ext = [ wallet.invoices_ext.get(key) for key in keys]
             can_batch_pay = all([i.type == PR_TYPE_ONCHAIN and wallet.get_invoice_status(i) == PR_UNPAID for i in invoices])
             if can_batch_pay:

@@ -7,6 +7,7 @@ from electrum_dash.commands import Commands, eval_bool
 from electrum_dash import storage, wallet
 from electrum_dash.wallet import restore_wallet_from_text
 from electrum_dash.simple_config import SimpleConfig
+from electrum_dash.transaction import tx_from_any
 
 from . import TestCaseForTestnet, ElectrumTestCase
 
@@ -99,9 +100,9 @@ class TestCommands(ElectrumTestCase):
                          cmds._run('getprivatekeys', ("Xci5KnMVkHrqBQk9cU4jwmzJfgaTPopHbz",), wallet=wallet))
         # list of addresses tests
         with self.assertRaises(Exception):
-            cmds._run('getprivatekeys', (['XmQ3Tn67Fgs7bwNXthtiEnBFh7ZeDG3aw2', 'asd'], ), wallet=wallet)
+            cmds._run('getprivatekeys', (['XmQ3Tn67Fgs7bwNXthtiEnBFh7ZeDG3aw2', 'asd'],), wallet=wallet)
         self.assertEqual(['p2pkh:XGx8LpkmLRv9RiMvpYx965BCaQKQbeMVVqgAh7B5SQVdosQiKJ4i', 'p2pkh:XEn9o6oayjsRmoEQwDbvkrWVvjRNqPj3xNskJJPAKraJTrWuutwd'],
-                         cmds._run('getprivatekeys', (['XmQ3Tn67Fgs7bwNXthtiEnBFh7ZeDG3aw2', 'Xci5KnMVkHrqBQk9cU4jwmzJfgaTPopHbz'], ), wallet=wallet))
+                         cmds._run('getprivatekeys', (['XmQ3Tn67Fgs7bwNXthtiEnBFh7ZeDG3aw2', 'Xci5KnMVkHrqBQk9cU4jwmzJfgaTPopHbz'],), wallet=wallet))
 
     @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
     def test_export_private_key_deterministic(self, mock_save_db):
@@ -121,7 +122,7 @@ class TestCommands(ElectrumTestCase):
         with self.assertRaises(Exception):
             cmds._run('getprivatekeys', (['XvmHzyQe8QWbvv17wc1PPMyJgaomknSp7W', 'asd'],), wallet=wallet)
         self.assertEqual(['p2pkh:XE5VEmWKQRK5N7kQMfw6KqoRp3ExKWgaeCKsxsmDFBxJJBgdQdTH', 'p2pkh:XGtpLmVGmaRnfvRvd4qxSeE7PqJoi9FUfkgPKD24PeoJsZCh1EXg'],
-                         cmds._run('getprivatekeys', (['XvmHzyQe8QWbvv17wc1PPMyJgaomknSp7W', 'XoEUKPPiPETff1S4oQmo4HGR1rYrRAX6uT'], ), wallet=wallet))
+                         cmds._run('getprivatekeys', (['XvmHzyQe8QWbvv17wc1PPMyJgaomknSp7W', 'XoEUKPPiPETff1S4oQmo4HGR1rYrRAX6uT'],), wallet=wallet))
 
 
 class TestCommandsTestnet(TestCaseForTestnet):
@@ -159,14 +160,14 @@ class TestCommandsTestnet(TestCaseForTestnet):
                 {
                     "prevout_hash": "9d221a69ca3997cbeaf5624d723e7dc5f829b1023078c177d37bdae95f37c539",
                     "prevout_n": 1,
-                    "value": 1000000,
+                    "value_sats": 1000000,
                     "privkey": "p2pkh:cVDXzzQg6RoCTfiKpe8MBvmm5d5cJc6JLuFApsFDKwWa6F5TVHpD"
                 }
             ],
             "outputs": [
                 {
                     "address": "yVMyvBvALMa12EJaqhEwu4tJ5h4tWcn9Yz",
-                    "value": 990000
+                    "value_sats": 990000
                 }
             ]
         }
@@ -180,7 +181,7 @@ class TestCommandsTestnet(TestCaseForTestnet):
                 {
                     "prevout_hash": "9d221a69ca3997cbeaf5624d723e7dc5f829b1023078c177d37bdae95f37c539",
                     "prevout_n": 1,
-                    "value": 1000000,
+                    "value_sats": 1000000,
                     "privkey": "p2pkh:cVDXzzQg6RoCTfiKpe8MBvmm5d5cJc6JLuFApsFDKwWa6F5TVHpD",
                     "nsequence": 0xfffffffd
                 }
@@ -188,7 +189,7 @@ class TestCommandsTestnet(TestCaseForTestnet):
             "outputs": [
                 {
                     "address": "yVMyvBvALMa12EJaqhEwu4tJ5h4tWcn9Yz",
-                    "value": 990000
+                    "value_sats": 990000
                 }
             ]
         }
@@ -209,3 +210,17 @@ class TestCommandsTestnet(TestCaseForTestnet):
                          cmds._run('getprivatekeyforpath', ("m/0/10000",), wallet=wallet))
         self.assertEqual("p2pkh:cS2exaULytoQ9CR89QHJDMg82NWKZ6f8rFboU7LGbHhdUMXxpPcd",
                          cmds._run('getprivatekeyforpath', ("m/5h/100000/88h/7",), wallet=wallet))
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_signtransaction_without_wallet(self, mock_save_db):
+        dummy_wallet = restore_wallet_from_text(
+            'yXyZrWX2AAmsVvmtGsgxtxmhuV4kPQKKLC',  # random testnet address
+            gap_limit=2, path='if_this_exists_mocking_failed_648151893', config=self.config)['wallet']
+        cmds = Commands(config=self.config)
+        unsigned_tx = "cHNidP8BAFUCAAAAAfYPG8xEZIPSCFUQvT9hKSebChcHfRf44VBKdvCv+BvUAQAAAAD+////AVtGSgAAAAAAGXapFHbdRv3NIGILeiru0ElFh/yu1oXmiKxePwcAAAEA/SUBAgAAAAF895Ja488aAx4I7yq55Jxlr50rK3fkjjIx3Uxsgh7Z8wAAAABqRzBEAiBAE2MpeZYzp5QC2J7V9/KfvF7uQk/XcUs8YI9K+12zBAIgex7/mvNPvdj91u7WFnCMSJZAHxMW1XGvPD815CbeJ3wBIQK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuf7///8EQJwAAAAAAAAZdqkU+InI3CUUVo7OLrKa7Q7hZ6qArceIrHtHSgAAAAAAGXapFMXi0i9hMWlau5GQFeiPwlJxs4dQiKzklpgAAAAAABl2qRQjqj1H4J1g4HSr2IvCdVOedvNkQIis5JaYAAAAAAAZdqkU+gvqRTG5zwueDUbg7AZ1AQmAF9aIrJ01BwAiBgK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuQzZ3FryAAAAAAAAAAAAIgIDJgOS9iOn/pO/96NpC3pK5xamEiGEQs3wIF/8r9G1G+MM2dxa8gAAAAAIAAAAAA=="
+        assert not tx_from_any(unsigned_tx).is_complete()
+        privkey = "cVigSP6aKjWJVX9Gp1fGMLJyCbuxYWaMBVQyjUt5mL17WhMH53e6"
+        tx_str = cmds._run('signtransaction', (), tx=unsigned_tx, privkey=privkey, wallet=dummy_wallet)
+        self.assertEqual(tx_str,
+                         "0200000001f60f1bcc446483d2085510bd3f6129279b0a17077d17f8e1504a76f0aff81bd4010000006a473044022040ea78e690d2a323daadc19831b3d1294e2a28d96c48481677c9786d9a1be3ac0220672ce6745e5de73f61cefb0f2f3fac5ce5aa9b9728fd28efb55e0660f92cc3d9012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff015b464a00000000001976a91476dd46fdcd20620b7a2aeed0494587fcaed685e688ac5e3f0700")
+        assert  tx_from_any(tx_str).is_complete()

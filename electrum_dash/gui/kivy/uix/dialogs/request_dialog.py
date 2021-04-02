@@ -49,7 +49,8 @@ Builder.load_string('''
             TopLabel:
                 text: _('Address') + ': '
             RefLabel:
-                text: root.key
+                data: root.key
+                name: _('Address')
             TopLabel:
                 text: _('Status') + ': ' + root.status_str
                 color: root.status_color

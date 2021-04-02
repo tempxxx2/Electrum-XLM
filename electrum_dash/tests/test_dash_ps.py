@@ -309,7 +309,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         self.config.set_key('show_dip2_tx_type', True, True)
         h = self.wallet.get_detailed_history()
         h_f = self.wallet.get_full_history()
-        assert h['summary']['end_balance'] == Satoshis(1484831773)
+        assert h['summary']['end']['BTC_balance'] == Satoshis(1484831773)
         txs = h['transactions']
         txf = list(h_f.values())
         assert len(txs) == 88
@@ -351,7 +351,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         self.config.set_key('show_dip2_tx_type', False, True)
         h = self.wallet.get_detailed_history()
         h_f = self.wallet.get_full_history()
-        assert h['summary']['end_balance'] == Satoshis(1484831773)
+        assert h['summary']['end']['BTC_balance'] == Satoshis(1484831773)
         txs = h['transactions']
         txf = list(h_f.values())
         assert len(txs) == 88
@@ -373,7 +373,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         h = self.wallet.get_detailed_history(group_ps=True)
         h_f = self.wallet.get_full_history(group_ps=True)
         end_balance = Satoshis(1484831773)
-        assert h['summary']['end_balance'] == end_balance
+        assert h['summary']['end']['BTC_balance'] == end_balance
         txs = h['transactions']
         txf = list(h_f.values())
         group0 = txs[81]['group_data']
@@ -422,7 +422,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         self.config.set_key('show_dip2_tx_type', True, True)
         h = self.wallet.get_detailed_history(group_ps=True)
         h_f = self.wallet.get_full_history(group_ps=True)
-        assert h['summary']['end_balance'] == end_balance
+        assert h['summary']['end']['BTC_balance'] == end_balance
         txs = h['transactions']
         txf = list(h_f.values())
         for i in [1, 6, 7, 10, 11, 83, 84, 85, 86]:
@@ -1638,7 +1638,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert not wfl
 
         # check on single minimal denom
-        coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+        coins = w.get_utxos(None, mature_only=True,
+                            confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() == MIN_DENOM_VAL]
         coins = sorted(coins, key=lambda x: x.ps_rounds)
@@ -2015,13 +2016,15 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert sum([sum(amnts)for amnts in res]) == two_dash_amnts_val
 
         # test with spendable amount < keep_amount
-        coins0 = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins0 = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                              mature_only=True, include_ps=True)
         coins = [c for c in coins0 if c.value_sats() < 50000000]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
         coins = [c for c in coins0 if c.value_sats() >= 100000000]
-        w.set_frozen_state_of_coins(coins, True)
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         assert sum([c.value_sats() for c in coins]) == 50000000  # 0.5 Dash
@@ -2032,7 +2035,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert sum([sum(amnts)for amnts in res]) == two_dash_amnts_val
 
         # test with zero spendable amount
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
 
         res = psman.calc_need_denoms_amounts()
@@ -2156,7 +2160,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert len(coins) == 138
 
         # freeze found coins to test next coins found
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         coro = psman.get_next_coins_for_mixing()
         coins = asyncio.get_event_loop().run_until_complete(coro)
@@ -2188,7 +2193,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert coins[0].value_sats() + coins[1].value_sats() == total_val
 
         # freeze found coins to test next coins found
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         coro = psman.get_next_coins_for_mixing()
         coins = asyncio.get_event_loop().run_until_complete(coro)
@@ -2204,7 +2210,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         coins = [c for c in coins
                  if c.value_sats() in [100001000, 100000000, 50000000,
                                        30000000, 10000100, 2000000]]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         coro = psman.get_next_coins_for_mixing()
         coins = asyncio.get_event_loop().run_until_complete(coro)
@@ -2222,7 +2229,9 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert len(coins) == 0
 
         # freeze all to test coins absence
-        w.set_frozen_state_of_coins(w.get_utxos(None), True)
+        coins = w.get_utxos(None)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         coro = psman.get_next_coins_for_mixing()
         coins = asyncio.get_event_loop().run_until_complete(coro)
@@ -2367,8 +2376,9 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # freeze coins except smallest
         coins = sorted(w.get_utxos(), key=lambda x: -x.value_sats())[:-1]
-        w.set_frozen_state_of_coins(coins, True)
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         assert len(coins) == 1
         assert coins[0].value_sats() == 1000000
@@ -2382,7 +2392,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         new_collateral_cnt = 19
         new_collateral_fee = calc_tx_fee(1, 2, fee_per_kb, max_size=True)
         half_minimal_denom = MIN_DENOM_VAL // 2
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         assert len(coins) == 1
         assert (coins[0].value_sats() -
@@ -2404,7 +2414,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert err
         assert not wfl
 
-        coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+        coins = w.get_utxos(None, mature_only=True,
+                            confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() == PS_DENOMS_VALS[-2]]
         coins = sorted(coins, key=lambda x: x.ps_rounds)
@@ -2489,7 +2500,8 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # check on 10000100 denom
         total_out_vals = 0
-        coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+        coins = w.get_utxos(None, mature_only=True,
+                            confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() == PS_DENOMS_VALS[-3]]
         coins = sorted(coins, key=lambda x: x.ps_rounds)
@@ -2526,7 +2538,8 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # check on 1000010 denom
         total_out_vals = 0
-        coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+        coins = w.get_utxos(None, mature_only=True,
+                            confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() == PS_DENOMS_VALS[-4]]
         coins = sorted(coins, key=lambda x: x.ps_rounds)
@@ -3361,7 +3374,7 @@ class PSWalletTestCase(TestCaseForTestnet):
                     or val in CREATE_COLLATERAL_VALS
                     or c.address in ['yRUktd39y5aU3JCgvZSx2NVfwPnv5nB2PF',
                                      'yZwFosFcLXGWomh11ddUNgGBKCBp7yueyo']):
-                w.set_frozen_state_of_coins([c], True)
+                w.set_frozen_state_of_coins([c.prevout.to_str()], True)
 
         psman.mix_rounds = 2
         w.db.set_ps_data('keep_amount', 1.65)  # to override min keep amount 2
@@ -3450,13 +3463,15 @@ class PSWalletTestCase(TestCaseForTestnet):
         w = self.wallet
         psman = w.psman
 
-        coins0 = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins0 = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                              mature_only=True, include_ps=True)
         coins = [c for c in coins0 if c.value_sats() < 50000000]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
         coins = [c for c in coins0 if c.value_sats() >= 100000000]
-        w.set_frozen_state_of_coins(coins, True)
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         assert sum([c.value_sats() for c in coins]) == 50000000  # 0.5 Dash
@@ -3543,14 +3558,15 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # freeze some coins to make small change amount
         selected_coins_vals = [801806773, 50000000, 1000000]
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True)
         coins = [c for c in coins if not w.is_frozen_coin(c) ]
         coins = [c for c in coins if not c.value_sats() in selected_coins_vals]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         # check spendable coins
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True)
         coins = [c for c in coins if not w.is_frozen_coin(c) ]
         coins = sorted([c for c in coins if not w.is_frozen_coin(c)],
@@ -3617,14 +3633,15 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # freeze some coins to make small change amount
         selected_coins_vals = [801806773, 50000000, 1000000]
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True)
         coins = [c for c in coins if not w.is_frozen_coin(c) ]
         coins = [c for c in coins if not c.value_sats() in selected_coins_vals]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
 
         # check spendable coins
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True)
         coins = [c for c in coins if not w.is_frozen_coin(c) ]
         coins = sorted([c for c in coins if not w.is_frozen_coin(c)],
@@ -3986,12 +4003,16 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.w_ks_type = 'hardware'  # mock
         psman.create_ps_ks_from_seed_ext_password(TEST_MNEMONIC, '222', None)
         ps_ks_dump = psman.ps_keystore.dump()
-        assert list(ps_ks_dump.keys()) == ['type', 'pw_hash_version', 'seed',
-                                           'passphrase', 'xpub', 'xprv',
-                                           'derivation', 'root_fingerprint']
+        assert sorted(ps_ks_dump.keys()) == sorted(['type', 'pw_hash_version',
+                                                    'seed', 'seed_type',
+                                                    'passphrase',
+                                                    'xpub', 'xprv',
+                                                    'derivation',
+                                                    'root_fingerprint'])
         assert ps_ks_dump['type'] == 'ps_bip32'
         assert ps_ks_dump['pw_hash_version'] == 1
         assert ps_ks_dump['seed'] == TEST_MNEMONIC
+        assert ps_ks_dump['seed_type'] == 'standard'
         assert ps_ks_dump['passphrase'] == '222'
         assert ps_ks_dump['xpub'] == ('tpubD6NzVbkrYhZ4XbJGdLV1VF6RSPjMCxn9hM6'
                                       'grY9bhAhPsnRxPEVjyUZbhbB6zMoWTqJEJkwsLv'
@@ -4100,13 +4121,15 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.mix_rounds = 2
 
         # test with spendable amount > keep_amount
-        coins0 = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins0 = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                              mature_only=True, include_ps=True)
         coins = [c for c in coins0 if c.value_sats() < 50000000]
-        w.set_frozen_state_of_coins(coins, True)
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
         coins = [c for c in coins0 if c.value_sats() > 800000000]
-        w.set_frozen_state_of_coins(coins, True)
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
 
@@ -4132,8 +4155,9 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         # test with spendable amount < keep_amount
         coins = [c for c in coins0 if c.value_sats() >= 100000000]
-        w.set_frozen_state_of_coins(coins, True)
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins_str = {c.prevout.to_str() for c in coins}
+        w.set_frozen_state_of_coins(coins_str, True)
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         assert sum([c.value_sats() for c in coins]) == 50000000  # 0.5 Dash
@@ -4238,7 +4262,7 @@ class PSWalletTestCase(TestCaseForTestnet):
             psman.prepare_funds_from_ps_keystore(None)
 
         unused = psman.get_unused_addresses()
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
 
@@ -4271,7 +4295,7 @@ class PSWalletTestCase(TestCaseForTestnet):
 
         assert not psman.check_funds_on_ps_keystore()
 
-        coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+        coins = w.get_utxos(None, excluded_addresses=w._frozen_addresses,
                             mature_only=True, include_ps=True)
         coins = [c for c in coins if not w.is_frozen_coin(c)]
         coins = coins[:1]
