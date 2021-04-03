@@ -791,10 +791,6 @@ class Transaction:
     def add_info_from_wallet(self, wallet: 'Abstract_Wallet', **kwargs) -> None:
         return  # no-op
 
-    def is_final(self) -> bool:
-        """Whether RBF is disabled."""
-        return not any([txin.nsequence < 0xffffffff - 1 for txin in self.inputs()])
-
     def estimated_size(self):
         """Return an estimated virtual tx size in vbytes.
         BIP-0141 defines 'Virtual transaction size' to be weight/4 rounded up.
