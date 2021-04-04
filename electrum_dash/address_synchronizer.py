@@ -956,7 +956,8 @@ class AddressSynchronizer(Logger):
             utxo._trusted_address = address
             utxo._trusted_value_sats = value
             utxo.block_height = tx_height
-            utxo.spent_height = spent.get(prevout_str, None)
+            utxo.spent_height, utxo.spent_islock = \
+                spent.get(prevout_str, (None, None))
             utxo.islock = islock
             utxo.ps_rounds = ps_rounds
             out[prevout] = utxo

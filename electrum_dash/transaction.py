@@ -1071,6 +1071,7 @@ class PartialTxInput(TxInput, PSBTSection):
         self.block_height = None  # type: Optional[int]  # height at which the TXO is mined; None means unknown
         self.spent_height = None  # type: Optional[int]  # height at which the TXO got spent
         self.islock = None  # type: Optional[int]  # islock for TXO; None means unknown
+        self.spent_islock = None  # type: Optional[int]  # islock for TXO spend; None means unknown
         self.ps_rounds = None  # type: Optional[int]  # ps_rounds for TXO; None means unknown
         self.is_ps_ks = False # type: Optional[bool]  # is PS keystore for TXO
         self.prevout_timestamp = None # type: Optional[int]  # mined info timestamp
