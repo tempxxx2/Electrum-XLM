@@ -1,3 +1,17 @@
+# Release 4.0.9.4
+
+ * qt: fix do_export_history (#213)
+ * couple of qt style fixes (#216)
+ * Fix offline command backup old version on wallet upgrade (#217)
+ * add support to save uncompleted multisig wallets (#219)
+ * installwizard: show hw xpub after adding cosigner (#220)
+ * Add plugin scan_over_gap (#221)
+ * qt: add show_utxo_time config/qt option (#222)
+ * Split dash_ps module (#223)
+ * dash_ps: allow set absolute denoms count to mix (#224)
+ * fixes for privatesend with hw wallet (#225)
+
+
 # Release 4.0.9.3
 
  * kivy: fix history screen tx_type processing (#207)
