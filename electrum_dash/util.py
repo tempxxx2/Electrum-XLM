@@ -28,6 +28,7 @@ from typing import (NamedTuple, Union, TYPE_CHECKING, Tuple, Optional, Callable,
 from datetime import datetime
 import decimal
 from decimal import Decimal
+from enum import IntEnum
 import traceback
 import urllib
 import threading
@@ -1517,3 +1518,9 @@ def test_read_write_permissions(path) -> None:
         raise IOError(e) from e
     if echo != echo2:
         raise IOError('echo sanity-check failed')
+
+
+class IntEnumWithCheck(IntEnum):
+    @classmethod
+    def has_value(cls, value):
+        return any(value == item.value for item in cls)

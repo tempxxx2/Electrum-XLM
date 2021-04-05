@@ -6,13 +6,14 @@ import random
 import shutil
 import tempfile
 import time
-from collections import defaultdict
+from collections import defaultdict, Counter
 from pprint import pprint
 
 from electrum_dash import dash_ps, ecc
 from electrum_dash.address_synchronizer import (TX_HEIGHT_LOCAL,
                                                 TX_HEIGHT_UNCONF_PARENT,
                                                 TX_HEIGHT_UNCONFIRMED)
+from electrum_dash.bitcoin import COIN
 from electrum_dash.dash_ps_util import (COLLATERAL_VAL, CREATE_COLLATERAL_VAL,
                                         CREATE_COLLATERAL_VALS, PS_DENOMS_VALS,
                                         MIN_DENOM_VAL, PSMinRoundsCheckFailed,
@@ -763,6 +764,34 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 10
         assert psman.keep_amount == 5
 
+    def test_keep_amount_on_abs_denoms_calc(self):
+        cur_cnt = {}
+        d1, d2, d3, d4, d5 = PS_DENOMS_VALS
+
+        def mock_calc_denoms_by_values():
+            return cur_cnt
+
+        psman = self.wallet.psman
+        psman.calc_denoms_by_values = mock_calc_denoms_by_values
+        assert psman.keep_amount == psman.DEFAULT_KEEP_AMOUNT
+
+        psman.calc_denoms_method = psman.CalcDenomsMethod.ABS
+        assert psman.keep_amount == 0
+
+        psman.keep_amount = 50 * psman.DEFAULT_KEEP_AMOUNT
+        assert psman.keep_amount == 0
+
+        psman.calc_denoms_method = psman.CalcDenomsMethod.DEF
+        assert psman.keep_amount == psman.DEFAULT_KEEP_AMOUNT
+        psman.calc_denoms_method = psman.CalcDenomsMethod.ABS
+
+        cur_cnt.update({d1: 10, d2: 10, d3: 1, d4: 0, d5: 0})
+        assert psman.keep_amount == 0
+        psman.abs_denoms_cnt = {d1: 20, d2: 0, d3: 0, d4: 10, d5: 1}
+        assert psman.keep_amount == (d1*20 + d4*10 + d5)/COIN
+        psman.abs_denoms_cnt = {d1: 0, d2: 0, d3: 0, d4: 0, d5: 1}
+        assert psman.keep_amount == d5/COIN
+
     def test_mix_rounds(self):
         psman = self.wallet.psman
         assert psman.mix_rounds == psman.DEFAULT_MIX_ROUNDS
@@ -829,6 +858,38 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert psman.mixing_progress() == 38
         psman.mix_rounds = 5
         assert psman.mixing_progress() == 31
+
+    def test_calc_denoms_method(self):
+        psman = self.wallet.psman
+        assert psman.calc_denoms_method == psman.CalcDenomsMethod.DEF
+        psman.calc_denoms_method = psman.CalcDenomsMethod.ABS
+        assert psman.calc_denoms_method == psman.CalcDenomsMethod.ABS
+
+        with self.assertRaises(AssertionError):
+            psman.calc_denoms_method = -1
+        assert psman.calc_denoms_method == psman.CalcDenomsMethod.ABS
+
+        assert psman.calc_denoms_method_str(psman.CalcDenomsMethod.DEF) == \
+            psman.CALC_DENOMS_METHOD_STR[psman.CalcDenomsMethod.DEF]
+        assert psman.calc_denoms_method_str(psman.CalcDenomsMethod.ABS) == \
+            psman.CALC_DENOMS_METHOD_STR[psman.CalcDenomsMethod.ABS]
+        with self.assertRaises(AssertionError):
+            psman.calc_denoms_method_str(psman.CalcDenomsMethod.DEF.value - 1)
+
+        assert psman.calc_denoms_method_data()
+        assert psman.calc_denoms_method_data(full_txt=True)
+
+    def test_abs_denoms_cnt(self):
+        psman = self.wallet.psman
+        abs_cnt = psman.abs_denoms_cnt
+        with self.assertRaises(AssertionError):
+            psman.abs_denoms_cnt = {}
+        with self.assertRaises(AssertionError):
+            psman.abs_denoms_cnt = {v: 20 for v in PS_DENOMS_VALS[1:]}
+        psman.abs_denoms_cnt = abs_cnt
+        abs_cnt.update({100001: 10, 1000010: 30})
+        psman.abs_denoms_cnt = copy.deepcopy(abs_cnt)
+        assert psman.abs_denoms_cnt == abs_cnt
 
     def test_is_waiting(self):
         psman = self.wallet.psman
@@ -1772,6 +1833,38 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert new_c_outpoint == f'{txid}:0'
         assert w.db.get_ps_tx(txid) == (PSTxTypes.NEW_COLLATERAL, True)
 
+    def test_find_denoms_approx_def(self):
+        psman = self.wallet.psman
+        need_val = psman.keep_amount*COIN + CREATE_COLLATERAL_VAL
+        res = psman._find_denoms_approx_def(need_val)
+        assert sum(v for amnts in res for v in amnts) - need_val == 62001
+
+    def test_find_denoms_approx_abs(self):
+        cur_cnt = {}
+        d1, d2, d3, d4, d5 = PS_DENOMS_VALS
+
+        def mock_calc_denoms_by_values():
+            return cur_cnt
+
+        psman = self.wallet.psman
+        psman.calc_denoms_by_values = mock_calc_denoms_by_values
+        psman.calc_denoms_method = psman.CalcDenomsMethod.ABS
+
+        cur_cnt.update({d1: 400, d2: 0, d3: 500, d4: 0, d5: 0})
+        psman.abs_denoms_cnt = abs_cnt = {d1: 10, d2: 0, d3: 0, d4: 5, d5: 10}
+        need_val = psman.keep_amount*COIN
+
+        res = psman._find_denoms_approx_abs(need_val)
+        assert sum(v for amnts in res for v in amnts) == need_val - d1*10
+
+        cur_cnt.update({d1: 400, d2: 0, d3: 500, d4: 1, d5: 0})
+        res = psman._find_denoms_approx_abs(need_val)
+        assert sum(v for amnts in res for v in amnts) == need_val - d1*10 - d4
+
+        cur_cnt.update({d1: 0, d2: 0, d3: 0, d4: 0, d5: 0})
+        res = psman._find_denoms_approx_abs(need_val)
+        assert sum(v for amnts in res for v in amnts) == need_val
+
     def test_calc_need_denoms_amounts(self):
         all_test_amounts = [
             [40000] + [100001]*11 + [1000010]*11 + [10000100]*11,
@@ -1946,6 +2039,62 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert sum([sum(amnts)for amnts in res]) == 0
         res = psman.calc_need_denoms_amounts(on_keep_amount=True)
         assert sum([sum(amnts)for amnts in res]) == two_dash_amnts_val
+
+    def test_calc_need_denoms_amounts_on_abs_cnt(self):
+        w = self.wallet
+        psman = w.psman
+        psman.calc_denoms_method = psman.CalcDenomsMethod.ABS
+        assert psman.keep_amount == 0
+        assert psman.calc_need_denoms_amounts() == []
+        abs_cnt = psman.abs_denoms_cnt
+        abs_cnt[PS_DENOMS_VALS[2]] = 3
+        abs_cnt[PS_DENOMS_VALS[3]] = 2
+        abs_cnt[PS_DENOMS_VALS[4]] = 1
+        psman.abs_denoms_cnt = abs_cnt
+
+        coins_data = psman._get_next_coins_for_mixing()
+        assert coins_data['total_val'] > psman.keep_amount*COIN + MIN_DENOM_VAL
+        assert psman.keep_amount == 12.300123
+        res = psman.calc_need_denoms_amounts()
+        total_val = sum(v for amnts in res for v in amnts)
+        cnt = Counter(res[0])
+        assert cnt[PS_DENOMS_VALS[2]] == 3
+        assert cnt[PS_DENOMS_VALS[3]] == 2
+        assert cnt[PS_DENOMS_VALS[4]] == 1
+        assert total_val - 40000 == psman.keep_amount*COIN
+
+        # check with on_keep_amount=True
+        abs_cnt[PS_DENOMS_VALS[4]] = 10
+        psman.abs_denoms_cnt = abs_cnt
+        assert psman.keep_amount == 102.301023
+
+        res = psman.calc_need_denoms_amounts(on_keep_amount=True)
+        total_val = sum(v for amnts in res for v in amnts)
+        assert total_val - 40000 == psman.keep_amount*COIN
+        assert coins_data['total_val'] < psman.keep_amount*COIN
+
+        # find untracked ps data
+        coro = psman.find_untracked_ps_txs(log=False)
+        asyncio.get_event_loop().run_until_complete(coro)
+
+        abs_cnt[PS_DENOMS_VALS[4]] = 1
+        psman.abs_denoms_cnt = abs_cnt
+        assert psman.keep_amount == 12.300123
+
+        res = psman.calc_need_denoms_amounts()
+        total_val = sum(v for amnts in res for v in amnts)
+        assert total_val == 0
+        found_cnt = psman.calc_denoms_by_values()
+        assert found_cnt[PS_DENOMS_VALS[2]] >= 3
+        assert found_cnt[PS_DENOMS_VALS[3]] >= 2
+        coins_data = psman._get_next_coins_for_mixing()
+        assert coins_data['total_val'] < PS_DENOMS_VALS[4]
+        assert found_cnt[PS_DENOMS_VALS[4]] == 0  # not enough funds
+
+        # check with on_keep_amount=True
+        res = psman.calc_need_denoms_amounts(on_keep_amount=True)
+        total_val = sum(v for amnts in res for v in amnts)
+        assert total_val == 1000010000
 
     def test_calc_tx_size(self):
         # average sizes

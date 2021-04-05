@@ -14,7 +14,7 @@ from .dash_ps_net import PSDenoms
 from .dash_tx import PSTxTypes, SPEC_TX_NAMES
 from .i18n import _
 from .transaction import Transaction
-from .util import profiler
+from .util import IntEnumWithCheck, profiler
 
 
 TXID_PATTERN = re.compile('([0123456789ABCDEFabcdef]{64})')
@@ -472,17 +472,30 @@ class PSOptsMixin:
     MIN_NEW_DENOMS_DELAY = 30       # minimum delay betweeen new denoms txs
     MAX_NEW_DENOMS_DELAY = 300      # maximum delay betweeen new denoms txs
 
+    CALC_DENOMS_METHOD_STR = [
+        _('Use default denoms count'),
+        _('Use absolute denoms count'),
+    ]
+
+    class CalcDenomsMethod(IntEnumWithCheck):
+        DEF = 0  # default
+        ABS = 1  # absolute
+
     def __init__(self, wallet):
         self._allow_others = self.DEFAULT_ALLOW_OTHERS
 
     @property
     def keep_amount(self):
-        return self.wallet.db.get_ps_data('keep_amount',
-                                          self.DEFAULT_KEEP_AMOUNT)
+        if self.calc_denoms_method != self.CalcDenomsMethod.ABS:
+            return self.wallet.db.get_ps_data('keep_amount',
+                                              self.DEFAULT_KEEP_AMOUNT)
+        return sum(v * self.abs_denoms_cnt[v] for v in PS_DENOMS_VALS)/COIN
 
     @keep_amount.setter
     def keep_amount(self, amount):
         if self.state in self.mixing_running_states:
+            return
+        if self.calc_denoms_method == self.CalcDenomsMethod.ABS:
             return
         if self.keep_amount == amount:
             return
@@ -902,6 +915,45 @@ class PSOptsMixin:
             return _('Mixing Progress in percents')
         else:
             return _('Mixing Progress')
+
+    @property
+    def calc_denoms_method(self):
+        return self.wallet.db.get_ps_data('calc_denoms_method',
+                                          self.CalcDenomsMethod.DEF)
+
+    @calc_denoms_method.setter
+    def calc_denoms_method(self, method):
+        if self.state in self.mixing_running_states:
+            return
+        assert self.CalcDenomsMethod.has_value(method), 'wrong method'
+        self.wallet.db.set_ps_data('calc_denoms_method', int(method))
+
+    def calc_denoms_method_str(self, method):
+        assert self.CalcDenomsMethod.has_value(method), 'wrong method'
+        return self.CALC_DENOMS_METHOD_STR[method]
+
+    def calc_denoms_method_data(self, full_txt=False):
+        if full_txt:
+            return _('Denoms calculate method determines'
+                     ' count of denoms created for mixing')
+        else:
+            return  _('Denoms calculate method')
+
+    @property
+    def abs_denoms_cnt(self):
+        res = self.wallet.db.get_ps_data('abs_denoms_cnt', {})
+        if res:
+            return {v: res[str(v)] for v in PS_DENOMS_VALS}
+        return {v: 0 for v in PS_DENOMS_VALS}
+
+    @abs_denoms_cnt.setter
+    def abs_denoms_cnt(self, abs_denoms_cnt):
+        if self.state in self.mixing_running_states:
+            return
+        assert type(abs_denoms_cnt) == dict, 'wrong type'
+        assert set(abs_denoms_cnt.keys()) == set(PS_DENOMS_VALS), 'wrong keys'
+        assert all([v >= 0 for v in abs_denoms_cnt.values()]), 'wrong values'
+        self.wallet.db.set_ps_data('abs_denoms_cnt', abs_denoms_cnt)
 
 
 class PSPossibleDoubleSpendError(Exception):

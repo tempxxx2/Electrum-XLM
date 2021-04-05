@@ -36,7 +36,7 @@ from .dash_tx import (to_compact_size, to_varbytes, serialize_ip, str_ip,
                       service_to_ip_port, TxOutPoint, read_uint16_nbo,
                       CTxIn, CTxOut)
 from .transaction import Transaction, BCDataStream, SerializationError
-from .util import bh2u, bfh
+from .util import IntEnumWithCheck, bh2u, bfh
 from .i18n import _
 
 
@@ -58,13 +58,6 @@ PRIVATESEND_ENTRY_MAX_SIZE = 9
 
 class DashMsgError(Exception):
     """Thrown when there's a problem with Dash message serialize/deserialize"""
-
-
-class IntEnumWithCheck(IntEnum):
-    '''IntEnum with hash_value class method'''
-    @classmethod
-    def has_value(cls, value):
-        return any(value == item.value for item in cls)
 
 
 class DashType(IntEnumWithCheck):

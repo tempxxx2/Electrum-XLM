@@ -1,14 +1,18 @@
 import time
+from functools import partial
 
 from electrum_dash import util
-from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat, PSStates
+from electrum_dash.dash_ps_util import (filter_log_line, PSLogSubCat, PSStates,
+                                        PS_DENOMS_VALS)
 
 from kivy.clock import Clock
+from kivy.factory import Factory
 from kivy.properties import (NumericProperty, StringProperty, BooleanProperty,
                              ObjectProperty)
 from kivy.lang import Builder
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
@@ -21,6 +25,7 @@ from electrum_dash.gui.kivy.uix.dialogs.question import Question
 Builder.load_string('''
 #:import _ electrum_dash.gui.kivy.i18n._
 #:import SpinBox electrum_dash.gui.kivy.uix.spinbox.SpinBox
+#:import ComboBox electrum_dash.gui.kivy.uix.combobox.ComboBox
 
 
 <LineItem>
@@ -258,7 +263,6 @@ Builder.load_string('''
     orientation: 'vertical'
     ScrollView:
         GridLayout:
-            id: scrollviewlayout
             cols:1
             size_hint: 1, None
             height: self.minimum_height
@@ -344,6 +348,86 @@ Builder.load_string('''
                 action: root.toggle_allow_others
 
 
+<DenomsCalcMethodPopup@Popup>
+    title: root.title
+    size_hint: 0.8, 0.5
+    combo: combo
+    BoxLayout:
+        padding: dp(10), dp(10)
+        spacing: dp(10)
+        orientation: 'vertical'
+        ComboBox
+            id: combo
+            size_hint: 1, None
+            height: '48sp'
+        Widget:
+            size_hint: 1, 1
+        Button:
+            text: _('Set')
+            size_hint: 1, None
+            height: '48dp'
+            on_release: root.dismiss(True)
+
+
+<DenomCount@BoxLayout>:
+    size_hint: 1, None
+    height: '48dp'
+    min: 0
+    max: 1e9
+    step: 1
+    val: 0
+    disabled: False
+    on_val:
+        if self.val > self.max: self.val = self.max
+        if self.val < self.min: self.val = self.min
+    Button:
+        text: '-'
+        size: input.height, input.height
+        size_hint: None, None
+        on_release: root.val -= root.step
+        disabled: root.disabled
+    TextInput:
+        id: input
+        multiline: False
+        input_filter: 'int'
+        halign: 'center'
+        text: str(root.val)
+        size_hint_y: None
+        height: self.minimum_height
+        on_text:
+            if not self.text: self.text = str(root.min)
+            if str(root.val) != self.text: root.val = int(self.text)
+        disabled: root.disabled
+    Button:
+        text: '+'
+        size_hint: None, None
+        size: input.height, input.height
+        on_release: root.val += root.step
+        disabled: root.disabled
+
+
+<PSDenomsTab@BoxLayout>
+    orientation: 'vertical'
+    ScrollView:
+        GridLayout:
+            id: content
+            cols: 1
+            size_hint: 1, None
+            height: self.minimum_height
+            padding: '10dp'
+            CardSeparator
+            SettingsItem:
+                title: root.method_text + ': %s' % root.method_str
+                description: root.method_help
+                action: root.show_method_popup
+            CardSeparator
+            SettingsItem:
+                title: root.keep_amount_text + ': %s Dash' % root.keep_amount
+                description: root.keep_amount_help
+                action: root.show_keep_amount_popup
+            CardSeparator
+
+
 <PSInfoTab@BoxLayout>
     orientation: 'vertical'
     rv: rv
@@ -420,6 +504,8 @@ Builder.load_string('''
     tabs: tabs
     mixing_tab_header: mixing_tab_header
     mixing_tab: mixing_tab_header.content
+    denoms_tab_header: denoms_tab_header
+    denoms_tab: denoms_tab_header.content
     info_tab_header: info_tab_header
     info_tab: info_tab_header.content
     log_tab_header: log_tab_header
@@ -430,6 +516,9 @@ Builder.load_string('''
         TabbedPanelHeader:
             id: mixing_tab_header
             text: _('Mixing')
+        TabbedPanelHeader:
+            id: denoms_tab_header
+            text: _('Denoms')
         TabbedPanelHeader:
             id: info_tab_header
             text: _('Info')
@@ -514,14 +603,16 @@ class KeepAmountPopup(Popup):
 
     spinbox = ObjectProperty(None)
 
-    def __init__(self, psdlg):
+    def __init__(self, tab):
         super(KeepAmountPopup, self).__init__()
-        self.psdlg = psdlg
-        self.psman = psman = psdlg.psman
-        self.title = self.psdlg.keep_amount_text
+        self.psdlg = psdlg = tab.psdlg
+        self.psman = psman = tab.psman
+        self.mixing_tab = psdlg.mixing_tab_header.content
+        self.denoms_tab = psdlg.denoms_tab_header.content
+        self.title = tab.keep_amount_text
         self.spinbox.min_val = psman.min_keep_amount
         self.spinbox.max_val = psman.max_keep_amount
-        self.spinbox.value = self.psdlg.keep_amount
+        self.spinbox.value = tab.keep_amount
 
     def dismiss(self, value=None):
         if self.spinbox.err.text:
@@ -529,7 +620,8 @@ class KeepAmountPopup(Popup):
         super(KeepAmountPopup, self).dismiss()
         if value is not None and value != self.psman.keep_amount:
             self.psman.keep_amount = value
-            self.psdlg.keep_amount = value
+            self.mixing_tab.keep_amount = value
+            self.denoms_tab.keep_amount = value
 
 
 class MixRoundsPopup(Popup):
@@ -631,8 +723,9 @@ class PSMixingTab(BoxLayout):
     is_fiat_dn_balance = False
     is_fiat_ps_balance = False
 
-    def __init__(self, app):
+    def __init__(self, app, psdlg):
         self.app = app
+        self.psdlg = psdlg
         self.wallet = wallet = app.wallet
         self.psman = psman = wallet.psman
 
@@ -706,10 +799,13 @@ class PSMixingTab(BoxLayout):
 
     def show_keep_amount_popup(self, *args):
         psman = self.psman
+        if psman.calc_denoms_method == psman.CalcDenomsMethod.ABS:
+            self.app.show_info(_('Value is calculated from denoms count'))
+            return
         if psman.state in psman.mixing_running_states:
             self.app.show_info(_('To change value stop mixing process'))
             return
-        KeepAmountPopup(self).open(self.psman)
+        KeepAmountPopup(self).open()
 
     def show_mix_rounds_popup(self, *args):
         psman = self.psman
@@ -833,6 +929,139 @@ class PSMixingTab(BoxLayout):
         self.app.coins_dialog()
 
 
+class DenomsCalcWidget(GridLayout):
+
+    def __init__(self, app, denoms_tab):
+        super(DenomsCalcWidget, self).__init__()
+        self.app = app
+        self.psdlg = denoms_tab.psdlg
+        self.format_amount = app.format_amount_and_units
+        self.psman = psman = app.wallet.psman
+        self.denoms_le = {}
+        self.abs_sb = {}
+
+    def update_abs_cnt(self):
+        psman = self.psman
+        method = psman.calc_denoms_method
+        show_abs = (method == psman.CalcDenomsMethod.ABS)
+        self.clear_widgets()
+        self.cols = 2
+        self.add_widget(Factory.Label(size_hint_y=None, height='48dp'))
+        self.add_widget(Factory.Label(text=_('Existing count:'),
+                                      size_hint_y=None, height='48dp'))
+        if show_abs:
+            self.cols = 3
+            self.add_widget(Factory.Label(text=_('Absolute count:'),
+                                          size_hint_y=None, height='48dp'))
+
+        denoms = psman.calc_denoms_by_values()
+        abs_cnt = psman.abs_denoms_cnt
+        for i, d in enumerate(PS_DENOMS_VALS[::-1]):
+            dv_lb = Factory.Label(text=self.format_amount(d),
+                                  size_hint_y=None, height='48dp')
+            self.add_widget(dv_lb)
+
+            d_le = Factory.Label(text=str(denoms[d]) if denoms else '0',
+                                 size_hint_y=None, height='48dp')
+            self.denoms_le[d] = d_le
+            self.add_widget(d_le)
+            if show_abs:
+                abs_sb = Factory.DenomCount()
+                abs_sb.disabled = psman.state in psman.mixing_running_states
+                abs_sb.val = abs_cnt[d]
+                abs_sb.bind(val=partial(self.on_abs_sb_changed, d))
+                self.abs_sb[d] = abs_sb
+                self.add_widget(abs_sb)
+
+    def update_denoms_cnt(self):
+        psman = self.psman
+        denoms = psman.calc_denoms_by_values()
+        for d in PS_DENOMS_VALS:
+            self.denoms_le[d].text = str(denoms[d]) if denoms else '0'
+
+    def on_abs_sb_changed(self, d, spinbox, val):
+        psman = self.psman
+        abs_cnt = psman.abs_denoms_cnt
+        if abs_cnt[d] == val:
+            return
+        abs_cnt[d] = val
+        psman.abs_denoms_cnt = abs_cnt
+        self.psdlg.denoms_tab.keep_amount = psman.keep_amount
+        self.psdlg.mixing_tab.keep_amount = psman.keep_amount
+
+
+class DenomsCalcMethodPopup(Popup):
+
+    def __init__(self, denoms_tab):
+        super(DenomsCalcMethodPopup, self).__init__()
+        self.denoms_tab = denoms_tab
+        self.mixing_tab = denoms_tab.psdlg.mixing_tab_header.content
+        self.title = denoms_tab.method_text
+        self.psman = psman = denoms_tab.psman
+        combo = self.ids.combo
+        for m in psman.CalcDenomsMethod:
+            combo.items.append((m, psman.calc_denoms_method_str(m)))
+        combo.key = psman.calc_denoms_method
+
+    def dismiss(self, confirmed=False):
+        super(DenomsCalcMethodPopup, self).dismiss()
+        if not confirmed:
+            return
+        psman = self.psman
+        psman.calc_denoms_method = m = self.ids.combo.key
+        self.denoms_tab.method_str = psman.calc_denoms_method_str(m)
+        self.denoms_tab.keep_amount = psman.keep_amount
+        self.mixing_tab.keep_amount = psman.keep_amount
+        self.denoms_tab.denoms_w.update_abs_cnt()
+
+
+class PSDenomsTab(BoxLayout):
+
+    keep_amount = NumericProperty()
+    method_str = StringProperty()
+
+    def __init__(self, app, psdlg):
+        self.app = app
+        self.psdlg = psdlg
+        self.wallet = wallet = app.wallet
+        self.psman = psman = wallet.psman
+        self.keep_amount_text = psman.keep_amount_data()
+        self.keep_amount_help = psman.keep_amount_data(full_txt=True)
+        self.method_text = psman.calc_denoms_method_data()
+        self.method_help = psman.calc_denoms_method_data(full_txt=True)
+        super(PSDenomsTab, self).__init__()
+        self.denoms_w = DenomsCalcWidget(app, self)
+        self.ids.content.add_widget(self.denoms_w)
+        self.update()
+
+    def update(self):
+        app = self.app
+        wallet = self.wallet
+        psman = self.psman
+        self.keep_amount = psman.keep_amount
+        method = psman.calc_denoms_method
+        self.method_str = psman.calc_denoms_method_str(method)
+        self.denoms_w.update_abs_cnt()
+        self.denoms_w.update_denoms_cnt()
+
+    def show_method_popup(self, *args):
+        psman = self.psman
+        if psman.state in psman.mixing_running_states:
+            self.app.show_info(_('To change value stop mixing process'))
+            return
+        DenomsCalcMethodPopup(self).open()
+
+    def show_keep_amount_popup(self, *args):
+        psman = self.psman
+        if psman.calc_denoms_method == psman.CalcDenomsMethod.ABS:
+            self.app.show_info(_('Value is calculated from denoms count'))
+            return
+        if psman.state in psman.mixing_running_states:
+            self.app.show_info(_('To change value stop mixing process'))
+            return
+        KeepAmountPopup(self).open()
+
+
 class PSInfoTab(BoxLayout):
 
     def __init__(self, app):
@@ -930,7 +1159,8 @@ class PSDialog(Popup):
         self.app = app
         self.wallet = app.wallet
         self.psman = app.wallet.psman
-        self.mixing_tab_header.content = PSMixingTab(self.app)
+        self.mixing_tab_header.content = PSMixingTab(self.app, self)
+        self.denoms_tab_header.content = PSDenomsTab(self.app, self)
         self.info_tab_header.content = PSInfoTab(self.app)
         self.log_tab_header.content = PSLogTab(self.app)
         self.tabs.switch_to(self.mixing_tab_header)
@@ -984,6 +1214,7 @@ class PSDialog(Popup):
                 self.ps_balance = ps_balance
                 self.mix_prog = psman.mixing_progress()
                 self.info_tab.update()
+                self.denoms_tab.denoms_w.update_denoms_cnt()
         elif event in ['ps-reserved-changes', 'ps-keypairs-changes']:
             wallet = args[0]
             if wallet == self.wallet:
@@ -994,6 +1225,7 @@ class PSDialog(Popup):
                 self.mixing_tab.mixing_control_text = \
                     self.psman.mixing_control_data()
                 self.info_tab.data_buttons_update()
+                self.denoms_tab.denoms_w.update_abs_cnt()
 
     def on_tabs_changed(self, tabs, current_tab):
         if current_tab == self.log_tab_header:
