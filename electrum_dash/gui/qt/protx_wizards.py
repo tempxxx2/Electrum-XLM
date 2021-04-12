@@ -24,16 +24,30 @@ from electrum_dash.i18n import _
 from .util import MONOSPACE_FONT, icon_path, read_QIcon, ButtonsLineEdit
 
 
+def is_p2pkh_address(addr):
+    if is_b58_address(addr):
+        addrtype = b58_address_to_hash160(addr)[0]
+        if addrtype == constants.net.ADDRTYPE_P2PKH:
+            return True
+    return False
+
+
 class ValidationError(Exception): pass
 
 
 class HwWarnError(Exception): pass
 
 
+class UsedInWallet(Exception): pass
+
+
 class SLineEdit(QLineEdit):
     '''QLineEdit with strip on text() method'''
     def text(self):
         return super().text().strip()
+
+class ButtonsSLineEdit(SLineEdit, ButtonsLineEdit):
+    '''QLineEdit with strip on text() method and buttons'''
 
 
 class SComboBox(QComboBox):
@@ -93,6 +107,7 @@ class OperationTypeWizardPage(QWizardPage):
         self.rb_create.setChecked(True)
         self.rb_connect.setEnabled(False)
         self.button_group = QButtonGroup()
+        self.button_group.buttonClicked.connect(self.on_operation_type_change)
         self.button_group.addButton(self.rb_import)
         self.button_group.addButton(self.rb_create)
         self.button_group.addButton(self.rb_connect)
@@ -109,7 +124,6 @@ class OperationTypeWizardPage(QWizardPage):
         self.cb_owner.stateChanged.connect(self.cb_state_changed)
         self.cb_operator.setChecked(True)
         self.cb_operator.stateChanged.connect(self.cb_state_changed)
-        self.cb_owner.setEnabled(False)
         gb_vbox = QVBoxLayout()
         gb_vbox.addWidget(self.cb_owner)
         gb_vbox.addWidget(self.cb_operator)
@@ -122,9 +136,18 @@ class OperationTypeWizardPage(QWizardPage):
         layout.addWidget(self.gb_owner)
         self.setLayout(layout)
 
+    def on_operation_type_change(self, op_btn):
+        if op_btn == self.rb_import:
+            self.cb_owner.setChecked(True)
+            self.cb_owner.setEnabled(False)
+        else:
+            self.cb_owner.setEnabled(True)
+
     def nextId(self):
         if self.rb_import.isChecked():
             return self.parent.IMPORT_LEGACY_PAGE
+        elif not self.cb_owner.isChecked():
+            return self.parent.SERVICE_PAGE
         else:
             return self.parent.COLLATERAL_PAGE
 
@@ -218,17 +241,17 @@ class ImportLegacyWizardPage(QWizardPage):
             return
 
         conflines = filter(lambda x: not x.startswith('#'),
-                           [l.strip() for l in conflines])
+                           [line.strip() for line in conflines])
 
         conflines = filter(lambda x: len(x.split()) == 5, conflines)
         res = []
-        for l in conflines:
+        for line in conflines:
             res_d = {}
-            alias, service, delegate, c_hash, c_index = l.split()
+            alias, service, delegate, c_hash, c_index = line.split()
 
             res_d['alias'] = 'masternode.conf:%s' % alias
             try:
-                ip, port = self.parent.validate_service(service)
+                ip, port = self.parent.validate_str_service(service)
                 res_d['addr'] = {'ip': ip, 'port': int(port)}
                 c_index = int(c_index)
             except Exception:
@@ -332,7 +355,7 @@ class ImportLegacyWizardPage(QWizardPage):
 
     def validatePage(self):
         try:
-            ip, port = self.parent.validate_service(self.service.text())
+            ip, port = self.parent.validate_str_service(self.service.text())
             coll = self.parent.validate_collateral(self.collateral.text(),
                                                    self.collateral_addr.text(),
                                                    self.collateral_value)
@@ -362,120 +385,198 @@ class SelectAddressesWizardPage(QWizardPage):
         self.parent = parent
         self.setTitle(_('Select Addresses'))
         self.setSubTitle(_('Select Masternode owner/voting/payout addresses.'))
-
+        wallet_is_p2sh = self.parent.wallet_is_p2sh
         layout = QGridLayout()
-        self.o_addr_label = QLabel(_('Owner Address (must differ from '
-                                     'collateral):'))
-        self.o_addr = SComboBox()
-        self.o_addr.setEditable(True)
-        self.o_addr.editTextChanged.connect(self.on_change_addr)
-        self.v_addr_label = QLabel(_('Voting Address (must differ from '
-                                     'collateral):'))
-        self.v_addr = SComboBox()
-        self.v_addr.setEditable(True)
-        self.v_addr.editTextChanged.connect(self.on_change_addr)
+        self.o_addr_label = QLabel(_('Owner Address (P2PKH):'))
+        if wallet_is_p2sh:
+            self.o_addr = SLineEdit()
+        else:
+            self.o_addr_cb = SComboBox()
+            self.o_addr_cb.setEditable(True)
+            self.o_addr = self.o_addr_cb.lineEdit()
+        self.o_addr.textChanged.connect(self.on_change_o_addr)
+        self.o_err_label = QLabel(_('Error:'))
+        self.o_err_label.setObjectName('err-label')
+        self.o_err = QLabel()
+        self.o_err.setObjectName('err-label')
+        self.o_err_label.hide()
+        self.o_err.hide()
+        self.v_addr_label = QLabel(_('Voting Address (P2PKH):'))
+        if wallet_is_p2sh:
+            self.v_addr = SLineEdit()
+        else:
+            self.v_addr_cb = SComboBox()
+            self.v_addr_cb.setEditable(True)
+            self.v_addr = self.v_addr_cb.lineEdit()
+        self.v_addr.textChanged.connect(self.on_change_v_addr)
+        self.v_err_label = QLabel(_('Error:'))
+        self.v_err_label.setObjectName('err-label')
+        self.v_err = QLabel()
+        self.v_err.setObjectName('err-label')
+        self.v_err_label.hide()
+        self.v_err.hide()
         self.p_addr_label = QLabel(_('Payout Address (must differ from '
-                                     'owner/voting/collateral):'))
-        self.p_addr = SComboBox()
-        self.p_addr.setEditable(True)
-        self.p_addr.editTextChanged.connect(self.on_change_addr)
-        self.err_label = QLabel(_('Error:'))
-        self.err_label.setObjectName('err-label')
-        self.err = QLabel()
-        self.err.setObjectName('err-label')
-        self.err_label.hide()
-        self.err.hide()
+                                     'owner/voting):'))
+        self.p_addr_cb = SComboBox()
+        self.p_addr_cb.setEditable(True)
+        self.p_addr = self.p_addr_cb.lineEdit()
+        self.p_addr.textChanged.connect(self.on_change_p_addr)
+        self.p_err_label = QLabel(_('Error:'))
+        self.p_err_label.setObjectName('err-label')
+        self.p_err = QLabel()
+        self.p_err.setObjectName('err-label')
+        self.p_err_label.hide()
+        self.p_err.hide()
         self.hw_err = QLabel()
         self.hw_err.setWordWrap(True)
         self.hw_err.setObjectName('err-label')
         self.hw_err.hide()
-        self.cb_ignore = QCheckBox(_('Ignore warning and continue.'))
-        self.cb_ignore.stateChanged.connect(self.on_change_ignore)
+        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
         self.cb_ignore.hide()
 
         layout.addWidget(self.o_addr_label, 0, 0, 1, -1)
-        layout.addWidget(self.o_addr, 1, 0, 1, -1)
+        if wallet_is_p2sh:
+            layout.addWidget(self.o_addr, 1, 0, 1, -1)
+        else:
+            layout.addWidget(self.o_addr_cb, 1, 0, 1, -1)
+        layout.addWidget(self.o_err_label, 2, 0)
+        layout.addWidget(self.o_err, 2, 1, 1, -1)
         layout.addWidget(self.v_addr_label, 3, 0, 1, -1)
-        layout.addWidget(self.v_addr, 4, 0, 1, -1)
+        if wallet_is_p2sh:
+            layout.addWidget(self.v_addr, 4, 0, 1, -1)
+        else:
+            layout.addWidget(self.v_addr_cb, 4, 0, 1, -1)
+        layout.addWidget(self.v_err_label, 5, 0)
+        layout.addWidget(self.v_err, 5, 1, 1, -1)
         layout.addWidget(self.p_addr_label, 6, 0, 1, -1)
-        layout.addWidget(self.p_addr, 7, 0, 1, -1)
+        layout.addWidget(self.p_addr_cb, 7, 0, 1, -1)
+        layout.addWidget(self.p_err_label, 8, 0)
+        layout.addWidget(self.p_err, 8, 1, 1, -1)
         layout.setColumnStretch(1, 1)
-        layout.setRowStretch(2, 1)
-        layout.setRowStretch(5, 1)
-        layout.addWidget(self.err_label, 8, 0)
-        layout.addWidget(self.err, 8, 1)
-        layout.addWidget(self.hw_err, 9, 0, 1, -1)
-        layout.addWidget(self.cb_ignore, 10, 0, 1, -1)
+        layout.setRowStretch(9, 1)
+        layout.addWidget(self.hw_err, 10, 0, 1, -1)
+        layout.addWidget(self.cb_ignore, 11, 0, 1, -1)
         self.setLayout(layout)
-
-        unused = self.parent.wallet.get_unused_addresses()
-        for addr in unused:
-            self.o_addr.addItem(addr)
-            self.v_addr.addItem(addr)
-            self.p_addr.addItem(addr)
-        self.o_addr.setEditText('')
-        self.v_addr.setEditText('')
-        self.p_addr.setEditText('')
+        self.first_run = True
 
     def initializePage(self):
-        self.new_mn = new_mn = self.parent.new_mn
-        unused = self.parent.wallet.get_unused_addresses()
+        new_mn = self.parent.new_mn
+        wallet_is_p2sh = self.parent.wallet_is_p2sh
+        if self.first_run:
+            self.first_run = False
+            start_id = self.parent.startId()
+            manager = self.parent.manager
+            skip_alias = None
+            if start_id in self.parent.UPD_ENTER_PAGES:
+                skip_alias = new_mn.alias
 
-        if not self.o_addr.currentText():
+            for addr in self.parent.wallet.get_unused_addresses():
+                self.p_addr_cb.addItem(addr)
+                if not wallet_is_p2sh:
+                    self.v_addr_cb.addItem(addr)
+                    used = manager.find_owner_addr_use(addr,
+                                                       skip_alias=skip_alias)
+                    if not used:
+                        self.o_addr_cb.addItem(addr)
+            self.o_addr.setText('')
+            self.v_addr.setText('')
+            self.p_addr.setText('')
+
+        i = 0
+        first_o_addr = '' if wallet_is_p2sh else self.o_addr_cb.itemText(i)
+        first_v_addr = '' if wallet_is_p2sh else self.v_addr_cb.itemText(i)
+        first_p_addr = self.p_addr_cb.itemText(i)
+
+        if not self.o_addr.text():
             owner_addr = new_mn.owner_addr
             if owner_addr:
-                self.o_addr.setEditText(owner_addr)
-            else:
-                self.o_addr.setEditText(unused[0])
+                self.o_addr.setText(owner_addr)
+            elif first_o_addr:
+                self.o_addr.setText(first_o_addr)
 
-        if not self.v_addr.currentText():
+        if not self.v_addr.text():
             voting_addr = new_mn.voting_addr
             if voting_addr:
-                self.v_addr.setEditText(voting_addr)
-            else:
-                self.v_addr.setEditText(unused[0])
+                self.v_addr.setText(voting_addr)
+            elif first_v_addr:
+                self.v_addr.setText(first_v_addr)
 
-        if not self.p_addr.currentText():
+        if not self.p_addr.text():
             payout_address = new_mn.payout_address
             if payout_address:
-                self.p_addr.setEditText(payout_address)
+                self.p_addr.setText(payout_address)
             else:
-                self.p_addr.setEditText(unused[1])
+                while first_p_addr:
+                    if first_p_addr in [first_o_addr, first_v_addr]:
+                        i += 1
+                        first_p_addr = self.p_addr_cb.itemText(i)
+                    else:
+                        self.p_addr.setText(first_p_addr)
+                        break
 
     @pyqtSlot()
-    def on_change_addr(self):
+    def on_change_o_addr(self):
+        self.hide_o_error()
         self.completeChanged.emit()
 
     @pyqtSlot()
-    def on_change_ignore(self):
-        if self.cb_ignore.isChecked():
-            self.hw_err.hide()
+    def on_change_v_addr(self):
+        self.hide_v_error()
+        self.completeChanged.emit()
+
+    @pyqtSlot()
+    def on_change_p_addr(self):
+        self.hide_p_error()
+        self.completeChanged.emit()
 
     def isComplete(self):
-        self.hide_error()
-        if (self.o_addr.currentText()
-                and self.v_addr.currentText()
-                and self.p_addr.currentText()):
+        if self.o_addr.text() and self.v_addr.text() and self.p_addr.text():
             return True
         return False
 
-    def hide_error(self):
-        self.err_label.hide()
-        self.err.hide()
+    def hide_o_error(self):
+        self.o_err_label.hide()
+        self.o_err.hide()
+
+    def hide_v_error(self):
+        self.v_err_label.hide()
+        self.v_err.hide()
+
+    def hide_p_error(self):
+        self.p_err_label.hide()
+        self.p_err.hide()
 
     def validatePage(self):
-        o_addr = self.o_addr.currentText()
-        v_addr = self.v_addr.currentText()
-        p_addr = self.p_addr.currentText()
+        o_addr = self.o_addr.text()
+        v_addr = self.v_addr.text()
+        p_addr = self.p_addr.text()
         ignore_hw_warn = self.cb_ignore.isChecked()
         try:
-            self.parent.validate_addresses(o_addr, v_addr, p_addr,
-                                           ignore_hw_warn)
+            self.parent.validate_owner_addr(o_addr)
         except ValidationError as e:
-            self.err.setText(str(e))
-            self.err_label.show()
-            self.err.show()
+            self.o_err.setText(str(e))
+            self.o_err_label.show()
+            self.o_err.show()
             return False
+
+        try:
+            self.parent.validate_voting_addr(v_addr)
+        except ValidationError as e:
+            self.v_err.setText(str(e))
+            self.v_err_label.show()
+            self.v_err.show()
+            return False
+
+        try:
+            self.parent.validate_payout_addr(p_addr, o_addr, v_addr)
+        except ValidationError as e:
+            self.p_err.setText(str(e))
+            self.p_err_label.show()
+            self.p_err.show()
+            return False
+
+        try:
+            self.parent.validate_sign_digest(o_addr, ignore_hw_warn)
         except HwWarnError as e:
             self.hw_err.setText(str(e))
             self.hw_err.show()
@@ -500,7 +601,7 @@ class BlsKeysWizardPage(QWizardPage):
         layout = QGridLayout()
 
         self.bls_pub_label = QLabel(_('BLS Public key:'))
-        self.bls_pub = SLineEdit()
+        self.bls_pub = ButtonsSLineEdit()
         self.bls_pub.textChanged.connect(self.on_pub_changed)
 
         self.op_reward_label = QLabel(_('Operator Reward:'))
@@ -523,7 +624,7 @@ class BlsKeysWizardPage(QWizardPage):
         self.bls_info_label.setWordWrap(True)
         self.bls_info_label.setObjectName('info-label')
         self.bls_info_label.hide()
-        self.bls_info_edit = ButtonsLineEdit()
+        self.bls_info_edit = ButtonsSLineEdit()
         self.bls_info_edit.addCopyButton(self.parent.gui.app)
         self.bls_info_edit.setReadOnly(True)
         self.bls_info_edit.hide()
@@ -534,28 +635,32 @@ class BlsKeysWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
+        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
+        self.cb_ignore.hide()
 
-        layout.addWidget(self.bls_pub_label, 0, 0)
-        layout.addWidget(self.bls_pub, 1, 0)
+        layout.addWidget(self.bls_pub_label, 0, 0, 1, -1)
+        layout.addWidget(self.bls_pub, 1, 0, 1, -1)
 
-        layout.addWidget(self.op_reward_label, 3, 0)
-        layout.addWidget(self.op_reward, 4, 0)
-        layout.addWidget(self.bls_priv_label, 3, 0)
-        layout.addWidget(self.bls_priv, 4, 0)
+        layout.addWidget(self.op_reward_label, 3, 0, 1, -1)
+        layout.addWidget(self.op_reward, 4, 0, 1, -1)
+        layout.addWidget(self.bls_priv_label, 3, 0, 1, -1)
+        layout.addWidget(self.bls_priv, 4, 0, 1, -1)
 
         layout.addWidget(self.gen_btn, 6, 0, 1, -1)
 
-        layout.addWidget(self.bls_info_label, 8, 0)
-        layout.addWidget(self.bls_info_edit, 9, 0)
+        layout.addWidget(self.bls_info_label, 8, 0, 1, -1)
+        layout.addWidget(self.bls_info_edit, 9, 0, 1, -1)
 
         layout.addWidget(self.err_label, 10, 0)
         layout.addWidget(self.err, 10, 1)
+        layout.addWidget(self.cb_ignore, 12, 0, 1, -1)
 
-        layout.setColumnStretch(0, 1)
+        layout.setColumnStretch(1, 1)
         layout.setRowStretch(2, 1)
         layout.setRowStretch(5, 1)
         layout.setRowStretch(7, 1)
         self.setLayout(layout)
+        self.first_run = True
 
     def hide_error(self):
         self.err_label.hide()
@@ -582,9 +687,9 @@ class BlsKeysWizardPage(QWizardPage):
             if self.bls_priv.text():
                 self.bls_pub.setText('')
                 self.bls_priv.setText('')
-            if start_id in parent.UPD_ENTER_PAGES:
-                if not self.bls_pub.text():
-                    self.bls_pub.setText(new_mn.pubkey_operator)
+            if not self.bls_pub.text() and new_mn.pubkey_operator:
+                self.bls_pub.setText(new_mn.pubkey_operator)
+            if start_id == parent.UPD_REG_PAGE:
                 self.setTitle(_('Operator BLS key setup'))
                 self.setSubTitle(_('Update operator BLS public key'))
             else:
@@ -593,6 +698,8 @@ class BlsKeysWizardPage(QWizardPage):
                 self.setTitle(_('Operator BLS key and reward'))
                 self.setSubTitle(_('Enter operator BLS public key and '
                                    'operator reward percent'))
+                if not self.op_reward.value() and new_mn.op_reward:
+                    self.op_reward.setValue(round(new_mn.op_reward/100, 2))
             return
 
         self.setTitle(_('BLS keys setup'))
@@ -608,6 +715,9 @@ class BlsKeysWizardPage(QWizardPage):
             self.generate_bls_keypair()
 
         self.bls_pub.setReadOnly(True)
+        if self.first_run:
+            self.first_run = False
+            self.bls_pub.addCopyButton(self.parent.gui.app)
         self.bls_priv_label.show()
         self.bls_priv.show()
         self.gen_btn.show()
@@ -656,9 +766,18 @@ class BlsKeysWizardPage(QWizardPage):
             op_reward = self.op_reward.value()
             if op_reward > 0.0:
                 new_mn.op_reward = round(op_reward * 100)
-            new_mn.bls_privk = ''
-            new_mn.pubkey_operator = bls_pub
-            return True
+            bls_priv = ''
+
+        try:
+            ignore_used = self.cb_ignore.isChecked()
+            self.parent.validate_bls_pub(bls_pub, ignore_used)
+        except UsedInWallet as e:
+            self.cb_ignore.show()
+            self.show_error(str(e))
+            return False
+        except ValidationError as e:
+            self.show_error(str(e))
+            return False
 
         new_mn.bls_privk = bls_priv
         new_mn.pubkey_operator = bls_pub
@@ -691,16 +810,22 @@ class SaveDip3WizardPage(QWizardPage):
         self.type = QLabel()
         mode_label = QLabel(_('Mode:'))
         self.mode = QLabel()
-        collateral_label = QLabel(_('Collateral:'))
+        self.collateral_label = QLabel(_('Collateral:'))
+        self.collateral_label.hide()
         self.collateral = QLabel()
+        self.collateral.hide()
         service_label = QLabel(_('Service:'))
         self.service = QLabel()
-        owner_addr_label = QLabel(_('Owner Address:'))
+        self.owner_addr_label = QLabel(_('Owner Address:'))
+        self.owner_addr_label.hide()
         self.owner_addr = QLabel()
+        self.owner_addr.hide()
         pubkey_op_label = QLabel(_('PubKeyOperator:'))
         self.pubkey_op = QLabel()
-        voting_addr_label = QLabel(_('Voting Address:'))
+        self.voting_addr_label = QLabel(_('Voting Address:'))
+        self.voting_addr_label.hide()
         self.voting_addr = QLabel()
+        self.voting_addr.hide()
 
         self.payout_address_label = QLabel(_('Payout Address:'))
         self.payout_address_label.hide()
@@ -718,7 +843,9 @@ class SaveDip3WizardPage(QWizardPage):
         self.op_payout_address.hide()
 
         self.cb_make_tx = QCheckBox()
-        self.cb_make_tx.setChecked(True)
+        self.cb_make_tx.setChecked(False)
+        self.cb_make_tx.setEnabled(False)
+        self.cb_make_tx.hide()
 
         self.layout.addWidget(self.alias, 0, 0, 1, 2)
         self.layout.addWidget(self.err_label, 1, 0)
@@ -730,16 +857,16 @@ class SaveDip3WizardPage(QWizardPage):
         self.layout.addWidget(self.type, 3, 1)
         self.layout.addWidget(mode_label, 4, 0)
         self.layout.addWidget(self.mode, 4, 1)
-        self.layout.addWidget(collateral_label, 5, 0)
+        self.layout.addWidget(self.collateral_label, 5, 0)
         self.layout.addWidget(self.collateral, 5, 1)
         self.layout.addWidget(service_label, 6, 0)
         self.layout.addWidget(self.service, 6, 1)
 
-        self.layout.addWidget(owner_addr_label, 7, 0)
+        self.layout.addWidget(self.owner_addr_label, 7, 0)
         self.layout.addWidget(self.owner_addr, 7, 1)
         self.layout.addWidget(pubkey_op_label, 8, 0)
         self.layout.addWidget(self.pubkey_op, 8, 1)
-        self.layout.addWidget(voting_addr_label, 9, 0)
+        self.layout.addWidget(self.voting_addr_label, 9, 0)
         self.layout.addWidget(self.voting_addr, 9, 1)
 
         self.layout.addWidget(self.payout_address_label, 10, 0)
@@ -779,12 +906,12 @@ class SaveDip3WizardPage(QWizardPage):
             self.alias.setText(new_mn.alias)
 
         if new_mn.is_owned and new_mn.is_operated:
-            ownership = _('This wallet is owns and operates on new Masternode')
+            ownership = _('This wallet is owns and operates on the Masternode')
         elif new_mn.is_owned:
-            ownership = (_('This wallet is owns on new Masternode '
+            ownership = (_('This wallet is owns on the Masternode '
                            '(external operator)'))
         elif new_mn.is_operated:
-            ownership = (_('This wallet is the operator on the new Masternode'))
+            ownership = (_('This wallet is the operator on the Masternode'))
         else:
             ownership = _('None')
         self.ownership.setText(ownership)
@@ -795,9 +922,21 @@ class SaveDip3WizardPage(QWizardPage):
         self.collateral.setText(collateral)
         self.service.setText(str(new_mn.service))
 
-        self.owner_addr.setText(new_mn.owner_addr)
         self.pubkey_op.setText(new_mn.pubkey_operator)
-        self.voting_addr.setText(new_mn.voting_addr)
+
+        if new_mn.is_owned:
+            self.collateral_label.show()
+            self.collateral.show()
+
+        if new_mn.owner_addr:
+            self.owner_addr.setText(new_mn.owner_addr)
+            self.owner_addr.show()
+            self.owner_addr_label.show()
+
+        if new_mn.voting_addr:
+            self.voting_addr.setText(new_mn.voting_addr)
+            self.voting_addr.show()
+            self.voting_addr_label.show()
 
         if new_mn.payout_address:
             self.payout_address.setText(new_mn.payout_address)
@@ -816,42 +955,38 @@ class SaveDip3WizardPage(QWizardPage):
 
         parent = self.parent
         start_id = parent.startId()
+        op_type = 'save'
+        tx_name = 'Unknown'
         if start_id == parent.OPERATION_TYPE_PAGE:
             tx_name = 'ProRegTx'
-            op_type = 'save'
         elif start_id == parent.UPD_SRV_PAGE:
             tx_name = 'ProUpServTx'
-            op_type = 'update'
         elif start_id == parent.UPD_REG_PAGE:
             tx_name = 'ProUpRegTx'
-            op_type = 'update'
         elif start_id == parent.COLLATERAL_PAGE:
             tx_name = 'UnknownTx'
-            op_type = 'save'
         elif start_id == parent.SERVICE_PAGE:
             tx_name = 'UnknownTx'
-            op_type = 'save'
+        elif start_id == parent.BLS_KEYS_PAGE:
+            tx_name = 'UnknownTx'
         else:
-            tx_name = 'Unknown'
             op_type = 'unknown'
 
         self.setTitle('%s DIP3 masternode' % op_type.capitalize())
         self.setSubTitle('Examine parameters and %s Masternode.' % op_type)
-        tx_cb_label_text = 'Make %s after saving Masternode data' % tx_name
-        self.cb_make_tx.setText(tx_cb_label_text)
-        if start_id == parent.OPERATION_TYPE_PAGE:
-            self.parent.setButtonText(QWizard.CommitButton,
-                                      op_type.capitalize())
-        else:
-            self.cb_make_tx.hide()
+
+        if start_id != parent.OPERATION_TYPE_PAGE:
             self.alias.setReadOnly(True)
-            if start_id in [parent.UPD_SRV_PAGE, parent.UPD_REG_PAGE]:
-                self.parent.setButtonText(QWizard.CommitButton,
-                                          'Prepare %s' % tx_name)
-            else:
-                self.cb_make_tx.setCheckState(Qt.Unchecked)
-                self.parent.setButtonText(QWizard.CommitButton,
-                                          op_type.capitalize())
+
+        if (start_id == parent.OPERATION_TYPE_PAGE and new_mn.is_owned
+                or start_id in [parent.UPD_SRV_PAGE, parent.UPD_REG_PAGE]):
+            self.cb_make_tx.setChecked(True)
+            self.cb_make_tx.setEnabled(True)
+            tx_cb_label_text = 'Make %s after saving Masternode data' % tx_name
+            self.cb_make_tx.setText(tx_cb_label_text)
+            self.cb_make_tx.show()
+
+        self.parent.setButtonText(QWizard.CommitButton, op_type.capitalize())
 
     @pyqtSlot()
     def on_alias_changed(self):
@@ -881,7 +1016,7 @@ class SaveDip3WizardPage(QWizardPage):
             parent.manager.add_mn(self.new_mn)
             dip3_tab.w_model.reload_data()
             parent.saved_mn = alias
-        elif start_id in [parent.COLLATERAL_PAGE, parent.SERVICE_PAGE]:
+        elif start_id in parent.UPD_ENTER_PAGES:
             parent.manager.update_mn(alias, self.new_mn)
             dip3_tab.w_model.reload_alias(alias)
             parent.saved_mn = alias
@@ -906,7 +1041,7 @@ class SaveDip3WizardPage(QWizardPage):
                 return True
             gui.do_clear()
             mn = self.new_mn
-            if mn.collateral.is_null:
+            if mn.collateral.is_null and tx_type == dash_tx.SPEC_PRO_REG_TX:
                 gui.amount_e.setText('1000')
             mn_addrs = [mn.owner_addr, mn.voting_addr, mn.payout_address]
             for addr in manager.wallet.get_unused_addresses():
@@ -1170,6 +1305,8 @@ class ServiceWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
+        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
+        self.cb_ignore.hide()
 
         layout.addWidget(self.srv_addr_label, 0, 0)
         layout.addWidget(self.srv_addr, 0, 1)
@@ -1178,6 +1315,7 @@ class ServiceWizardPage(QWizardPage):
 
         layout.addWidget(self.err_label, 1, 0)
         layout.addWidget(self.err, 1, 1, 1, -1)
+        layout.addWidget(self.cb_ignore, 3, 0, 1, -1)
         layout.setColumnStretch(1, 1)
         layout.setRowStretch(2, 1)
         self.setLayout(layout)
@@ -1197,7 +1335,7 @@ class ServiceWizardPage(QWizardPage):
 
     def isComplete(self):
         self.hide_error()
-        if self.srv_addr.text() and self.srv_port.text():
+        if self.srv_port.text():
             return True
         return False
 
@@ -1210,19 +1348,18 @@ class ServiceWizardPage(QWizardPage):
             self.srv_port.setText('%d' % new_mn.service.port)
 
     def validatePage(self):
+        ip = self.srv_addr.text()
+        port = self.srv_port.text()
         try:
-            ip = self.srv_addr.text()
-            ipaddress.ip_address(ip)
-        except ValueError:
-            self.show_error('Wrong service address specified')
+            ignore_used = self.cb_ignore.isChecked()
+            ip, port = self.parent.validate_service_ip_port(ip, port,
+                                                            ignore_used)
+        except UsedInWallet as e:
+            self.cb_ignore.show()
+            self.show_error(str(e))
             return False
-        try:
-            port = int(self.srv_port.text())
-        except ValueError:
-            self.show_error('Service port must be integer number')
-            return False
-        if not 1 <= port <= 65535:
-            self.show_error('Service port must be in range 1-65535')
+        except ValidationError as e:
+            self.show_error(str(e))
             return False
         self.parent.new_mn.service = ProTxService(ip, port)
         return True
@@ -1252,10 +1389,12 @@ class UpdSrvWizardPage(QWizardPage):
         self.srv_port.textChanged.connect(self.on_service_changed)
 
         self.op_p_addr_label = QLabel('Operator Payout Address:')
-        self.op_p_addr = SComboBox()
-        self.op_p_addr.setEditable(True)
+        self.op_p_addr_cb = SComboBox()
+        self.op_p_addr_cb.setEditable(True)
+        self.op_p_addr = self.op_p_addr_cb.lineEdit()
+        self.op_p_addr.textChanged.connect(self.on_change_op_p_addr)
         self.op_p_addr_label.hide()
-        self.op_p_addr.hide()
+        self.op_p_addr_cb.hide()
 
         self.err_label = QLabel('Error:')
         self.err_label.setObjectName('err-label')
@@ -1263,16 +1402,19 @@ class UpdSrvWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
+        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
+        self.cb_ignore.hide()
 
         layout.addWidget(self.srv_addr_label, 0, 0)
         layout.addWidget(self.srv_addr, 0, 1)
         layout.addWidget(self.srv_port_label, 0, 2)
         layout.addWidget(self.srv_port, 0, 3)
         layout.addWidget(self.op_p_addr_label, 1, 0)
-        layout.addWidget(self.op_p_addr, 1, 1, 1, -1)
+        layout.addWidget(self.op_p_addr_cb, 1, 1, 1, -1)
 
         layout.addWidget(self.err_label, 2, 0)
         layout.addWidget(self.err, 2, 1, 1, -1)
+        layout.addWidget(self.cb_ignore, 4, 0, 1, -1)
         layout.setColumnStretch(1, 1)
         layout.setRowStretch(3, 1)
         self.setLayout(layout)
@@ -1297,19 +1439,23 @@ class UpdSrvWizardPage(QWizardPage):
         self.srv_port.setText('%d' % upd_mn.service.port)
 
         if not upd_mn.is_owned and upd_mn.is_operated:
-            unused = self.parent.wallet.get_unused_addresses()
-            cur_op_p_addr = self.op_p_addr.currentText()
-            for addr in unused:
-                self.op_p_addr.addItem(addr)
-            self.op_p_addr.setEditText(cur_op_p_addr)
+            for addr in self.parent.wallet.get_unused_addresses():
+                self.op_p_addr_cb.addItem(addr)
+            self.op_p_addr.setText('')
             self.op_p_addr_label.show()
-            self.op_p_addr.show()
-            if not self.op_p_addr.currentText():
+            self.op_p_addr_cb.show()
+
+            first_op_p_addr = self.op_p_addr_cb.itemText(0)
+            if not self.op_p_addr.text():
                 op_payout_address = upd_mn.op_payout_address
                 if op_payout_address:
-                    self.op_p_addr.setEditText(op_payout_address)
-                else:
-                    self.op_p_addr.setEditText(unused[0])
+                    self.op_p_addr.setText(op_payout_address)
+                elif first_op_p_addr:
+                    self.op_p_addr.setText(first_op_p_addr)
+
+    @pyqtSlot()
+    def on_change_op_p_addr(self):
+        self.completeChanged.emit()
 
     @pyqtSlot()
     def on_service_changed(self):
@@ -1322,29 +1468,27 @@ class UpdSrvWizardPage(QWizardPage):
         return False
 
     def validatePage(self):
+        ip = self.srv_addr.text()
+        port = self.srv_port.text()
         try:
-            ip = self.srv_addr.text()
-            ipaddress.ip_address(ip)
-        except ValueError:
-            self.show_error('Wrong service address specified')
+            ignore_used = self.cb_ignore.isChecked()
+            ip, port = self.parent.validate_service_ip_port(ip, port,
+                                                            ignore_used)
+        except UsedInWallet as e:
+            self.cb_ignore.show()
+            self.show_error(str(e))
             return False
-        try:
-            port = int(self.srv_port.text())
-        except ValueError:
-            self.show_error('Service port must be integer number')
+        except ValidationError as e:
+            self.show_error(str(e))
             return False
-        if not 1 <= port <= 65535:
-            self.show_error('Service port must be in range 1-65535')
-            return False
-        self.upd_mn.service = ProTxService(ip, port)
-
+        self.parent.new_mn.service = ProTxService(ip, port)
         if not self.upd_mn.is_owned and self.upd_mn.is_operated:
-            op_p_addr = self.op_p_addr.currentText()
+            op_p_addr = self.op_p_addr.text()
             if op_p_addr and not is_b58_address(op_p_addr):
-                self.show_error('Wrong operator payout address format')
+                err = 'Operator payout address must be of P2PKH/P2SH type'
+                self.show_error(err)
                 return False
             self.upd_mn.op_payout_address = op_p_addr
-
         return True
 
 
@@ -1355,101 +1499,137 @@ class UpdRegWizardPage(QWizardPage):
         self.parent = parent
         self.setTitle('Update addresses')
         self.setSubTitle('Update Masternode voting/payout addresses.')
-
+        wallet_is_p2sh = self.parent.wallet_is_p2sh
         layout = QGridLayout()
-        self.v_addr_label = QLabel('Voting Address (must differ from '
-                                   'collateral):')
-        self.v_addr = SComboBox()
-        self.v_addr.setEditable(True)
-        self.v_addr.editTextChanged.connect(self.on_change_addr)
-        self.p_addr_label = QLabel('Payout Address (must differ from '
-                                   'owner/voting/collateral):')
-        self.p_addr = SComboBox()
-        self.p_addr.setEditable(True)
-        self.p_addr.editTextChanged.connect(self.on_change_addr)
-        self.err_label = QLabel('Error:')
-        self.err_label.setObjectName('err-label')
-        self.err = QLabel()
-        self.err.setObjectName('err-label')
-        self.err_label.hide()
-        self.err.hide()
+        self.v_addr_label = QLabel(_('Voting Address (P2PKH):'))
+        if wallet_is_p2sh:
+            self.v_addr = SLineEdit()
+        else:
+            self.v_addr_cb = SComboBox()
+            self.v_addr_cb.setEditable(True)
+            self.v_addr = self.v_addr_cb.lineEdit()
+        self.v_addr.textChanged.connect(self.on_change_v_addr)
+        self.v_err_label = QLabel(_('Error:'))
+        self.v_err_label.setObjectName('err-label')
+        self.v_err = QLabel()
+        self.v_err.setObjectName('err-label')
+        self.v_err_label.hide()
+        self.v_err.hide()
+        self.p_addr_label = QLabel(_('Payout Address (must differ from '
+                                     'owner/voting):'))
+        self.p_addr_cb = SComboBox()
+        self.p_addr_cb.setEditable(True)
+        self.p_addr = self.p_addr_cb.lineEdit()
+        self.p_addr.textChanged.connect(self.on_change_p_addr)
+        self.p_err_label = QLabel(_('Error:'))
+        self.p_err_label.setObjectName('err-label')
+        self.p_err = QLabel()
+        self.p_err.setObjectName('err-label')
+        self.p_err_label.hide()
+        self.p_err.hide()
 
         layout.addWidget(self.v_addr_label, 0, 0, 1, -1)
-        layout.addWidget(self.v_addr, 1, 0, 1, -1)
+        if wallet_is_p2sh:
+            layout.addWidget(self.v_addr, 1, 0, 1, -1)
+        else:
+            layout.addWidget(self.v_addr_cb, 1, 0, 1, -1)
+        layout.addWidget(self.v_err_label, 2, 0)
+        layout.addWidget(self.v_err, 2, 1, 1, -1)
         layout.addWidget(self.p_addr_label, 3, 0, 1, -1)
-        layout.addWidget(self.p_addr, 4, 0, 1, -1)
+        layout.addWidget(self.p_addr_cb, 4, 0, 1, -1)
+        layout.addWidget(self.p_err_label, 5, 0)
+        layout.addWidget(self.p_err, 5, 1, 1, -1)
         layout.setColumnStretch(1, 1)
-        layout.setRowStretch(2, 1)
-        layout.addWidget(self.err_label, 5, 0)
-        layout.addWidget(self.err, 5, 1)
+        layout.setRowStretch(6, 1)
         self.setLayout(layout)
-
-        unused = self.parent.wallet.get_unused_addresses()
-        for addr in unused:
-            self.v_addr.addItem(addr)
-            self.p_addr.addItem(addr)
-        self.v_addr.setEditText('')
-        self.p_addr.setEditText('')
+        self.first_run = True
 
     def nextId(self):
         return self.parent.BLS_KEYS_PAGE
 
     def initializePage(self):
-        self.upd_mn = upd_mn = self.parent.new_mn
-        unused = self.parent.wallet.get_unused_addresses()
+        new_mn = self.parent.new_mn
+        wallet_is_p2sh = self.parent.wallet_is_p2sh
+        if self.first_run:
+            self.first_run = False
+            for addr in self.parent.wallet.get_unused_addresses():
+                self.p_addr_cb.addItem(addr)
+                if not wallet_is_p2sh:
+                    self.v_addr_cb.addItem(addr)
+            self.v_addr.setText('')
+            self.p_addr.setText('')
 
-        if not self.v_addr.currentText():
-            voting_addr = upd_mn.voting_addr
+        i = 0
+        first_v_addr = '' if wallet_is_p2sh else self.v_addr_cb.itemText(i)
+        first_p_addr = self.p_addr_cb.itemText(i)
+
+        if not self.v_addr.text():
+            voting_addr = new_mn.voting_addr
             if voting_addr:
-                self.v_addr.setEditText(voting_addr)
-            else:
-                self.v_addr.setEditText(unused[0])
+                self.v_addr.setText(voting_addr)
+            elif first_v_addr:
+                self.v_addr.setText(first_v_addr)
 
-        if not self.p_addr.currentText():
-            payout_address = upd_mn.payout_address
+        if not self.p_addr.text():
+            payout_address = new_mn.payout_address
             if payout_address:
-                self.p_addr.setEditText(payout_address)
+                self.p_addr.setText(payout_address)
             else:
-                self.p_addr.setEditText(unused[1])
+                while first_p_addr:
+                    if first_p_addr in [new_mn.owner_addr, first_v_addr]:
+                        i += 1
+                        first_p_addr = self.p_addr_cb.itemText(i)
+                    else:
+                        self.p_addr.setText(first_p_addr)
+                        break
 
     @pyqtSlot()
-    def on_change_addr(self):
+    def on_change_v_addr(self):
+        self.hide_v_error()
+        self.completeChanged.emit()
+
+    @pyqtSlot()
+    def on_change_p_addr(self):
+        self.hide_p_error()
         self.completeChanged.emit()
 
     def isComplete(self):
-        self.hide_error()
-        if (self.v_addr.currentText() and self.p_addr.currentText()):
+        if self.v_addr.text() and self.p_addr.text():
             return True
         return False
 
-    def show_error(self, err):
-        self.err.setText(err)
-        self.err_label.show()
-        self.err.show()
+    def hide_v_error(self):
+        self.v_err_label.hide()
+        self.v_err.hide()
 
-    def hide_error(self):
-        self.err_label.hide()
-        self.err.hide()
+    def hide_p_error(self):
+        self.p_err_label.hide()
+        self.p_err.hide()
 
     def validatePage(self):
-        v_addr = self.v_addr.currentText()
-        p_addr = self.p_addr.currentText()
+        new_mn = self.parent.new_mn
+        o_addr = new_mn.owner_addr
+        v_addr = self.v_addr.text()
+        p_addr = self.p_addr.text()
 
-        if not v_addr:
-            self.show_error('No voting address set')
+        try:
+            self.parent.validate_voting_addr(v_addr)
+        except ValidationError as e:
+            self.v_err.setText(str(e))
+            self.v_err_label.show()
+            self.v_err.show()
             return False
-        if not is_b58_address(v_addr):
-            self.show_error('Wrong voting address format')
-            return False
-        self.upd_mn.voting_addr = v_addr
 
-        if not p_addr:
-            self.show_error('No payout address set')
+        try:
+            self.parent.validate_payout_addr(p_addr, o_addr, v_addr)
+        except ValidationError as e:
+            self.p_err.setText(str(e))
+            self.p_err_label.show()
+            self.p_err.show()
             return False
-        if not is_b58_address(p_addr):
-            self.show_error('Wrong payout address format')
-            return False
-        self.upd_mn.payout_address = p_addr
+
+        new_mn.voting_addr = v_addr
+        new_mn.payout_address = p_addr
         return True
 
 
@@ -1467,14 +1647,15 @@ class Dip3MasternodeWizard(QWizard):
     UPD_SRV_PAGE = 101
     UPD_REG_PAGE = 102
 
-    UPD_ENTER_PAGES  = [COLLATERAL_PAGE, SERVICE_PAGE,
-                        UPD_SRV_PAGE, UPD_REG_PAGE]
+    UPD_ENTER_PAGES = [COLLATERAL_PAGE, SERVICE_PAGE, BLS_KEYS_PAGE,
+                       UPD_SRV_PAGE, UPD_REG_PAGE]
 
     def __init__(self, parent, mn=None, start_id=None):
         super(Dip3MasternodeWizard, self).__init__(parent)
         self.gui = parent.gui
         self.manager = parent.manager
-        self.wallet = parent.wallet
+        self.wallet = w = parent.wallet
+        self.wallet_is_p2sh = not is_p2pkh_address(w.get_addresses()[0])
 
         if mn:
             self.new_mn = ProTxMN.from_dict(mn.as_dict())
@@ -1497,9 +1678,9 @@ class Dip3MasternodeWizard(QWizard):
 
         if start_id:
             self.setStartId(start_id)
-            title = 'Update DIP3 Masternode'
+            title = _('Update DIP3 Masternode: {}').format(mn.alias)
         else:
-            title = 'Add DIP3 Masternode'
+            title = _('Add DIP3 Masternode')
 
         logo = QPixmap(icon_path('tab_dip3.png'))
         logo = logo.scaledToWidth(32, mode=Qt.SmoothTransformation)
@@ -1520,7 +1701,7 @@ class Dip3MasternodeWizard(QWizard):
                                   alias)
         return alias
 
-    def validate_service(self, service):
+    def validate_str_service(self, service):
         if not service:
             raise ValidationError('No service value specified')
         try:
@@ -1528,6 +1709,47 @@ class Dip3MasternodeWizard(QWizard):
         except BaseException:
             raise ValidationError('Wrong service format specified')
         return ip, port
+
+    def validate_service_ip_port(self, ip, port, ignore_used):
+        try:
+            if ip:
+                ipaddress.ip_address(ip)
+        except ValueError:
+            raise ValidationError('Wrong service address specified')
+        try:
+            port = int(port)
+        except ValueError:
+            raise ValidationError('Service port must be integer number')
+        if not 1 <= port <= 65535:
+            raise ValidationError('Service port must be in range 1-65535')
+        serv = ProTxService(ip, port)
+        skip_alias = None
+        start_id = self.startId()
+        if start_id in self.UPD_ENTER_PAGES:
+            skip_alias = self.new_mn.alias
+        used = self.manager.find_service_use(serv, skip_alias=skip_alias,
+                                             ignore_used=ignore_used)
+        if isinstance(used, str):
+            err = _('Service {} used by: {}').format(serv, used)
+            raise UsedInWallet(err)
+        elif used:
+            err = _('Service {} used by registered masternodes').format(serv)
+            raise ValidationError(err)
+        return ip, port
+
+    def validate_bls_pub(self, bls_pub, ignore_used):
+        skip_alias = None
+        start_id = self.startId()
+        if start_id in self.UPD_ENTER_PAGES:
+            skip_alias = self.new_mn.alias
+        used = self.manager.find_bls_pub_use(bls_pub, skip_alias=skip_alias,
+                                             ignore_used=ignore_used)
+        if isinstance(used, str):
+            err = _('pubKeyOperarot used by: {}').format(used)
+            raise UsedInWallet(err)
+        elif used:
+            err = _('pubKeyOperarot used by registered masternodes')
+            raise ValidationError(err)
 
     def validate_collateral(self, outpoint, addr, value, skip_alias=None):
         outpoint = outpoint.split(':')
@@ -1579,37 +1801,45 @@ class Dip3MasternodeWizard(QWizard):
 
         return prevout_hash, prevout_n, addr
 
-    def validate_addresses(self, o_addr, v_addr, p_addr, ignore_hw_warn):
-        c_addr = self.collateral_addr
+    def validate_owner_addr(self, addr):
+        if not is_p2pkh_address(addr):
+            raise ValidationError('Owner address must be of P2PKH type')
+        skip_alias = None
+        start_id = self.startId()
+        if start_id in self.UPD_ENTER_PAGES:
+            skip_alias = self.new_mn.alias
+        use = self.manager.find_owner_addr_use(addr, skip_alias=skip_alias)
+        if use:
+            raise ValidationError('Address already used by: {}'.format(use))
 
-        if c_addr == o_addr or c_addr == v_addr or c_addr == p_addr:
-            raise ValidationError('Addresses must differ from collateral '
-                                  'address %s' % c_addr)
+    def validate_voting_addr(self, addr):
+        if not is_p2pkh_address(addr):
+            raise ValidationError('Voting address must be of P2PKH type')
 
-        if p_addr == o_addr or p_addr == v_addr:
+    def validate_payout_addr(self, addr, o_addr, v_addr):
+        if not is_b58_address(addr):
+            raise ValidationError('Payout address must be of P2PKH/P2SH type')
+        if addr == o_addr or addr == v_addr:
             raise ValidationError('Payout address must differ from owner '
                                   'and voting addresses')
 
-        keystore = self.wallet.keystore
-        if not hasattr(keystore, 'sign_digest') and not ignore_hw_warn:
-            raise HwWarnError('Warning: sign_digest not implemented in '
-                              'hardware wallet keystores. You cannot use '
-                              'this wallet to sign a ProUpRegTx. You '
-                              'can register a masternode, but in the future it '
-                              'will not be possible to change voting/payout '
-                              'addresses or the operator public BLS key')
-
-        if not is_b58_address(v_addr):
-            raise ValidationError('Wrong voting address format')
-        if not is_b58_address(p_addr):
-            raise ValidationError('Wrong payout address format')
-
-        if b58_address_to_hash160(o_addr)[0] != constants.net.ADDRTYPE_P2PKH:
-            raise ValidationError('Owner address must be of P2PKH type')
-        if b58_address_to_hash160(v_addr)[0] != constants.net.ADDRTYPE_P2PKH:
-            raise ValidationError('Voting address must be of P2PKH type')
-
-        return o_addr, v_addr, p_addr
+    def validate_sign_digest(self, addr, ignore_hw_warn):
+        hw_warn_msg = None
+        if not self.wallet.is_mine(addr):
+            hw_warn_msg = ('Warning: sign_digest is not implemented in '
+                           'hardware wallet keystores. If address you set '
+                           'as Owner address belongs to hardware wallet '
+                           'it is impossible to sign a ProUpRegTx. ')
+        elif not hasattr(self.wallet.keystore, 'sign_digest'):
+            hw_warn_msg = ('Warning: sign_digest not implemented in '
+                           'hardware wallet keystores. You cannot use '
+                           'this wallet to sign a ProUpRegTx. ')
+        if hw_warn_msg and not ignore_hw_warn:
+            hw_warn_possibility = ('You can still register a masternode,'
+                                   ' but in the future it will be impossible'
+                                   ' to change voting/payout addresses or'
+                                   ' the operator public BLS key')
+            raise HwWarnError(hw_warn_msg + hw_warn_possibility)
 
 
 class Dip3FileWizard(QWizard):
