@@ -650,7 +650,6 @@ class Commands:
         """Wallet history. Returns the transaction history of your wallet."""
         kwargs = {
             'show_addresses': show_addresses,
-            'config': self.config,
         }
         if year:
             import time
