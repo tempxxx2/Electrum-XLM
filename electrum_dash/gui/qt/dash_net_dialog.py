@@ -425,7 +425,7 @@ class DashNetDialogLayout(object):
 
 
 class DashNetDialog(QDialog):
-    def __init__(self, network, config, dash_net_sobj):
+    def __init__(self, *, network, config, dash_net_sobj):
         QDialog.__init__(self)
         self.setWindowTitle(_('Dash Network'))
         self.setMinimumSize(700, 400)
@@ -437,6 +437,7 @@ class DashNetDialog(QDialog):
         vbox.addLayout(self.dnlayout.layout())
         vbox.addLayout(Buttons(CloseButton(self)))
         self.dash_net_sobj.dlg.connect(self.on_updated)
+        self._cleaned_up = False
 
     def show(self):
         super(DashNetDialog, self).show()
@@ -454,7 +455,16 @@ class DashNetDialog(QDialog):
             util.unregister_callback(self.on_dash_net)
 
     def on_dash_net(self, event, *args):
-        self.dash_net_sobj.dlg.emit(event, args)
+        signal_obj = self.dash_net_sobj
+        if signal_obj:
+            signal_obj.dlg.emit(event, args)
 
     def on_updated(self, event=None, args=None):
         self.dnlayout.update(event, args)
+
+    def clean_up(self):
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+        self.dash_net_sobj.dlg.disconnect()
+        self.dash_net_sobj = None

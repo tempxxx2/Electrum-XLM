@@ -1,7 +1,14 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 LABEL maintainer "Andriy Khavryuchenko <akhavr@khavr.com>"
 
+ENV LANG="en_US.UTF-8" \
+    LANGUAGE="en_US.UTF-8" \
+    LC_ALL="en_US.UTF-8" \
+    DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update -y \
+    && apt-get install -qq --yes --no-install-recommends locales \
+    && locale-gen en_US.UTF-8 \
     && apt-get install -y \
         python3-pip \
         gettext \

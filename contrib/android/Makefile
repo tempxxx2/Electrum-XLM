@@ -15,7 +15,8 @@ prepare-testnet:
 	@-cd ../..; sed -r "s:^(title =.*):\1 Testnet:" -i buildozer.spec
 	@-cd ../..; sed -r "s:^(package.nam.*):\1_Testnet:" -i buildozer.spec
 	@-cd ../..; sed -r "s:^(presp.*).png:\1_testnet.png:" -i buildozer.spec
-	@-cd ../..; sed -r "s:^(icon.*).png:\1-testnet.png:" -i buildozer.spec
+	@-cd ../..; sed -r "s:^(icon.filename.*).png:\1_testnet.png:" -i buildozer.spec
+	@-cd ../..; sed -r "s:^(icon.adaptive_foreground.*).png:\1_testnet.png:" -i buildozer.spec
 apk:
 	@make prepare
 	@-cd ../..; buildozer android debug

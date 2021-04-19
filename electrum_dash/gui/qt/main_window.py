@@ -236,7 +236,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.contacts = wallet.contacts
         self.tray = gui_object.tray
         self.app = gui_object.app
-        self.cleaned_up = False
+        self._cleaned_up = False
         self.payment_request = None  # type: Optional[paymentrequest.PaymentRequest]
         self.payto_URI = None
         self.checking_accounts = False
@@ -368,6 +368,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                                        _("Would you like to be notified when there is a newer version of Dash Electrum available?"))
             config.set_key('check_updates', bool(choice), save=True)
 
+        self._update_check_thread = None
         if config.get('check_updates', False):
             # The references to both the thread and the window need to be stored somewhere
             # to prevent GC from getting in our way.
@@ -645,7 +646,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def close_wallet(self):
         if self.wallet:
             self.logger.info(f'close_wallet {self.wallet.storage.path}')
-            self.wallet.thread = None
         run_hook('close_wallet', self.wallet)
 
     @profiler
@@ -1158,7 +1158,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 text = not_connected_msg
             icon = read_QIcon("status_disconnected.png")
 
-        self.tray.setToolTip("%s (%s)" % (text, self.wallet.basename()))
+        if self.tray:
+            self.tray.setToolTip("%s (%s)" % (text, self.wallet.basename()))
         self.balance_label.setText(text)
         if self.status_button:
             self.status_button.setIcon(icon)
@@ -1190,9 +1191,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         l.searchable_list = l
         l.setObjectName("history_container")
         toolbar = l.create_toolbar(self.config)
+        tab = self.create_list_tab(l, toolbar)
         toolbar_shown = bool(self.config.get('show_toolbar_history', False))
         l.show_toolbar(toolbar_shown)
-        return self.create_list_tab(l, toolbar)
+        return tab
 
     def show_address(self, addr):
         from . import address_dialog
@@ -2335,9 +2337,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.address_model.set_view(self.address_list)
         l.setObjectName("addresses_container")
         toolbar = l.create_toolbar(self.config)
+        tab =  self.create_list_tab(l, toolbar)
         toolbar_shown = bool(self.config.get('show_toolbar_addresses', True))
         l.show_toolbar(toolbar_shown)
-        return self.create_list_tab(l, toolbar)
+        return tab
 
     def create_utxo_tab(self):
         from .utxo_list import UTXOModel, UTXOList
@@ -3403,11 +3406,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 self.send_funds_to_main_ks(mwin=self, parent=self)
                 event.ignore()
                 return
-        # It seems in some rare cases this closeEvent() is called twice
-        if not self.cleaned_up:
-            self.stop_get_data_threads()
-            self.cleaned_up = True
-            self.clean_up()
+        # note that closeEvent is NOT called if the user quits with Ctrl-C
+        self.clean_up()
         event.accept()
 
     def stop_get_data_threads(self):
@@ -3419,14 +3419,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.utxo_list.cm.get_data_thread.wait()
 
     def clean_up(self):
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+        self.stop_get_data_threads()
         hide_ps_dialog(self)
         self.dip3_tab.unregister_callbacks()
         util.unregister_callback(self.on_ps_callback)
-        self.wallet.thread.stop()
-        util.unregister_callback(self.on_network)
         if self.network:
             self.wallet.protx_manager.clean_up()
             util.unregister_callback(self.on_dash_net)
+        if self.wallet.thread:
+            self.wallet.thread.stop()
+            self.wallet.thread = None
+        util.unregister_callback(self.on_network)
         self.config.set_key("is_maximized", self.isMaximized())
         if not self.isMaximized():
             g = self.geometry()
@@ -3437,6 +3443,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.qr_window.close()
         self.close_wallet()
 
+        if self._update_check_thread:
+            self._update_check_thread.exit()
+            self._update_check_thread.wait()
+        if self.tray:
+            self.tray = None
         self.gui_object.timer.timeout.disconnect(self.timer_actions)
         self.gui_object.close_window(self)
 

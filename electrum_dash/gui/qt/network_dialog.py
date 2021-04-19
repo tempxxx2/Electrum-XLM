@@ -27,6 +27,7 @@ import socket
 import time
 from enum import IntEnum
 from typing import Tuple, TYPE_CHECKING
+import threading
 
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from PyQt5.QtWidgets import (QTreeWidget, QTreeWidgetItem, QMenu, QGridLayout, QComboBox,
@@ -53,7 +54,7 @@ protocol_names = ['TCP', 'SSL']
 protocol_letters = 'ts'
 
 class NetworkDialog(QDialog):
-    def __init__(self, network, config, network_updated_signal_obj):
+    def __init__(self, *, network: Network, config: 'SimpleConfig', network_updated_signal_obj):
         QDialog.__init__(self)
         self.setWindowTitle(_('Electrum Network'))
         self.setMinimumSize(500, 500)
@@ -65,13 +66,23 @@ class NetworkDialog(QDialog):
         self.network_updated_signal_obj.network_updated_signal.connect(
             self.on_update)
         util.register_callback(self.on_network, ['network_updated'])
+        self._cleaned_up = False
 
     def on_network(self, event, *args):
-        self.network_updated_signal_obj.network_updated_signal.emit(event, args)
+        signal_obj = self.network_updated_signal_obj
+        if signal_obj:
+            signal_obj.network_updated_signal.emit(event, args)
 
     def on_update(self):
         self.nlayout.update()
 
+    def clean_up(self):
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+        self.nlayout.clean_up()
+        self.network_updated_signal_obj.network_updated_signal.disconnect()
+        self.network_updated_signal_obj = None
 
 
 class NodesListWidget(QTreeWidget):
@@ -322,6 +333,12 @@ class NetworkChoiceLayout(object):
         self.fill_in_proxy_settings()
         self.update()
 
+    def clean_up(self):
+        if self.td:
+            self.td.found_proxy.disconnect()
+            self.td.stop()
+            self.td = None
+
     def check_disable_proxy(self, b):
         if not self.config.is_modifiable('proxy'):
             b = False
@@ -469,6 +486,7 @@ class TorDetector(QThread):
 
     def __init__(self):
         QThread.__init__(self)
+        self._stop_event = threading.Event()
 
     def run(self):
         # Probable ports for Tor to listen at
@@ -477,19 +495,18 @@ class TorDetector(QThread):
             for p in ports:
                 net_addr = ("127.0.0.1", p)
                 if TorDetector.is_tor_port(net_addr):
-                    try:
-                        self.found_proxy.emit(net_addr)
-                    except AttributeError as e:
-                        _logger.info('found_proxy signal is already unbound')
-                        return
+                    self.found_proxy.emit(net_addr)
                     break
             else:
-                try:
-                    self.found_proxy.emit(None)
-                except AttributeError:
-                    _logger.info('found_proxy signal is already unbound')
-                    return
-            time.sleep(10)
+                self.found_proxy.emit(None)
+            stopping = self._stop_event.wait(10)
+            if stopping:
+                return
+
+    def stop(self):
+        self._stop_event.set()
+        self.exit()
+        self.wait()
 
     @staticmethod
     def is_tor_port(net_addr: Tuple[str, int]) -> bool:

@@ -1,4 +1,4 @@
-# Release 4.1.1.0 (Unreleased yet)
+# Release 4.1.2.0 (Unreleased yet)
 
  * The wallet creation wizard no longer asks for a seed type.
  * Paid invoices are removed from the lists. Invoice details can still
@@ -20,6 +20,10 @@
  * Block explorer: allow setting a custom URL in Qt GUI.
  * fix Kivy bug with scrollbar
  * fix localization issues
+ * Qt GUI: fix some crashes when exiting, make sure pressing
+   Ctrl-C always quits
+ * Android: use more modern application launcher/icon,
+   implement freezing addresses
  * other minor fixes
 
 
