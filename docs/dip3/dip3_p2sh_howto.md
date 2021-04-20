@@ -1,4 +1,4 @@
-# Setup masterode with P2SH collateral output stored on multisig wallet
+# Setup masternode with P2SH collateral output stored on multisig wallet
 
 To store collateral amount on multisig P2SH wallet collateral amount
 must be created as output of ProRegTx transaction. Existing collateral

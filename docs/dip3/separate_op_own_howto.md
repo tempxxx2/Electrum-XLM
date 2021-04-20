@@ -1,4 +1,4 @@
-# Setup masterode with separate owner, operator
+# Setup masternode with separate owner, operator
 
 ## Operator wallet
 Create DIP3 masternode on operator wallet with wizard.
@@ -8,7 +8,7 @@ Create DIP3 masternode on operator wallet with wizard.
 
 Select service params. BLS public key sould be copied and sent to the
 owner of the masternode together with service params. BLS private key
-sould be saved to dash.conf of masternode Dash Core node,
+should be saved to dash.conf of masternode Dash Core node,
 with subsequent restart of the node.
 
 <p><image src="operator/p2.png" width="800" />
@@ -36,7 +36,7 @@ Set BLS public key sent from operator, set operator reward in percents.
 <p><image src="owner/p5.png" width="800" /></p>
 
 Save new masternode data with preferred alias, send ProRegTx Transaction
-with 1000 Dash output for collaterl amount.
+with 1000 Dash output for collateral amount.
 
 <p><image src="owner/p6.png" width="800" />
    <image src="owner/p7.png" width="800" />

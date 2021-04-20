@@ -1,4 +1,4 @@
-# Setup masterode with combined owner and operator
+# Setup masternode with combined owner and operator
 
 Create DIP3 masternode on standard P2PKH wallet with wizard.
 
