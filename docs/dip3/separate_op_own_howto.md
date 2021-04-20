@@ -6,7 +6,7 @@ Create DIP3 masternode on operator wallet with wizard.
 
 <p><image src="operator/p1.png" width="800" /></p>
 
-Select service params. BLS public key sould be copied and sent to the
+Select service params. BLS public key should be copied and sent to the
 owner of the masternode together with service params. BLS private key
 should be saved to dash.conf of masternode Dash Core node,
 with subsequent restart of the node.
