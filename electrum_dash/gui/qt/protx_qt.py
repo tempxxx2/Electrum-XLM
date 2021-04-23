@@ -9,16 +9,18 @@ from PyQt5.QtCore import (Qt, QSortFilterProxyModel, QAbstractTableModel,
 from PyQt5.QtWidgets import (QTabBar, QTabWidget, QWidget, QLabel, QPushButton,
                              QTableView, QHeaderView, QAbstractItemView,
                              QHBoxLayout, QVBoxLayout, QDialog, QGridLayout,
-                             QTextEdit, QMenu)
+                             QTextEdit, QMenu, QComboBox)
 
 from electrum_dash import util
-from electrum_dash.dash_tx import SPEC_PRO_REG_TX
-from electrum_dash.protx import ProRegTxExc, ProTxManagerExc
+from electrum_dash.dash_tx import (SPEC_PRO_REG_TX, SPEC_PRO_UP_REV_TX,
+                                   RevokeReasons, revoke_reason_str)
+from electrum_dash.protx import (ProRegTxExc, ProTxManagerExc, ProTxMN,
+                                 ProTxService)
 from electrum_dash.i18n import _
 
 from .dash_qt import VTabBar
 from .protx_wizards import Dip3MasternodeWizard, Dip3FileWizard
-from .util import icon_path, read_QIcon
+from .util import icon_path, read_QIcon, Buttons, CancelButton, OkButton
 
 
 VALID_MASTERNODE_COLOR = '#008000'
@@ -153,6 +155,7 @@ class WalletMNsModel(QAbstractTableModel):
 
     STATE_LOADING = 'Loading'
     STATE_UNREGISTERED = 'Unregistered'
+    STATE_REGISTERED = 'Registered'  # ProTxHash known but validity unknown
     STATE_VALID = 'Valid'
     STATE_BANNED = 'PoSe Banned'
     STATE_REMOVED = 'Removed'
@@ -160,6 +163,7 @@ class WalletMNsModel(QAbstractTableModel):
     STATES_TXT = {
         STATE_LOADING: _('Loading'),
         STATE_UNREGISTERED: _('Unregistered'),
+        STATE_REGISTERED: _('Registered'),
         STATE_VALID: _('Valid'),
         STATE_BANNED: _('PoSe Banned'),
         STATE_REMOVED: _('Removed'),
@@ -183,8 +187,12 @@ class WalletMNsModel(QAbstractTableModel):
         self.icon_removed = QPixmap(imgfile).scaledToWidth(sz, mode=mode)
         imgfile = icon_path('dip3_own_op.png')
         self.icon_own_op = QPixmap(imgfile).scaledToWidth(sz, mode=mode)
+        imgfile = icon_path('dip3_own_nokey_op.png')
+        self.icon_own_nokey_op= QPixmap(imgfile).scaledToWidth(sz, mode=mode)
         imgfile = icon_path('dip3_own.png')
         self.icon_own = QPixmap(imgfile).scaledToWidth(sz, mode=mode)
+        imgfile = icon_path('dip3_own_nokey.png')
+        self.icon_own_nokey = QPixmap(imgfile).scaledToWidth(sz, mode=mode)
         imgfile = icon_path('dip3_op.png')
         self.icon_op = QPixmap(imgfile).scaledToWidth(sz, mode=mode)
 
@@ -218,7 +226,11 @@ class WalletMNsModel(QAbstractTableModel):
                 self.mns_states[mn.alias] = self.STATE_UNREGISTERED
                 continue
 
-            if not self.mn_list or self.mn_list.protx_loading:
+            if not self.mn_list:
+                self.mns_states[mn.alias] = self.STATE_REGISTERED
+                continue
+
+            if self.mn_list.protx_loading:
                 self.mns_states[mn.alias] = self.STATE_LOADING
                 continue
 
@@ -229,11 +241,7 @@ class WalletMNsModel(QAbstractTableModel):
                 else:
                     self.mns_states[mn.alias] = self.STATE_BANNED
             else:
-                conf = self.manager.wallet.get_tx_height(h).conf
-                if conf > 0:
-                    self.mns_states[mn.alias] = self.STATE_REMOVED
-                else:
-                    self.mns_states[mn.alias] = self.STATE_UNREGISTERED
+                self.mns_states[mn.alias] = self.STATE_REMOVED
 
         self.row_count = len(self.mns)
         self.endResetModel()
@@ -259,6 +267,8 @@ class WalletMNsModel(QAbstractTableModel):
             return None
 
         mn = self.mns[index.row()]
+        w = self.manager.wallet
+        has_owner_key = w.is_mine(mn.owner_addr) if mn.owner_addr else False
         i = index.column()
 
         if i == self.ALIAS and role in (Qt.DisplayRole, Qt.EditRole):
@@ -266,7 +276,8 @@ class WalletMNsModel(QAbstractTableModel):
         elif i == self.STATE:
             if role == Qt.DecorationRole:
                 state = self.mns_states.get(mn.alias)
-                if state in [self.STATE_UNREGISTERED, self.STATE_LOADING]:
+                if state in [self.STATE_UNREGISTERED, self.STATE_REGISTERED,
+                             self.STATE_LOADING]:
                     data = self.icon_unregistered
                 elif state == self.STATE_VALID:
                     data = self.icon_valid
@@ -282,18 +293,30 @@ class WalletMNsModel(QAbstractTableModel):
         elif i == self.KEYS:
             if role == Qt.DecorationRole:
                 if mn.is_owned and mn.is_operated:
-                    data = self.icon_own_op
+                    if has_owner_key:
+                        data = self.icon_own_op
+                    else:
+                        data = self.icon_own_nokey_op
                 elif mn.is_owned and not mn.is_operated:
-                    data = self.icon_own
+                    if has_owner_key:
+                        data = self.icon_own
+                    else:
+                        data = self.icon_own_nokey
                 elif not mn.is_owned and mn.is_operated:
                     data = self.icon_op
                 else:
                     data = None
             elif role == Qt.ToolTipRole:
                 if mn.is_owned and mn.is_operated:
-                    data = _('Owner and Operator private keys')
+                    if has_owner_key:
+                        data = _('Owner and Operator private keys')
+                    else:
+                        data = _('Owner with no key and Operator private key')
                 elif mn.is_owned and not mn.is_operated:
-                    data = _('Owner key')
+                    if has_owner_key:
+                        data = _('Owner key')
+                    else:
+                        data = _('Owner with no key')
                 elif not mn.is_owned and mn.is_operated:
                     data = _('Operator privete key')
                 else:
@@ -398,17 +421,12 @@ class Dip3TabBar(VTabBar):
         self.protx_llmq_reset_btn.clicked.connect(self.on_protx_llmq_reset)
         gl.addWidget(self.protx_llmq_reset_btn, 8, 0, 1, -1)
 
-        hbox = QHBoxLayout()
-        hbox.addStretch(1)
-        hbox.addWidget(self.data_w)
-        hbox.setContentsMargins(0, 0, 0, 0)
-        hw = QWidget()
-        hw.setLayout(hbox)
-        vbox = QVBoxLayout()
-        vbox.addStretch(1)
-        vbox.addWidget(hw)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        self.tab_w.setLayout(vbox)
+        gl2 = QGridLayout()
+        gl2.setColumnStretch(0, 1)
+        gl2.setRowStretch(0, 1)
+        gl2.addWidget(self.data_w, 1, 1)
+        gl2.setContentsMargins(0, 0, 0, 0)
+        self.tab_w.setLayout(gl2)
 
     def tabSizeHint(self, index):
         s = QTabBar.tabSizeHint(self, index)
@@ -454,6 +472,7 @@ class Dip3TabWidget(QTabWidget):
         self.manager = wallet.protx_manager
         self.mn_list = gui.network.mn_list if gui.network else None
         self.reg_cur_protx = ''
+        self.reg_cur_idx = None
         self.w_cur_alias = ''
         self.w_cur_state = ''
         self.w_cur_idx = None
@@ -523,6 +542,7 @@ class Dip3TabWidget(QTabWidget):
     @pyqtSlot(str)
     def on_alias_updated(self, alias):
         self.w_model.reload_data()
+        self.restore_w_selection()
 
     @pyqtSlot()
     def on_network_updated(self):
@@ -533,7 +553,9 @@ class Dip3TabWidget(QTabWidget):
         state = value.get('state', self.mn_list.DIP3_DISABLED)
         if self.mn_list.load_mns and not self.mn_list.protx_loading:
             self.reg_model.reload_data()
-            self.w_model.reload_data()
+            self.restore_reg_selection()
+        self.w_model.reload_data()
+        self.restore_w_selection()
 
         if state == self.mn_list.DIP3_ENABLED:
             self.reg_search_btn.setEnabled(True)
@@ -631,6 +653,7 @@ class Dip3TabWidget(QTabWidget):
         self.addTab(w, read_QIcon('tab_search.png'), _('Registered MNs'))
         if not self.mn_list.protx_loading:
             self.reg_model.reload_data()
+            self.restore_reg_selection()
         return w
 
     def create_reg_menu(self, position):
@@ -647,19 +670,24 @@ class Dip3TabWidget(QTabWidget):
         self.w_add_btn = QPushButton(_('Add / Import'))
         self.w_file_btn = QPushButton(_('File'))
         self.w_del_btn = QPushButton(_('Remove'))
+        self.w_clear_protx_btn = QPushButton(_('Clear ProTxHash'))
         self.w_up_params_btn = QPushButton(_('Update Params'))
-        self.w_up_coll_btn = QPushButton(_('Change Collateral'))
         self.w_protx_btn = QPushButton(_('Register'))
-        self.w_up_srv_btn = QPushButton(_('Update Service'))
         self.w_up_reg_btn = QPushButton(_('Update Registrar'))
+        self.w_up_rev_btn = QPushButton(_('Revoke'))
+        self.w_new_bls_bnt = QPushButton(_('New BLS Keys'))
+        self.w_up_srv_btn = QPushButton(_('Update Service'))
         self.w_add_btn.clicked.connect(self.on_add_masternode)
         self.w_file_btn.clicked.connect(self.on_file)
         self.w_del_btn.clicked.connect(self.on_del_masternode)
+        self.w_clear_protx_btn.clicked.connect(self.on_clear_protx)
         self.w_up_params_btn.clicked.connect(self.on_update_params)
-        self.w_up_coll_btn.clicked.connect(self.on_update_collateral)
         self.w_protx_btn.clicked.connect(self.on_make_pro_reg_tx)
-        self.w_up_srv_btn.clicked.connect(self.on_make_pro_up_srv_tx)
         self.w_up_reg_btn.clicked.connect(self.on_make_pro_up_reg_tx)
+        self.w_up_rev_btn.clicked.connect(self.on_make_pro_up_rev_tx)
+        self.w_new_bls_bnt.clicked.connect(self.on_new_bls)
+        self.w_up_srv_btn.clicked.connect(self.on_make_pro_up_srv_tx)
+        self.hide_mn_buttons()
 
         self.w_view = QTableView()
         self.w_view.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -691,21 +719,30 @@ class Dip3TabWidget(QTabWidget):
         hbox.setContentsMargins(0, 0, 0, 0)
         hbox.addWidget(self.w_label)
         hbox.addStretch(1)
-        hbox.addWidget(self.w_del_btn)
-        hbox.addWidget(self.w_up_params_btn)
-        hbox.addWidget(self.w_up_coll_btn)
-        hbox.addWidget(self.w_protx_btn)
-        hbox.addWidget(self.w_up_reg_btn)
-        hbox.addWidget(self.w_up_srv_btn)
-        hbox.addWidget(self.w_file_btn)
         hbox.addWidget(self.w_add_btn)
         hw.setLayout(hbox)
         vbox.addWidget(hw)
         vbox.addWidget(self.w_view)
-        w.setLayout(vbox)
         self.addTab(w, read_QIcon('tab_dip3.png'), _('Wallet MNs'))
         if self.mn_list and not self.mn_list.protx_loading:
             self.w_model.reload_data()
+            self.restore_w_selection()
+
+        hw = QWidget()
+        hbox = QHBoxLayout()
+        hbox.addStretch(1)
+        hbox.addWidget(self.w_file_btn)
+        hbox.addWidget(self.w_del_btn)
+        hbox.addWidget(self.w_clear_protx_btn)
+        hbox.addWidget(self.w_up_params_btn)
+        hbox.addWidget(self.w_protx_btn)
+        hbox.addWidget(self.w_up_reg_btn)
+        hbox.addWidget(self.w_up_rev_btn)
+        hbox.addWidget(self.w_new_bls_bnt)
+        hbox.addWidget(self.w_up_srv_btn)
+        hw.setLayout(hbox)
+        vbox.addWidget(hw)
+        w.setLayout(vbox)
         return w
 
     @pyqtSlot()
@@ -716,7 +753,12 @@ class Dip3TabWidget(QTabWidget):
         a = self.w_cur_alias
         s = self.w_cur_state
         i = self.w_cur_idx
-        if not i:
+
+        menu = QMenu()
+        if not i or s == WalletMNsModel.STATE_LOADING:
+            menu.addAction(_('Add / Import'), self.on_add_masternode)
+            menu.addAction(_('File'), self.on_file)
+            menu.exec_(self.w_view.viewport().mapToGlobal(position))
             return
 
         mn = self.manager.mns.get(a)
@@ -725,38 +767,48 @@ class Dip3TabWidget(QTabWidget):
         protx_hash = mn.protx_hash
         removed = (s == WalletMNsModel.STATE_REMOVED)
 
-        menu = QMenu()
         menu.addAction(_('Remove'), self.on_del_masternode)
+
+        if removed:
+            menu.addAction(_('Clear ProTxHash'), self.on_clear_protx)
 
         if not protx_hash:
             menu.addAction(_('Update Params'), self.on_update_params)
 
-        if removed and owned:
-            menu.addAction(_('Change Collateral'), self.on_update_collateral)
-
         if owned and not protx_hash:
-            menu.addAction(_('Register Masternode'), self.on_make_pro_reg_tx)
+            menu.addAction(_('Register'), self.on_make_pro_reg_tx)
+
+        if (owned and protx_hash and not removed
+                and self.wallet.is_mine(mn.owner_addr)):
+            menu.addAction(_('Update Registrar'), self.on_make_pro_up_reg_tx)
+
+        if operated and not owned and protx_hash and not removed:
+            menu.addAction(_('Revoke'), self.on_make_pro_up_rev_tx)
+
+        if operated and not owned and protx_hash:
+            menu.addAction(_('New BLS Keys'), self.on_new_bls)
 
         if operated and protx_hash and not removed:
             menu.addAction(_('Update Service'), self.on_make_pro_up_srv_tx)
-
-        if owned and protx_hash and not removed:
-            menu.addAction(_('Update Registrar'), self.on_make_pro_up_reg_tx)
 
         menu.addSeparator()
         menu.addAction(_('Rename Alias'),
                        lambda: self.w_view.edit(i))
         menu.addSeparator()
         menu.addAction(_('Details'), lambda: self.show_alias_info(a))
+
+        menu.addSeparator()
+        menu.addAction(_('Add / Import'), self.on_add_masternode)
+        menu.addAction(_('File'), self.on_file)
+
         menu.exec_(self.w_view.viewport().mapToGlobal(position))
 
     @pyqtSlot()
-    def on_update_collateral(self):
+    def on_new_bls(self):
         mn = self.manager.mns.get(self.w_cur_alias)
-        removed = (self.w_cur_state == WalletMNsModel.STATE_REMOVED)
-        if not mn or not mn.is_owned or not mn.protx_hash or not removed:
+        if not mn or not mn.is_operated:
             return
-        start_id = Dip3MasternodeWizard.COLLATERAL_PAGE
+        start_id = Dip3MasternodeWizard.BLS_KEYS_PAGE
         wiz = Dip3MasternodeWizard(self, mn=mn, start_id=start_id)
         wiz.open()
 
@@ -814,6 +866,30 @@ class Dip3TabWidget(QTabWidget):
         wiz.open()
 
     @pyqtSlot()
+    def on_make_pro_up_rev_tx(self):
+        mn = self.manager.mns.get(self.w_cur_alias)
+        if not mn or not mn.protx_hash:
+            return
+        d = RevokeOperatiorDialog(self, mn)
+        if d.exec_() and d.reason is not None:
+            try:
+                rev_tx = self.manager.prepare_pro_up_rev_tx(mn.alias, d.reason)
+            except ProRegTxExc as e:
+                self.gui.show_error(e)
+                return
+            gui = self.gui
+            gui.do_clear()
+            mn_addrs = [mn.owner_addr, mn.voting_addr, mn.payout_address]
+            for addr in self.manager.wallet.get_unused_addresses():
+                if addr not in mn_addrs:
+                    gui.payto_e.setText(addr)
+                    break
+            tx_type = SPEC_PRO_UP_REV_TX
+            gui.extra_payload.set_extra_data(tx_type, rev_tx, mn.alias)
+            gui.show_extra_payload()
+            gui.tabs.setCurrentIndex(gui.tabs.indexOf(gui.send_tab))
+
+    @pyqtSlot()
     def on_make_pro_up_reg_tx(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or not mn.protx_hash:
@@ -839,25 +915,57 @@ class Dip3TabWidget(QTabWidget):
         self.w_model.reload_data()
 
     @pyqtSlot()
+    def on_clear_protx(self):
+        alias = self.w_cur_alias
+        mn = self.manager.mns.get(alias)
+        if not mn:
+            return
+        q = '\n'.join([_('Clearing of ProTxHash allow reuse of masternode.'),
+                       _('Do you want to clear ProTxHash for %s?') % alias])
+        if not self.gui.question(q):
+            return
+        if not mn.service.port:  # service cleared on Revoke operator
+            mn.service = ProTxService('', ProTxMN.default_port())
+        mn.protx_hash = ''
+        self.manager.update_mn(alias, mn)
+        self.w_model.reload_alias(alias)
+
+    @pyqtSlot()
     def on_reg_selection_changed(self):
         sel = self.reg_view.selectionModel()
         if sel.hasSelection():
             idx = sel.selectedRows()[0]
+            self.reg_cur_idx = idx
             self.reg_cur_protx = idx.data()
         else:
+            self.reg_cur_idx = None
             self.reg_cur_protx = ''
+
+    def restore_reg_selection(self):
+        cur_idx = self.reg_cur_idx
+        if not cur_idx:
+            return
+        row_count = self.reg_model.sourceModel().row_count
+        if row_count == 0 or row_count <= cur_idx.row():
+            self.reg_cur_idx = None
+            self.reg_cur_protx = ''
+        else:
+            self.reg_view.selectRow(cur_idx.row())
+
+    def hide_mn_buttons(self):
+        self.w_del_btn.hide()
+        self.w_clear_protx_btn.hide()
+        self.w_up_params_btn.hide()
+        self.w_protx_btn.hide()
+        self.w_up_reg_btn.hide()
+        self.w_up_rev_btn.hide()
+        self.w_new_bls_bnt.hide()
+        self.w_up_srv_btn.hide()
 
     @pyqtSlot()
     def on_wallet_model_reset(self):
         self.update_wallet_label()
-        self.w_file_btn.show()
-        self.w_add_btn.show()
-        self.w_up_params_btn.hide()
-        self.w_up_coll_btn.hide()
-        self.w_protx_btn.hide()
-        self.w_up_srv_btn.hide()
-        self.w_up_reg_btn.hide()
-        self.w_del_btn.hide()
+        self.hide_mn_buttons()
 
     @pyqtSlot()
     def on_wallet_selection_changed(self):
@@ -866,14 +974,7 @@ class Dip3TabWidget(QTabWidget):
             self.w_cur_alias = ''
             self.w_cur_state = ''
             self.w_cur_idx = None
-            self.w_add_btn.show()
-            self.w_file_btn.show()
-            self.w_protx_btn.hide()
-            self.w_del_btn.hide()
-            self.w_up_params_btn.hide()
-            self.w_up_coll_btn.hide()
-            self.w_up_srv_btn.hide()
-            self.w_up_reg_btn.hide()
+            self.hide_mn_buttons()
             return
 
         idx = sel.selectedRows()[0]
@@ -882,11 +983,8 @@ class Dip3TabWidget(QTabWidget):
         self.w_cur_idx = idx
 
         mn = self.manager.mns.get(self.w_cur_alias)
-        if mn is None:
+        if not mn or self.w_cur_state == WalletMNsModel.STATE_LOADING:
             return
-
-        self.w_add_btn.hide()
-        self.w_file_btn.hide()
 
         owned = mn.is_owned
         operated = mn.is_operated
@@ -895,30 +993,51 @@ class Dip3TabWidget(QTabWidget):
 
         self.w_del_btn.show()
 
+        if removed:
+            self.w_clear_protx_btn.show()
+
         if not protx_hash:
             self.w_up_params_btn.show()
         else:
             self.w_up_params_btn.hide()
 
-        if removed and owned:
-            self.w_up_coll_btn.show()
+        if operated and not owned and protx_hash:
+            self.w_new_bls_bnt.show()
         else:
-            self.w_up_coll_btn.hide()
+            self.w_new_bls_bnt.hide()
 
         if owned and not protx_hash:
             self.w_protx_btn.show()
         else:
             self.w_protx_btn.hide()
 
+        if operated and not owned and protx_hash and not removed:
+            self.w_up_rev_btn.show()
+        else:
+            self.w_up_rev_btn.hide()
+
         if operated and protx_hash and not removed:
             self.w_up_srv_btn.show()
         else:
             self.w_up_srv_btn.hide()
 
-        if owned and protx_hash and not removed:
+        if (owned and protx_hash and not removed
+                and self.wallet.is_mine(mn.owner_addr)):
             self.w_up_reg_btn.show()
         else:
             self.w_up_reg_btn.hide()
+
+    def restore_w_selection(self):
+        cur_idx = self.w_cur_idx
+        if not cur_idx:
+            return
+        row_count = self.w_model.sourceModel().row_count
+        if row_count == 0 or row_count <= cur_idx.row():
+            self.w_cur_alias = ''
+            self.w_cur_state = ''
+            self.w_cur_idx = None
+        else:
+            self.w_view.selectRow(cur_idx.row())
 
     @pyqtSlot(QModelIndex)
     def reg_mn_dbl_clicked(self, idx):
@@ -1087,3 +1206,31 @@ class Dip3MNInfoDialog(QDialog):
             mn_info_dialogs.remove(self)
         except ValueError:
             pass
+
+
+class RevokeOperatiorDialog(QDialog):
+
+    def __init__(self, parent, mn):
+        super(RevokeOperatiorDialog, self).__init__(parent)
+        self.setWindowTitle(_('Revoke operator'))
+        self.setWindowIcon(read_QIcon('electrum-dash.png'))
+        self.setMinimumWidth(400)
+        vbox = QVBoxLayout()
+        vbox.addWidget(QLabel(_('Revoke operator for: {}').format(mn.alias)))
+        vbox.addStretch(1)
+        self.setLayout(vbox)
+        vbox.addWidget(QLabel(_('Select revocation reason:')))
+        self.reason_cb = QComboBox()
+        vbox.addWidget(self.reason_cb)
+        self.ok_btn = OkButton(self)
+        self.ok_btn.setEnabled(False)
+        vbox.addLayout(Buttons(CancelButton(self), self.ok_btn))
+        for reason in RevokeReasons:
+            self.reason_cb.addItem(revoke_reason_str(reason), reason)
+        self.reason_cb.setCurrentIndex(-1)
+        self.reason_cb.currentIndexChanged.connect(self.on_reason_changed)
+        self.reason = None
+
+    def on_reason_changed(self, idx):
+        self.reason = self.reason_cb.itemData(idx)
+        self.ok_btn.setEnabled(True)

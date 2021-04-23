@@ -25,16 +25,15 @@
 
 import copy
 import threading
-from collections import defaultdict
 
-from . import util
+from . import constants, util
 from .bitcoin import address_to_script, is_b58_address, b58_address_to_hash160
+from .protx_list import MNList
 from .dash_tx import (TxOutPoint, ProTxService, DashProRegTx, DashProUpServTx,
                       DashProUpRegTx, DashProUpRevTx,
                       SPEC_PRO_REG_TX, SPEC_PRO_UP_SERV_TX,
-                      SPEC_PRO_UP_REG_TX, SPEC_PRO_UP_REV_TX)
-from .transaction import Transaction
-from .util import bfh
+                      SPEC_PRO_UP_REG_TX, SPEC_PRO_UP_REV_TX, str_ip)
+from .util import bfh, bh2u
 from .json_db import StoredDict
 from .logging import Logger
 
@@ -86,7 +85,7 @@ class ProTxMN:
         self.type = 0
         self.mode = 0
         self.collateral = TxOutPoint('', -1)
-        self.service = ProTxService('', 9999)
+        self.service = ProTxService('', self.default_port())
         self.owner_addr = ''
         self.pubkey_operator = ''
         self.voting_addr = ''
@@ -95,6 +94,10 @@ class ProTxMN:
         self.op_payout_address = ''
 
         self.protx_hash = ''
+
+    @classmethod
+    def default_port(cls):
+        return 19999 if constants.net.TESTNET else 9999
 
     def __repr__(self):
         f = ', '.join(['%s=%s' % (f, getattr(self, f)) for f in self.fields])
@@ -166,11 +169,13 @@ class ProTxManager(Logger):
 
     def on_network_start(self, network):
         self.network = network
-        util.register_callback(self.on_verified_tx, ['verified'])
+        self.update_mns_from_protx_list()
+        util.register_callback(self.on_mn_list_diff_updated,
+                               ['mn-list-diff-updated'])
 
     def clean_up(self):
         if self.network:
-            util.unregister_callback(self.on_verified_tx)
+            util.unregister_callback(self.on_mn_list_diff_updated)
 
     @with_manager_lock
     def load(self):
@@ -273,9 +278,6 @@ class ProTxManager(Logger):
             if not coll_hash_is_null:
                 raise ProRegTxExc('Collateral index is not set')
 
-        if mn.is_operated and not mn.service.ip:
-            raise ProRegTxExc('Service IP address is not set')
-
         if not mn.owner_addr:
             raise ProRegTxExc('Owner address is not set')
 
@@ -365,37 +367,6 @@ class ProTxManager(Logger):
                             b'\x00'*32, b'\x00'*65)
         return tx
 
-    def find_mn_by_proregtx(self, tx):
-        txid = tx.txid()
-        ep = tx.extra_payload
-        ep_collateral = ep.collateralOutpoint
-        if ep_collateral.hash_is_null:
-            ep_service = ProTxService(ep.ipAddress, ep.port)
-            for alias, mn in self.mns.items():
-                if mn.protx_hash:
-                    continue
-                keyid_owner = b58_address_to_hash160(mn.owner_addr)[1]
-                pubkey_operator = bfh(mn.pubkey_operator)
-                keyid_voting = b58_address_to_hash160(mn.voting_addr)[1]
-                script_payout = bfh(address_to_script(mn.payout_address))
-                if (mn.type == ep.type and mn.mode == ep.mode
-                        and mn.collateral.hash_is_null
-                        and str(mn.service) == str(ep_service)
-                        and keyid_owner == ep.KeyIdOwner
-                        and pubkey_operator == ep.PubKeyOperator
-                        and keyid_voting == ep.KeyIdVoting
-                        and mn.op_reward == ep.operatorReward
-                        and script_payout == ep.scriptPayout):
-                    index = ep_collateral.index
-                    collateral = TxOutPoint(bfh(txid)[::-1], index)
-                    return mn, txid, collateral
-        else:
-            for alias, mn in self.mns.items():
-                if mn.protx_hash:
-                    continue
-                if str(mn.collateral) == str(ep_collateral):
-                    return mn, txid, None
-
     def prepare_pro_up_rev_tx(self, alias, reason):
         '''Prepare and return ProUpRevTx from ProTxMN alias'''
         mn = self.mns.get('%s' % alias)
@@ -415,10 +386,95 @@ class ProTxManager(Logger):
                             b'\x00'*32, b'\x00'*96)
         return tx
 
-    def on_verified_tx(self, event, wallet, tx_hash, tx_mined_status):
-        tx = wallet.db.get_transaction(tx_hash)
-        if not tx:
+    def update_mn_from_sml_entry(self, mn, sml_entry):
+        changed_aliases = set()
+        if not mn.is_operated:
+            if (mn.service.ip != str_ip(sml_entry.ipAddress)
+                    or mn.service.port != sml_entry.port):
+                mn.service = ProTxService(str_ip(sml_entry.ipAddress),
+                                          sml_entry.port)
+                changed_aliases.add(mn.alias)
+        return changed_aliases
+
+    def update_mns_from_protx_list(self, *, diff_hashes=None):
+        no_protx_has_mns = []
+        mn_list = self.network.mn_list
+        changed_aliases = set()
+        for mn in self.mns.values():
+            protx_hash = mn.protx_hash
+            if not protx_hash:
+                no_protx_has_mns.append(mn)
+                continue
+            if diff_hashes and protx_hash not in diff_hashes:
+                continue
+            sml_entry = mn_list.protx_mns.get(protx_hash)
+            if sml_entry:
+                changed_aliases |= self.update_mn_from_sml_entry(mn, sml_entry)
+        if no_protx_has_mns:
+            for protx_hash, sml_entry in mn_list.protx_mns.items():
+                if diff_hashes and protx_hash not in diff_hashes:
+                    continue
+                pubkey_operator = bh2u(sml_entry.pubKeyOperator)
+                for mn in no_protx_has_mns:
+                    if mn.pubkey_operator != pubkey_operator:
+                        continue
+                    changed_aliases.add(mn.alias)
+                    mn.protx_hash = bh2u(sml_entry.proRegTxHash[::-1])
+                    self.update_mn_from_sml_entry(mn, sml_entry)
+        for alias in changed_aliases:
+            self.alias_updated = alias
+            self.notify('manager-alias-updated')
+        if changed_aliases:
+            self.save()
+
+    def on_mn_list_diff_updated(self, key, diff_update):
+        if diff_update['state'] == MNList.DIP3_DISABLED:
             return
-        conf = tx_mined_status.conf
-        if tx.tx_type in PROTX_TX_TYPES and tx.extra_payload and conf >= 1:
-            tx.extra_payload.after_confirmation(tx, self)
+        diff_hashes = diff_update['diff_hashes']
+        if diff_hashes:
+            self.update_mns_from_protx_list(diff_hashes=diff_hashes)
+
+    def find_owner_addr_use(self, addr, skip_alias=None):
+        for mn in self.mns.values():
+            alias = mn.alias
+            if skip_alias and skip_alias == alias:
+                continue
+            if addr == mn.owner_addr:
+                return alias
+
+    def find_service_use(self, service, skip_alias=None, ignore_used=False):
+        if not service.ip:
+            return
+        skipped_mn = None
+        for mn in self.mns.values():
+            alias = mn.alias
+            if skip_alias and skip_alias == alias:
+                skipped_mn = mn
+                continue
+            if str(service) == str(mn.service) and not ignore_used:
+                return alias
+        for sml_entry in self.network.mn_list.protx_mns.values():
+            if (service.ip == str_ip(sml_entry.ipAddress)
+                    and service.port == sml_entry.port):
+                protx_hash = bh2u(sml_entry.proRegTxHash[::-1])
+                if skipped_mn and skipped_mn.protx_hash == protx_hash:
+                    continue
+                return True
+
+    def find_bls_pub_use(self, bls_pub, skip_alias=None, ignore_used=False):
+        if not bls_pub:
+            return
+        skipped_mn = None
+        for mn in self.mns.values():
+            alias = mn.alias
+            if skip_alias and skip_alias == alias:
+                skipped_mn = mn
+                continue
+            if bls_pub == mn.pubkey_operator and not ignore_used:
+                return alias
+        for sml_entry in self.network.mn_list.protx_mns.values():
+            if bls_pub == bh2u(sml_entry.pubKeyOperator):
+                protx_hash = bh2u(sml_entry.proRegTxHash[::-1])
+                if skipped_mn and skipped_mn.protx_hash == protx_hash:
+                    continue
+                return True

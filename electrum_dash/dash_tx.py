@@ -31,8 +31,9 @@ from ipaddress import ip_address, IPv6Address
 from bls_py import bls
 
 from .util import bh2u, bfh
-from .bitcoin import script_to_address, hash160_to_p2pkh, COIN
+from .bitcoin import COIN
 from .crypto import sha256d
+from .i18n import _
 
 
 def tx_header_to_tx_type(tx_header_bytes):
@@ -260,9 +261,6 @@ class ProTxBase:
     def update_before_sign(self, *args, **kwargs):
         '''Update spec tx signature when password is accessible'''
 
-    def after_confirmation(self, *args, **kwargs):
-        '''Run after confirmation of spec tx'''
-
 
 class DashProRegTx(ProTxBase):
     '''Class representing DIP3 ProRegTx'''
@@ -304,8 +302,13 @@ class DashProRegTx(ProTxBase):
             f'{len(self.KeyIdVoting)} not 20'
         assert len(self.inputsHash) == 32, \
             f'{len(self.inputsHash)} not 32'
-        ipAddress = ip_address(self.ipAddress)
-        ipAddress = serialize_ip(ipAddress)
+        if self.ipAddress:
+            ipAddress = ip_address(self.ipAddress)
+            ipAddress = serialize_ip(ipAddress)
+            port = self.port
+        else:
+            ipAddress = b'\x00' * 16
+            port = 0
         payloadSig = to_varbytes(self.payloadSig) if full else b''
         return (
             struct.pack('<H', self.version) +           # version
@@ -313,7 +316,7 @@ class DashProRegTx(ProTxBase):
             struct.pack('<H', self.mode) +              # mode
             self.collateralOutpoint.serialize() +       # collateralOutpoint
             ipAddress +                                 # ipAddress
-            struct.pack('>H', self.port) +              # port
+            struct.pack('>H', port) +                   # port
             self.KeyIdOwner +                           # KeyIdOwner
             self.PubKeyOperator +                       # PubKeyOperator
             self.KeyIdVoting +                          # KeyIdVoting
@@ -395,18 +398,6 @@ class DashProRegTx(ProTxBase):
                                                   payload_sig_msg,
                                                   password)
 
-    def after_confirmation(self, tx, manager):
-        found = manager.find_mn_by_proregtx(tx)
-        if found:
-            mn, protx_hash, collateral = found
-            with manager.manager_lock:
-                mn.protx_hash = protx_hash
-                if collateral:
-                    mn.collateral = collateral
-                manager.save(with_lock=False)
-                manager.alias_updated = mn.alias
-            manager.notify('manager-alias-updated')
-
 
 class DashProUpServTx(ProTxBase):
     '''Class representing DIP3 ProUpServTx'''
@@ -486,21 +477,6 @@ class DashProUpServTx(ProTxBase):
         bls_sig = bls_privk.sign_prehashed(sha256d(self.serialize(full=False)))
         self.payloadSig = bls_sig.serialize()
 
-    def after_confirmation(self, tx, manager):
-        protx_hash = bh2u(self.proTxHash[::-1])
-        for alias, mn in manager.mns.items():
-            if mn.protx_hash == protx_hash:
-                with manager.manager_lock:
-                    mn.service = ProTxService(self.ipAddress, self.port)
-                    if self.scriptOperatorPayout:
-                        op_pay_script = bh2u(self.scriptOperatorPayout)
-                        mn.op_payout_address = script_to_address(op_pay_script)
-                    else:
-                        mn.op_payout_address = ''
-                    manager.save(with_lock=False)
-                    manager.alias_updated = mn.alias
-                manager.notify('manager-alias-updated')
-
 
 class DashProUpRegTx(ProTxBase):
     '''Class representing DIP3 ProUpRegTx'''
@@ -576,19 +552,26 @@ class DashProUpRegTx(ProTxBase):
         self.payloadSig = wallet.sign_digest(owner_addr, payload_hash,
                                              password)
 
-    def after_confirmation(self, tx, manager):
-        protx_hash = bh2u(self.proTxHash[::-1])
-        for alias, mn in manager.mns.items():
-            if mn.protx_hash == protx_hash:
-                with manager.manager_lock:
-                    pay_script = bh2u(self.scriptPayout)
-                    mn.payout_address = script_to_address(pay_script)
-                    mn.voting_addr = hash160_to_p2pkh(self.KeyIdVoting)
-                    mn.pubkey_operator = bh2u(self.PubKeyOperator)
-                    mn.mode = self.mode
-                    manager.save(with_lock=False)
-                    manager.alias_updated = mn.alias
-                manager.notify('manager-alias-updated')
+
+class RevokeReasons(IntEnum):
+    '''DashProUpRevTx revocation reasons'''
+    NOT_SPECIFIED = 0
+    TERMINATION_OF_SERVICE = 1
+    COMPROMISED_KEYS = 2
+    CHANGE_OF_KEYS = 3
+
+
+def revoke_reason_str(reason):
+    if reason == RevokeReasons.NOT_SPECIFIED:
+        return _('Not Specified')
+    elif reason == RevokeReasons.TERMINATION_OF_SERVICE:
+        return _('Termination of Service')
+    elif reason == RevokeReasons.COMPROMISED_KEYS:
+        return _('Compromised Keys')
+    elif reason == RevokeReasons.CHANGE_OF_KEYS:
+        return _('Change of Keys')
+    else:
+        return 'Unknown reason'
 
 
 class DashProUpRevTx(ProTxBase):
@@ -603,7 +586,7 @@ class DashProUpRevTx(ProTxBase):
                 'reason: %s\n'
                 % (self.version,
                    bh2u(self.proTxHash[::-1]),
-                   self.reason))
+                   revoke_reason_str(self.reason)))
 
     def serialize(self, full=True):
         assert len(self.proTxHash) == 32, \
