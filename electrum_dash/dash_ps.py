@@ -1825,11 +1825,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return signed_inputs
 
     def _sign_denominate_tx(self, tx):
+        w = self.wallet
         mine_txins_cnt = 0
         for txin in tx.inputs():
-            self.wallet.add_input_info(txin)
-            if txin.address is None:
+            if not w.is_mine(w.get_txin_address(txin)):
                 continue
+            w.add_input_info(txin)
             mine_txins_cnt += 1
         self.sign_transaction(tx, None, mine_txins_cnt)
         return tx

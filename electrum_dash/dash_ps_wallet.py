@@ -535,6 +535,7 @@ class KeyPairsMixin:
         addr = self.get_tmp_reserved_address()
         if not addr:
             return False
+        sequence = None
         if self.ps_keystore:
             sequence = self.get_address_index(addr)
         if sequence:
@@ -659,11 +660,34 @@ class KeyPairsMixin:
                 keypairs[pubkey] = sec
         return keypairs
 
+    def get_keypairs_for_denominate_tx(self, tx, password):
+        w = self.wallet
+        keypairs = {}
+        for txin in tx.inputs():
+            addr = txin.address
+            if addr is None:
+                continue
+            sequence = None
+            if self.ps_keystore:
+                sequence = self.get_address_index(addr)
+            if sequence:
+                pubkey = self.ps_keystore.derive_pubkey(*sequence).hex()
+                sec = self.ps_keystore.get_private_key(sequence, password)
+            else:
+                sequence = w.get_address_index(addr)
+                pubkey = w.keystore.derive_pubkey(*sequence).hex()
+                sec = w.keystore.get_private_key(sequence, password)
+            keypairs[pubkey] = sec
+        return keypairs
+
     def sign_transaction(self, tx, password, mine_txins_cnt=None):
-        if self._keypairs_cache:
+        if self._keypairs_cache or mine_txins_cnt:
             if mine_txins_cnt is None:
                 tx.add_info_from_wallet(self.wallet)
-            keypairs = self.get_keypairs()
+            if self._keypairs_cache:
+                keypairs = self.get_keypairs()
+            else:
+                keypairs = self.get_keypairs_for_denominate_tx(tx, password)
             signed_txins_cnt = tx.sign(keypairs)
             tx.finalize_psbt()
             keypairs.clear()
