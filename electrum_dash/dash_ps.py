@@ -138,6 +138,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         else:
             self.unsupported_msg = ''
 
+        self.ps_keystore_has_history = False
         if self.is_hw_ks:
             self.enable_ps_keystore()
 

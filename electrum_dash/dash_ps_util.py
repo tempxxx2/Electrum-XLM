@@ -1037,6 +1037,7 @@ class PSUtilsMixin:
                     util.trigger_callback('ps-state-changes', w, None, None)
                     self.logger.info('Clearing PrivateSend wallet data')
                     w.db.clear_ps_data()
+                    self.ps_keystore_has_history = False
                     self.state = PSStates.Ready
                     self.logger.info('All PrivateSend wallet data cleared')
             return msg
@@ -1208,6 +1209,12 @@ class PSUtilsMixin:
             for txid, tx, tx_type, islock, islock_sort in history:
                 if tx_type or txid in all_detected_txs:  # already found
                     continue
+                if not self.ps_keystore_has_history:
+                    ps_ks_addrs = self.wallet.psman.get_addresses()
+                    for o in tx.outputs():
+                        if o.address in ps_ks_addrs:
+                            self.ps_keystore_has_history = True
+                            break
                 tx_type = self._check_ps_tx_type(txid, tx, find_untracked=True)
                 if tx_type:
                     self._add_ps_data(txid, tx, tx_type)

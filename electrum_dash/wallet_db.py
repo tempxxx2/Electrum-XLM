@@ -992,8 +992,13 @@ class WalletDB(JsonDB):
         return list(self.transactions.keys())
 
     @locked
-    def get_history(self) -> Sequence[str]:
-        return list(self.history.keys()) + list(self.ps_ks_hist.keys())
+    def get_history(self, *, main_ks=True, ps_ks=True) -> Sequence[str]:
+        hist = []
+        if main_ks:
+            hist += list(self.history.keys())
+        if ps_ks:
+            hist += list(self.ps_ks_hist.keys())
+        return hist
 
     def is_addr_in_history(self, addr: str) -> bool:
         # does not mean history is non-empty!
