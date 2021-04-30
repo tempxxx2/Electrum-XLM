@@ -24,6 +24,7 @@
    Ctrl-C always quits
  * Android: use more modern application launcher/icon,
    implement freezing addresses
+ * enhance protx code, add protx info to docs (#237)
  * other minor fixes
 
 
