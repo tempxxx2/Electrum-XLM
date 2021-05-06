@@ -1,3 +1,33 @@
+# Release 4.1.2.0 (Unreleased yet)
+
+ * The wallet creation wizard no longer asks for a seed type.
+ * Paid invoices are removed from the lists. Invoice details can still
+   be accessed from the transaction history.
+ * Password unification (Android only): When the Android app is
+   started, the entered password is checked against all wallets in
+   the directory. If the test passes:
+    - all wallets are encrypted
+    - new wallets will use the unified password
+    - password updates are performed on all wallets
+   Whether the password is unified can be seen in the GUI: In the
+   'Settings' dialog, the description for the password setting is
+   'Change password for this wallet' if the password is not unified,
+   and becomes 'Change password' if password is unified.
+ * Android PIN reset: If the password is unified, the PIN can be reset
+   by providing the password.
+ * Android: fees have been removed from the settings dialog. Instead,
+   the fee slider is shown everytime an transaction will be performed.
+ * Block explorer: allow setting a custom URL in Qt GUI.
+ * fix Kivy bug with scrollbar
+ * fix localization issues
+ * Qt GUI: fix some crashes when exiting, make sure pressing
+   Ctrl-C always quits
+ * Android: use more modern application launcher/icon,
+   implement freezing addresses
+ * enhance protx code, add protx info to docs (#237)
+ * other minor fixes
+
+
 # Release 4.0.9.4
 
  * qt: fix do_export_history (#213)

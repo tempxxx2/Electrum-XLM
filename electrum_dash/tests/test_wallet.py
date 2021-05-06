@@ -5,8 +5,9 @@ import os
 import json
 from decimal import Decimal
 import time
-
 from io import StringIO
+import asyncio
+
 from electrum_dash.storage import WalletStorage
 from electrum_dash.wallet_db import FINAL_SEED_VERSION
 from electrum_dash.wallet import (Abstract_Wallet, Standard_Wallet, create_new_wallet,
@@ -16,6 +17,7 @@ from electrum_dash.util import TxMinedInfo, InvalidPassword
 from electrum_dash.bitcoin import COIN
 from electrum_dash.wallet_db import WalletDB
 from electrum_dash.simple_config import SimpleConfig
+from electrum_dash import util
 
 from . import ElectrumTestCase
 
@@ -233,6 +235,15 @@ class TestCreateRestoreWallet(WalletTestCase):
 
 class TestWalletPassword(WalletTestCase):
 
+    def setUp(self):
+        super().setUp()
+        self.asyncio_loop, self._stop_loop, self._loop_thread = util.create_and_start_event_loop()
+
+    def tearDown(self):
+        super().tearDown()
+        self.asyncio_loop.call_soon_threadsafe(self._stop_loop.set_result, 1)
+        self._loop_thread.join(timeout=1)
+
     def test_update_password_of_imported_wallet(self):
         wallet_str = '{"addr_history":{"Xcmu97gPDoJn6NELShGPRnaRDvbLWyN4ph":[],"Xetp3vzZd25tqMTHUs826okUcpnxAtG73J":[],"XpeViGqbFaUYUQYHeYx62tSBNfrctAu6er":[]},"addresses":{"change":[],"receiving":["Xcmu97gPDoJn6NELShGPRnaRDvbLWyN4ph","XpeViGqbFaUYUQYHeYx62tSBNfrctAu6er","Xetp3vzZd25tqMTHUs826okUcpnxAtG73J"]},"keystore":{"keypairs":{"0344b1588589958b0bcab03435061539e9bcf54677c104904044e4f8901f4ebdf5":"XGw9fNSxGB9e7c9G1wHwMdVsfgvLZGxrUVDEiuozYtEJbQQ8Djc9","0389508c13999d08ffae0f434a085f4185922d64765c0bff2f66e36ad7f745cc5f":"XHLdYVniEEZajZEreWmi6AwfqgzjJwKDAyZATAjVavZZ58gdjf38","04575f52b82f159fa649d2a4c353eb7435f30206f0a6cb9674fbd659f45082c37d559ffd19bea9c0d3b7dcc07a7b79f4cffb76026d5d4dff35341efe99056e22d2":"7ri5P9aS73pjQp62MU6MdhNz2cp6XamakdXtp91aRLEJUtZLd1M"},"type":"imported"},"pruned_txo":{},"seed_version":13,"stored_height":-1,"transactions":{},"tx_fees":{},"txi":{},"txo":{},"use_encryption":false,"verified_tx3":{},"wallet_type":"standard","winpos-qt":[100,100,840,405]}'
         db = WalletDB(wallet_str, manual_upgrades=False)
@@ -269,7 +280,7 @@ class TestWalletPassword(WalletTestCase):
         db = WalletDB(wallet_str, manual_upgrades=False)
         storage = WalletStorage(self.wallet_path)
         wallet = Wallet(db, storage, config=self.config)
-        wallet.stop()
+        asyncio.run_coroutine_threadsafe(wallet.stop(), self.asyncio_loop).result()
 
         storage = WalletStorage(self.wallet_path)
         # if storage.is_encrypted():

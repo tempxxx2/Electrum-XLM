@@ -37,7 +37,8 @@ try:
 
     TREZORLIB = True
 except Exception as e:
-    _logger.exception('error importing trezorlib')
+    if not (isinstance(e, ModuleNotFoundError) and e.name == 'trezorlib'):
+        _logger.exception('error importing trezor plugin deps')
     TREZORLIB = False
 
     class _EnumMissing:
@@ -318,22 +319,22 @@ class TrezorPlugin(HW_PluginBase):
         return xpub
 
     def get_trezor_input_script_type(self, electrum_txin_type: str):
-        if electrum_txin_type in ('p2pkh', ):
+        if electrum_txin_type in ('p2pkh',):
             return InputScriptType.SPENDADDRESS
-        if electrum_txin_type in ('p2sh', ):
+        if electrum_txin_type in ('p2sh',):
             return InputScriptType.SPENDMULTISIG
         raise ValueError('unexpected txin type: {}'.format(electrum_txin_type))
 
     def get_trezor_output_script_type(self, electrum_txin_type: str):
-        if electrum_txin_type in ('p2pkh', ):
+        if electrum_txin_type in ('p2pkh',):
             return OutputScriptType.PAYTOADDRESS
-        if electrum_txin_type in ('p2sh', ):
+        if electrum_txin_type in ('p2sh',):
             return OutputScriptType.PAYTOMULTISIG
         raise ValueError('unexpected txin type: {}'.format(electrum_txin_type))
 
     @runs_in_hwd_thread
     def sign_transaction(self, keystore, tx: PartialTransaction, prev_tx):
-        prev_tx = { bfh(txhash): self.electrum_tx_to_txtype(tx) for txhash, tx in prev_tx.items() }
+        prev_tx = {bfh(txhash): self.electrum_tx_to_txtype(tx) for txhash, tx in prev_tx.items()}
         client = self.get_client(keystore)
         inputs = self.tx_inputs(tx, for_sig=True, keystore=keystore)
         outputs = self.tx_outputs(tx, keystore=keystore)

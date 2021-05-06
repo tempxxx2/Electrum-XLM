@@ -380,8 +380,10 @@ class BaseWizard(Logger):
                 # will need to re-pair
                 devmgr.unpair_id(device_info.device.id_)
             raise ChooseHwDeviceAgain()
-        except (UserCancelled, GoBack):
+        except GoBack:
             raise ChooseHwDeviceAgain()
+        except (UserCancelled, ReRunDialog):
+            raise
         except UserFacingException as e:
             self.show_error(str(e))
             raise ChooseHwDeviceAgain()
@@ -755,19 +757,9 @@ class BaseWizard(Logger):
         hw_info = f'{k.hw_type} ({k.label})' if k.label else f'{k.hw_type}'
         self.show_xpub_dialog(xpub=k.xpub, run_next=run_next, hw_info=hw_info)
 
-    def choose_seed_type(self, message=None, choices=None):
-        title = _('Choose Seed type')
-        if message is None:
-            message = ' '.join([
-                _("The type of addresses used by your wallet will depend on your seed."),
-            ])
-        if choices is None:
-            choices = [
-                ('create_standard_seed', _('Standard')),
-            ]
-        self.choice_dialog(title=title, message=message, choices=choices, run_next=self.run)
-
-    def create_standard_seed(self): self.create_seed('standard')
+    def choose_seed_type(self):
+        seed_type = 'standard'
+        self.create_seed(seed_type)
 
     def create_seed(self, seed_type):
         from . import mnemonic

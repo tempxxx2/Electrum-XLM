@@ -212,10 +212,12 @@ class KeyPairsMixin:
             if cache_type not in self._keypairs_cache:
                 return True, prev_kp_state
 
+        with w._freeze_lock:
+            frozen_addresses = w._frozen_addresses.copy()
         with w.lock:
             # check spendable regular coins keys
             utxos = w.get_utxos(None,
-                                excluded_addresses=w.frozen_addresses,
+                                excluded_addresses=frozen_addresses,
                                 mature_only=True)
             utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
             utxos = self.filter_out_hw_ks_coins(utxos)
@@ -333,8 +335,10 @@ class KeyPairsMixin:
         '''Cache spendable regular coins keys'''
         w = self.wallet
         cached = 0
+        with w._freeze_lock:
+            frozen_addresses = w._frozen_addresses.copy()
         utxos = w.get_utxos(None,
-                            excluded_addresses=w.frozen_addresses,
+                            excluded_addresses=frozen_addresses,
                             mature_only=True)
         utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
         utxos = self.filter_out_hw_ks_coins(utxos)
@@ -531,6 +535,7 @@ class KeyPairsMixin:
         addr = self.get_tmp_reserved_address()
         if not addr:
             return False
+        sequence = None
         if self.ps_keystore:
             sequence = self.get_address_index(addr)
         if sequence:
@@ -655,11 +660,34 @@ class KeyPairsMixin:
                 keypairs[pubkey] = sec
         return keypairs
 
+    def get_keypairs_for_denominate_tx(self, tx, password):
+        w = self.wallet
+        keypairs = {}
+        for txin in tx.inputs():
+            addr = txin.address
+            if addr is None:
+                continue
+            sequence = None
+            if self.ps_keystore:
+                sequence = self.get_address_index(addr)
+            if sequence:
+                pubkey = self.ps_keystore.derive_pubkey(*sequence).hex()
+                sec = self.ps_keystore.get_private_key(sequence, password)
+            else:
+                sequence = w.get_address_index(addr)
+                pubkey = w.keystore.derive_pubkey(*sequence).hex()
+                sec = w.keystore.get_private_key(sequence, password)
+            keypairs[pubkey] = sec
+        return keypairs
+
     def sign_transaction(self, tx, password, mine_txins_cnt=None):
-        if self._keypairs_cache:
+        if self._keypairs_cache or mine_txins_cnt:
             if mine_txins_cnt is None:
                 tx.add_info_from_wallet(self.wallet)
-            keypairs = self.get_keypairs()
+            if self._keypairs_cache:
+                keypairs = self.get_keypairs()
+            else:
+                keypairs = self.get_keypairs_for_denominate_tx(tx, password)
             signed_txins_cnt = tx.sign(keypairs)
             tx.finalize_psbt()
             keypairs.clear()
@@ -1048,9 +1076,11 @@ class PSDataMixin:
 
     def _get_next_coins_for_mixing(self, for_denoms=True):
         w = self.wallet
+        with w._freeze_lock:
+            frozen_addresses = w._frozen_addresses.copy()
         coins = w.get_utxos(None,
-                            excluded_addresses=w.frozen_addresses,
-                            mature_only=True, confirmed_only=True,
+                            excluded_addresses=frozen_addresses,
+                            mature_only=True, confirmed_funding_only=True,
                             consider_islocks=True, include_ps=True)
         coins = [c for c in coins
                  if c.ps_rounds in [None, PSCoinRounds.MIX_ORIGIN]]
@@ -2460,7 +2490,9 @@ class PSKeystoreMixin:
             w = self.wallet
             fee_per_kb = self.config.fee_per_kb()
             # calc amount need to be sent to ps_keystore
-            coins = w.get_utxos(None, excluded_addresses=w.frozen_addresses,
+            with w._freeze_lock:
+                frozen_addresses = w._frozen_addresses.copy()
+            coins = w.get_utxos(None, excluded_addresses=frozen_addresses,
                                 mature_only=True)
             coins = [c for c in coins if not w.is_frozen_coin(c)]
             coins_val = sum([c.value_sats() for c in coins])

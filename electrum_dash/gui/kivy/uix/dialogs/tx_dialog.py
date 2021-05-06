@@ -1,6 +1,7 @@
 import copy
 from datetime import datetime
 from typing import NamedTuple, Callable, TYPE_CHECKING
+from functools import partial
 
 from kivy.app import App
 from kivy.factory import Factory
@@ -18,6 +19,7 @@ from electrum_dash.dash_tx import SPEC_TX_NAMES
 from electrum_dash.util import InvalidPassword, bfh
 from electrum_dash.address_synchronizer import TX_HEIGHT_LOCAL
 from electrum_dash.transaction import Transaction, PartialTransaction
+from electrum_dash.network import NetworkException
 from ...util import address_colors
 
 if TYPE_CHECKING:
@@ -138,6 +140,7 @@ class TxDialog(Factory.Popup):
         # As a result, e.g. we might learn an imported address tx is segwit,
         # or that a beyond-gap-limit address is is_mine.
         # note: this might fetch prev txs over the network.
+        # note: this is a no-op for complete txs
         tx.add_info_from_wallet(self.wallet)
 
     def on_open(self):
@@ -239,6 +242,19 @@ class TxDialog(Factory.Popup):
         action_button = self.ids.action_button
         self._action_button_fn(action_button)
 
+    def _add_info_to_tx_from_wallet_and_network(self, tx: PartialTransaction) -> bool:
+        """Returns whether successful."""
+        # note side-effect: tx is being mutated
+        assert isinstance(tx, PartialTransaction)
+        try:
+            # note: this might download input utxos over network
+            # FIXME network code in gui thread...
+            tx.add_info_from_wallet(self.wallet, ignore_network_issues=False)
+        except NetworkException as e:
+            self.app.show_error(repr(e))
+            return False
+        return True
+
     def do_sign(self):
         if self.dropdown:
             self.dropdown.dismiss()
@@ -269,17 +285,15 @@ class TxDialog(Factory.Popup):
         if self.dropdown:
             self.dropdown.dismiss()
         txid = self.tx.txid()
-        to_delete = {txid}
-        to_delete |= self.wallet.get_depending_transactions(txid)
+        num_child_txs = len(self.wallet.get_depending_transactions(txid))
         question = _("Are you sure you want to remove this transaction?")
-        if len(to_delete) > 1:
+        if num_child_txs > 0:
             question = (_("Are you sure you want to remove this transaction and {} child transactions?")
-                        .format(len(to_delete) - 1))
+                        .format(num_child_txs))
 
         def on_prompt(b):
             if b:
-                for tx in to_delete:
-                    self.wallet.remove_transaction(tx)
+                self.wallet.remove_transaction(txid)
                 self.wallet.save_db()
                 self.app._trigger_update_wallet()  # FIXME private...
                 self.dismiss()

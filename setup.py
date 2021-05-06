@@ -79,19 +79,10 @@ setup(
     package_dir={
         'electrum_dash': 'electrum_dash'
     },
-    package_data={
-        '': ['*.txt', '*.json', '*.ttf', '*.otf', '*.csv'],
-        'electrum_dash': [
-            'checkpoints*.gz',
-            'wordlist/*.txt',
-            'locale/*/LC_MESSAGES/electrum.mo',
-        ],
-        'electrum_dash.gui': [
-            'icons/*.*',
-            'icons/radio/*.*',
-            'icons/checkbox/*.*',
-        ],
-    },
+    # Note: MANIFEST.in lists what gets included in the tar.gz, and the
+    # package_data kwarg lists what gets put in site-packages when pip installing the tar.gz.
+    # By specifying include_package_data=True, MANIFEST.in becomes responsible for both.
+    include_package_data=True,
     scripts=['electrum_dash/electrum-dash'],
     data_files=data_files,
     description="Lightweight Dashpay Wallet",

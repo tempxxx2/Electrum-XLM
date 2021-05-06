@@ -17,8 +17,11 @@ graft contrib/udev
 
 exclude electrum_dash/*.so
 exclude electrum_dash/*.so.0
+exclude electrum_dash/*.dll
+exclude electrum_dash/*.dylib
 
 global-exclude __pycache__
 global-exclude *.py[co~]
 global-exclude *.py.orig
 global-exclude *.py.rej
+global-exclude .git

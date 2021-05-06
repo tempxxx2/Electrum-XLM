@@ -9,6 +9,7 @@ from electrum_dash.gui.kivy.i18n import _
 from electrum_dash.plugin import run_hook
 from electrum_dash import coinchooser
 
+from electrum_dash.gui import messages
 from electrum_dash.gui.kivy import KIVY_GUI_PATH
 
 from .choice_dialog import ChoiceDialog
@@ -16,6 +17,7 @@ from .choice_dialog import ChoiceDialog
 Builder.load_string('''
 #:import partial functools.partial
 #:import _ electrum_dash.gui.kivy.i18n._
+#:import messages electrum_dash.gui.messages
 
 <SettingsDialog@Popup>
     id: settings
@@ -77,7 +79,7 @@ Builder.load_string('''
                 CardSeparator
                 SettingsItem:
                     title: _('Password')
-                    description: _("Change wallet password.")
+                    description: _('Change your password') if app._use_single_password else _("Change your password for this wallet.")
                     action: root.change_password
 
                 # disabled: there is currently only one coin selection policy
@@ -122,7 +124,7 @@ class SettingsDialog(Factory.Popup):
         self.app.change_password(self.update)
 
     def change_pin_code(self, label, dt):
-        self.app.change_pin_code(self.update)
+        self.app.pin_code_dialog(self.update)
 
     def language_dialog(self, item, dt):
         if self._language_dialog is None:
@@ -202,9 +204,6 @@ class SettingsDialog(Factory.Popup):
         fullname = dd.get('fullname')
         d = CheckBoxDialog(fullname, descr, status, callback)
         d.open()
-
-    def fee_status(self):
-        return self.config.get_fee_status()
 
     def boolean_dialog(self, name, title, message, dt):
         from .checkbox_dialog import CheckBoxDialog

@@ -600,7 +600,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         for outpoint, ps_collateral in w.db.get_ps_collaterals().items():
             addr, value = ps_collateral
             utxos = w.get_utxos([addr], min_rounds=PSCoinRounds.COLLATERAL,
-                                confirmed_only=True, consider_islocks=True)
+                                confirmed_funding_only=True,
+                                consider_islocks=True)
             utxos = self.filter_out_hw_ks_coins(utxos)
             inputs = []
             for utxo in utxos:
@@ -950,7 +951,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         oaddr = self.reserve_addresses(1, data=uuid)[0]
         if not coins:
             # try select minimal denom utxo with mimial rounds
-            coins = w.get_utxos(None, mature_only=True, confirmed_only=True,
+            coins = w.get_utxos(None, mature_only=True,
+                                confirmed_funding_only=True,
                                 consider_islocks=True, min_rounds=0)
             coins = [c for c in coins if c.value_sats() == MIN_DENOM_VAL]
             coins = self.filter_out_hw_ks_coins(coins)
@@ -1823,11 +1825,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return signed_inputs
 
     def _sign_denominate_tx(self, tx):
+        w = self.wallet
         mine_txins_cnt = 0
         for txin in tx.inputs():
-            self.wallet.add_input_info(txin)
-            if txin.address is None:
+            if not w.is_mine(w.get_txin_address(txin)):
                 continue
+            w.add_input_info(txin)
             mine_txins_cnt += 1
         self.sign_transaction(tx, None, mine_txins_cnt)
         return tx

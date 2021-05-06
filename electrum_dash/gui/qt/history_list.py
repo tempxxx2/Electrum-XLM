@@ -42,6 +42,7 @@ from PyQt5.QtWidgets import (QMenu, QHeaderView, QLabel, QMessageBox,
                              QPushButton, QComboBox, QVBoxLayout, QCalendarWidget,
                              QGridLayout)
 
+from electrum_dash.gui import messages
 from electrum_dash.address_synchronizer import TX_HEIGHT_LOCAL
 from electrum_dash.dash_tx import PSTxTypes, SPEC_TX_NAMES
 from electrum_dash.i18n import _
@@ -52,7 +53,7 @@ from electrum_dash.logging import get_logger, Logger
 
 from .util import (read_QIcon, MONOSPACE_FONT, Buttons, CancelButton, OkButton,
                    filename_field, MyTreeView, AcceptFileDragDrop, WindowModalDialog,
-                   CloseButton, webopen, GetDataThread)
+                   CloseButton, webopen, WWLabel, GetDataThread)
 
 if TYPE_CHECKING:
     from electrum_dash.wallet import Abstract_Wallet
@@ -72,7 +73,7 @@ except:
 TX_ICONS = [
     "unconfirmed.png",
     "warning.png",
-    "unconfirmed.png",
+    "offline_tx.png",
     "offline_tx.png",
     "clock1.png",
     "clock2.png",
@@ -626,12 +627,12 @@ class HistoryModel(QAbstractItemModel, Logger):
         set_visible(HistoryColumns.TX_GROUP, group_ps)
 
     def update_fiat(self, idx, tx_item):
-        key = tx_item['txid']
+        txid = tx_item['txid']
         fee = tx_item.get('fee')
         value = tx_item['value'].value
-        fiat_fields = \
-            self.parent.wallet.get_tx_item_fiat(key, value, self.parent.fx,
-                                                fee.value if fee else None)
+        fiat_fields = self.parent.wallet.get_tx_item_fiat(
+            tx_hash=txid, amount_sat=value, fx=self.parent.fx,
+            tx_fee=fee.value if fee else None)
         tx_item.update(fiat_fields)
         self.dataChanged.emit(idx, idx, [Qt.DisplayRole, Qt.ForegroundRole])
 
@@ -716,8 +717,8 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         self.setModel(model)
         AcceptFileDragDrop.__init__(self, ".txn")
         self.setSortingEnabled(True)
-        self.start_timestamp = None
-        self.end_timestamp = None
+        self.start_date = None
+        self.end_date = None
         self.years = []
         self.create_toolbar_buttons()
         self.wallet = self.parent.wallet  # type: Abstract_Wallet
@@ -739,8 +740,8 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         self.start_button.setEnabled(x)
         self.end_button.setEnabled(x)
         if s == _('All'):
-            self.start_timestamp = None
-            self.end_timestamp = None
+            self.start_date = None
+            self.end_date = None
             self.start_button.setText("-")
             self.end_button.setText("-")
         else:
@@ -748,10 +749,10 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                 year = int(s)
             except:
                 return
-            self.start_timestamp = start_date = datetime.datetime(year, 1, 1)
-            self.end_timestamp = end_date = datetime.datetime(year+1, 1, 1)
-            self.start_button.setText(_('From') + ' ' + self.format_date(start_date))
-            self.end_button.setText(_('To') + ' ' + self.format_date(end_date))
+            self.start_date = datetime.datetime(year, 1, 1)
+            self.end_date = datetime.datetime(year+1, 1, 1)
+            self.start_button.setText(_('From') + ' ' + self.format_date(self.start_date))
+            self.end_button.setText(_('To') + ' ' + self.format_date(self.end_date))
         self.hide_rows()
 
     def create_toolbar_buttons(self):
@@ -769,19 +770,19 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         return self.period_combo, self.start_button, self.end_button
 
     def on_hide_toolbar(self):
-        self.start_timestamp = None
-        self.end_timestamp = None
+        self.start_date = None
+        self.end_date = None
         self.hide_rows()
 
     def save_toolbar_state(self, state, config):
         config.set_key('show_toolbar_history', state)
 
     def select_start_date(self):
-        self.start_timestamp = self.select_date(self.start_button)
+        self.start_date = self.select_date(self.start_button)
         self.hide_rows()
 
     def select_end_date(self):
-        self.end_timestamp = self.select_date(self.end_button)
+        self.end_date = self.select_date(self.end_button)
         self.hide_rows()
 
     def select_date(self, button):
@@ -805,40 +806,75 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
             return datetime.datetime(date.year, date.month, date.day)
 
     def show_summary(self):
-        h = self.wallet.get_detailed_history()['summary']
-        if not h:
+        fx = self.parent.fx
+        show_fiat = fx and fx.is_enabled() and fx.get_history_config()
+        if not show_fiat:
+            self.parent.show_message(_("Enable fiat exchange rate with history."))
+            return
+        h = self.parent.wallet.get_detailed_history(
+            from_timestamp = time.mktime(self.start_date.timetuple()) if self.start_date else None,
+            to_timestamp = time.mktime(self.end_date.timetuple()) if self.end_date else None,
+            fx=fx)
+        summary = h['summary']
+        if not summary:
             self.parent.show_message(_("Nothing to summarize."))
             return
-        start_date = h.get('start_date')
-        end_date = h.get('end_date')
+        start = summary['begin']
+        end = summary['end']
+        flow = summary['flow']
+        start_date = start.get('date')
+        end_date = end.get('date')
         format_amount = lambda x: self.parent.format_amount(x.value) + ' ' + self.parent.base_unit()
+        format_fiat = lambda x: str(x) + ' ' + self.parent.fx.ccy
+
         d = WindowModalDialog(self, _("Summary"))
         d.setMinimumSize(600, 150)
         vbox = QVBoxLayout()
+        msg = messages.to_rtf(messages.MSG_CAPITAL_GAINS)
+        vbox.addWidget(WWLabel(msg))
         grid = QGridLayout()
-        grid.addWidget(QLabel(_("Start")), 0, 0)
-        grid.addWidget(QLabel(self.format_date(start_date)), 0, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_start_value')) + '/DASH'), 0, 2)
-        grid.addWidget(QLabel(_("Initial balance")), 1, 0)
-        grid.addWidget(QLabel(format_amount(h['start_balance'])), 1, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_start_balance'))), 1, 2)
-        grid.addWidget(QLabel(_("End")), 2, 0)
-        grid.addWidget(QLabel(self.format_date(end_date)), 2, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_end_value')) + '/DASH'), 2, 2)
-        grid.addWidget(QLabel(_("Final balance")), 4, 0)
-        grid.addWidget(QLabel(format_amount(h['end_balance'])), 4, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_end_balance'))), 4, 2)
-        grid.addWidget(QLabel(_("Income")), 5, 0)
-        grid.addWidget(QLabel(format_amount(h.get('incoming'))), 5, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_incoming'))), 5, 2)
-        grid.addWidget(QLabel(_("Expenditures")), 6, 0)
-        grid.addWidget(QLabel(format_amount(h.get('outgoing'))), 6, 1)
-        grid.addWidget(QLabel(str(h.get('fiat_outgoing'))), 6, 2)
-        grid.addWidget(QLabel(_("Capital gains")), 7, 0)
-        grid.addWidget(QLabel(str(h.get('fiat_capital_gains'))), 7, 2)
-        grid.addWidget(QLabel(_("Unrealized gains")), 8, 0)
-        grid.addWidget(QLabel(str(h.get('fiat_unrealized_gains', ''))), 8, 2)
+        grid.addWidget(QLabel(_("Begin")), 0, 1)
+        grid.addWidget(QLabel(_("End")), 0, 2)
+        #
+        grid.addWidget(QLabel(_("Date")), 1, 0)
+        grid.addWidget(QLabel(self.format_date(start_date)), 1, 1)
+        grid.addWidget(QLabel(self.format_date(end_date)), 1, 2)
+        #
+        grid.addWidget(QLabel(_("Dash balance")), 2, 0)
+        grid.addWidget(QLabel(format_amount(start['BTC_balance'])), 2, 1)
+        grid.addWidget(QLabel(format_amount(end['BTC_balance'])), 2, 2)
+        #
+        grid.addWidget(QLabel(_("Dash Fiat price")), 3, 0)
+        grid.addWidget(QLabel(format_fiat(start.get('BTC_fiat_price'))), 3, 1)
+        grid.addWidget(QLabel(format_fiat(end.get('BTC_fiat_price'))), 3, 2)
+        #
+        grid.addWidget(QLabel(_("Fiat balance")), 4, 0)
+        grid.addWidget(QLabel(format_fiat(start.get('fiat_balance'))), 4, 1)
+        grid.addWidget(QLabel(format_fiat(end.get('fiat_balance'))), 4, 2)
+        #
+        grid.addWidget(QLabel(_("Acquisition price")), 5, 0)
+        grid.addWidget(QLabel(format_fiat(start.get('acquisition_price', ''))), 5, 1)
+        grid.addWidget(QLabel(format_fiat(end.get('acquisition_price', ''))), 5, 2)
+        #
+        grid.addWidget(QLabel(_("Unrealized capital gains")), 6, 0)
+        grid.addWidget(QLabel(format_fiat(start.get('unrealized_gains', ''))), 6, 1)
+        grid.addWidget(QLabel(format_fiat(end.get('unrealized_gains', ''))), 6, 2)
+        #
+        grid2 = QGridLayout()
+        grid2.addWidget(QLabel(_("Dash incoming")), 0, 0)
+        grid2.addWidget(QLabel(format_amount(flow['BTC_incoming'])), 0, 1)
+        grid2.addWidget(QLabel(_("Fiat incoming")), 1, 0)
+        grid2.addWidget(QLabel(format_fiat(flow.get('fiat_incoming'))), 1, 1)
+        grid2.addWidget(QLabel(_("Dash outgoing")), 2, 0)
+        grid2.addWidget(QLabel(format_amount(flow['BTC_outgoing'])), 2, 1)
+        grid2.addWidget(QLabel(_("Fiat outgoing")), 3, 0)
+        grid2.addWidget(QLabel(format_fiat(flow.get('fiat_outgoing'))), 3, 1)
+        #
+        grid2.addWidget(QLabel(_("Realized capital gains")), 4, 0)
+        grid2.addWidget(QLabel(format_fiat(flow.get('realized_capital_gains'))), 4, 1)
         vbox.addLayout(grid)
+        vbox.addWidget(QLabel(_('Cash flow')))
+        vbox.addLayout(grid2)
         vbox.addLayout(Buttons(CloseButton(d)))
         d.setLayout(vbox)
         d.exec_()
@@ -1017,17 +1053,15 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                 self.hm.dataChanged.emit(idx, idx_last)
 
     def remove_local_tx(self, tx_hash):
-        to_delete = {tx_hash}
-        to_delete |= self.wallet.get_depending_transactions(tx_hash)
+        num_child_txs = len(self.wallet.get_depending_transactions(tx_hash))
         question = _("Are you sure you want to remove this transaction?")
-        if len(to_delete) > 1:
+        if num_child_txs > 0:
             question = (_("Are you sure you want to remove this transaction and {} child transactions?")
-                        .format(len(to_delete) - 1))
+                        .format(num_child_txs))
         if not self.parent.question(msg=question,
                                     title=_("Please confirm")):
             return
-        for tx in to_delete:
-            self.wallet.remove_transaction(tx)
+        self.wallet.remove_transaction(tx_hash)
         self.wallet.save_db()
         # need to update at least: history_list, utxo_list, address_list
         self.parent.need_update.set()
@@ -1140,10 +1174,11 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
             return True
 
     def should_hide(self, tx_item):
-        if self.start_timestamp and self.end_timestamp:
+        if self.start_date and self.end_date:
             date = tx_item['date']
             if date:
-                if not self.start_timestamp <= date <= self.end_timestamp:
+                in_interval = self.start_date <= date <= self.end_date
+                if not in_interval:
                     return True
             return False
 

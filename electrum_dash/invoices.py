@@ -9,7 +9,7 @@ from .json_db import StoredObject
 from .i18n import _
 from .util import age
 from . import constants
-from .bitcoin import COIN
+from .bitcoin import COIN, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC
 from .transaction import PartialTxOutput
 
 if TYPE_CHECKING:
@@ -28,6 +28,7 @@ PR_PAID     = 3     # send and propagated
 PR_INFLIGHT = 4     # unconfirmed
 PR_FAILED   = 5
 PR_ROUTING  = 6
+PR_UNCONFIRMED = 7
 
 pr_color = {
     PR_UNPAID:   (.7, .7, .7, 1),
@@ -37,6 +38,7 @@ pr_color = {
     PR_INFLIGHT: (.9, .6, .3, 1),
     PR_FAILED:   (.9, .2, .2, 1),
     PR_ROUTING: (.9, .6, .3, 1),
+    PR_UNCONFIRMED: (.9, .6, .3, 1),
 }
 
 pr_tooltips = {
@@ -47,6 +49,7 @@ pr_tooltips = {
     PR_INFLIGHT:_('In progress'),
     PR_FAILED:_('Failed'),
     PR_ROUTING: _('Computing route...'),
+    PR_UNCONFIRMED: _('Unconfirmed'),
 }
 
 PR_DEFAULT_EXPIRATION_WHEN_CREATING = 24*60*60  # 1 day
@@ -116,6 +119,17 @@ class OnchainInvoice(Invoice):
 
     def get_amount_sat(self) -> Union[int, str]:
         return self.amount_sat or 0
+
+    @amount_sat.validator
+    def _validate_amount(self, attribute, value):
+        if isinstance(value, int):
+            if not (0 <= value <= TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN):
+                raise ValueError(f"amount is out-of-bounds: {value!r} sat")
+        elif isinstance(value, str):
+            if value != "!":
+                raise ValueError(f"unexpected amount: {value!r}")
+        else:
+            raise ValueError(f"unexpected amount: {value!r}")
 
     @classmethod
     def from_bip70_payreq(cls, pr: 'PaymentRequest', height:int) -> 'OnchainInvoice':

@@ -34,7 +34,7 @@ import certifi
 
 from electrum_dash import util, keystore, ecc, crypto
 from electrum_dash import transaction
-from electrum_dash.transaction import Transaction, PartialTransaction, tx_from_any
+from electrum_dash.transaction import Transaction, PartialTransaction, tx_from_any, SerializationError
 from electrum_dash.bip32 import BIP32Node
 from electrum_dash.plugin import BasePlugin, hook
 from electrum_dash.i18n import _
@@ -71,7 +71,7 @@ class Listener(util.DaemonThread):
         self.received.remove(keyhash)
 
     def run(self):
-        while self.running:
+        while self.is_running():
             if not self.keyhashes:
                 time.sleep(2)
                 continue
@@ -248,5 +248,9 @@ class Plugin(BasePlugin):
             return
 
         self.listener.clear(keyhash)
-        tx = tx_from_any(message)
+        try:
+            tx = tx_from_any(message)
+        except SerializationError as e:
+            window.show_error(_("Dash Electrum was unable to deserialize the transaction:") + "\n" + str(e))
+            return
         show_transaction(tx, parent=window, prompt_if_unsaved=True)

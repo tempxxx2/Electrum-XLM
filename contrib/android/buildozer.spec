@@ -38,14 +38,13 @@ version.filename = %(source.dir)s/electrum_dash/version.py
 requirements =
     six,
     setuptools,
-    # note: re python3.8, see #6147
-    hostpython3==3.7.9,
-    python3==3.7.9,
+    hostpython3==3.8.8,
+    python3==3.8.8,
     android,
     openssl,
     plyer,
-    # kivy 1.11.1
-    kivy==39c17457bae91baf8fe710dc989791e45879f136,
+    # kivy master 2020-12-10 (2.0.0 plus a few bugfixes)
+    kivy==2debbc3b1484b14824112986cb03b1072a60fbfc,
     libffi,
     libsecp256k1,
     cryptography,
@@ -57,7 +56,9 @@ requirements =
 presplash.filename = %(source.dir)s/electrum_dash/gui/icons/electrum_presplash.png
 
 # (str) Icon of the application
-icon.filename = %(source.dir)s/electrum_dash/gui/icons/electrum-dash.png
+icon.filename = %(source.dir)s/electrum_dash/gui/icons/android_icon_legacy.png
+icon.adaptive_foreground.filename = %(source.dir)s/electrum_dash/gui/icons/android_icon_foreground.png
+icon.adaptive_background.filename = %(source.dir)s/electrum_dash/gui/icons/android_icon_background.png
 
 # (str) Supported orientation (one of landscape, portrait or all)
 orientation = portrait

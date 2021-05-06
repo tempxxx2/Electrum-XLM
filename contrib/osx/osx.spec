@@ -13,7 +13,6 @@ for i, x in enumerate(sys.argv):
 else:
     raise Exception('no name')
 
-PY36BINDIR = os.environ.get('PY36BINDIR')
 TRAVIS_TAG = os.environ.get('TRAVIS_TAG')
 DASH_ELECTRUM_VERSION = os.environ.get('DASH_ELECTRUM_VERSION')
 ICONS_FILE = 'electrum_dash/gui/icons/electrum-dash.icns'

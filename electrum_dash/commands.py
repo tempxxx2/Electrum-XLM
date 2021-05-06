@@ -23,7 +23,6 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import os
 import sys
 import datetime
 import copy
@@ -205,7 +204,8 @@ class Commands:
     @command('n')
     async def stop(self):
         """Stop daemon"""
-        self.daemon.stop()
+        # TODO it would be nice if this could stop the GUI too
+        await self.daemon.stop()
         return "Daemon stopped"
 
     @command('n')
@@ -358,7 +358,7 @@ class Commands:
             return {'error': 'Transactions with extra payload can not'
                              ' be created from serialize command'}
         inputs = []  # type: List[PartialTxInput]
-        locktime = jsontx.get('lockTime', 0)
+        locktime = jsontx.get('locktime', 0)
         for txin_dict in jsontx.get('inputs'):
             if txin_dict.get('prevout_hash') is not None and txin_dict.get('prevout_n') is not None:
                 prevout = TxOutpoint(txid=bfh(txin_dict['prevout_hash']), out_idx=int(txin_dict['prevout_n']))
@@ -367,7 +367,7 @@ class Commands:
             else:
                 raise Exception("missing prevout for txin")
             txin = PartialTxInput(prevout=prevout)
-            txin._trusted_value_sats = int(txin_dict['value'])
+            txin._trusted_value_sats = int(txin_dict.get('value', txin_dict['value_sats']))
             nsequence = txin_dict.get('nsequence', None)
             if nsequence is not None:
                 txin.nsequence = nsequence
@@ -381,7 +381,7 @@ class Commands:
                 txin.num_sig = 1
             inputs.append(txin)
 
-        outputs = [PartialTxOutput.from_address_and_value(txout['address'], int(txout['value']))
+        outputs = [PartialTxOutput.from_address_and_value(txout['address'], int(txout.get('value', txout['value_sats'])))
                    for txout in jsontx.get('outputs')]
         tx = PartialTransaction.from_io(inputs, outputs, locktime=locktime)
         tx.sign(keypairs)
@@ -390,11 +390,16 @@ class Commands:
     @command('wp')
     async def signtransaction(self, tx, privkey=None, password=None, wallet: Abstract_Wallet = None):
         """Sign a transaction. The wallet keys will be used unless a private key is provided."""
+        # TODO this command should be split in two... (1) *_with_wallet, (2) *_with_privkey
         tx = tx_from_any(tx)
         if privkey:
             txin_type, privkey2, compressed = bitcoin.deserialize_privkey(privkey)
-            pubkey = ecc.ECPrivkey(privkey2).get_public_key_bytes(compressed=compressed).hex()
-            tx.sign({pubkey:(privkey2, compressed)})
+            pubkey = ecc.ECPrivkey(privkey2).get_public_key_bytes(compressed=compressed)
+            for txin in tx.inputs():
+                if txin.address and txin.address == bitcoin.pubkey_to_address(txin_type, pubkey.hex()):
+                    txin.pubkeys = [pubkey]
+                    txin.script_type = txin_type
+            tx.sign({pubkey.hex(): (privkey2, compressed)})
         else:
             wallet.sign_transaction(tx, password)
         return tx.serialize()
@@ -421,14 +426,26 @@ class Commands:
         return {'address':address, 'redeemScript':redeem_script}
 
     @command('w')
-    async def freeze(self, address, wallet: Abstract_Wallet = None):
+    async def freeze(self, address: str, wallet: Abstract_Wallet = None):
         """Freeze address. Freeze the funds at one of your wallet\'s addresses"""
         return wallet.set_frozen_state_of_addresses([address], True)
 
     @command('w')
-    async def unfreeze(self, address, wallet: Abstract_Wallet = None):
+    async def unfreeze(self, address: str, wallet: Abstract_Wallet = None):
         """Unfreeze address. Unfreeze the funds at one of your wallet\'s address"""
         return wallet.set_frozen_state_of_addresses([address], False)
+
+    @command('w')
+    async def freeze_utxo(self, coin: str, wallet: Abstract_Wallet = None):
+        """Freeze a UTXO so that the wallet will not spend it."""
+        wallet.set_frozen_state_of_coins([coin], True)
+        return True
+
+    @command('w')
+    async def unfreeze_utxo(self, coin: str, wallet: Abstract_Wallet = None):
+        """Unfreeze a UTXO so that the wallet might spend it."""
+        wallet.set_frozen_state_of_coins([coin], False)
+        return True
 
     @command('wp')
     async def getprivatekeys(self, address, password=None, wallet: Abstract_Wallet = None):
@@ -646,10 +663,13 @@ class Commands:
         return result
 
     @command('w')
-    async def history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None):
+    async def history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None,
+                      from_height=None, to_height=None):
         """Wallet history. Returns the transaction history of your wallet."""
         kwargs = {
             'show_addresses': show_addresses,
+            'from_height': from_height,
+            'to_height': to_height,
         }
         if year:
             import time
@@ -661,6 +681,7 @@ class Commands:
             from .exchange_rate import FxThread
             fx = FxThread(self.config, None)
             kwargs['fx'] = fx
+
         return json_normalize(wallet.get_detailed_history(**kwargs))
 
     @command('w')
@@ -779,7 +800,8 @@ class Commands:
             f = None
         out = wallet.get_sorted_requests()
         if f is not None:
-            out = list(filter(lambda x: x.status==f, out))
+            out = [req for req in out
+                   if f == wallet.get_request_status(wallet.get_key_for_receive_request(req))]
         return [wallet.export_request(x) for x in out]
 
     @command('w')
@@ -915,13 +937,10 @@ class Commands:
         if not is_hash256_str(txid):
             raise Exception(f"{repr(txid)} is not a txid")
         height = wallet.get_tx_height(txid).height
-        to_delete = {txid}
         if height != TX_HEIGHT_LOCAL:
             raise Exception(f'Only local transactions can be removed. '
                             f'This tx has height: {height} != {TX_HEIGHT_LOCAL}')
-        to_delete |= wallet.get_depending_transactions(txid)
-        for tx_hash in to_delete:
-            wallet.remove_transaction(tx_hash)
+        wallet.remove_transaction(txid)
         wallet.save_db()
 
     @command('wn')
