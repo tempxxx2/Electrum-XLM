@@ -931,6 +931,12 @@ def from_bip39_seed(seed, passphrase, derivation, xtype=None):
     return k
 
 
+PURPOSE48_SCRIPT_TYPES = {
+    'standard': 0,  # specifically multisig
+}
+PURPOSE48_SCRIPT_TYPES_INV = inv_dict(PURPOSE48_SCRIPT_TYPES)
+
+
 def xtype_from_derivation(derivation: str) -> str:
     """Returns the script type to be used for this derivation."""
     bip32_indices = convert_bip32_path_to_list_of_uint32(derivation)
@@ -939,6 +945,14 @@ def xtype_from_derivation(derivation: str) -> str:
             return 'standard'
         elif bip32_indices[0] == 45 + BIP32_PRIME:
             return 'standard'
+
+    if len(bip32_indices) >= 4:
+        if bip32_indices[0] == 48 + BIP32_PRIME:
+            # m / purpose' / coin_type' / account' / script_type' / change / address_index
+            script_type_int = bip32_indices[3] - BIP32_PRIME
+            script_type = PURPOSE48_SCRIPT_TYPES_INV.get(script_type_int)
+            if script_type is not None:
+                return script_type
     return 'standard'
 
 
@@ -1019,6 +1033,18 @@ def is_bip32_key(x):
 def bip44_derivation(account_id, bip43_purpose=44):
     coin = constants.net.BIP44_COIN_TYPE
     der = "m/%d'/%d'/%d'" % (bip43_purpose, coin, int(account_id))
+    return normalize_bip32_derivation(der)
+
+
+def purpose48_derivation(account_id: int, xtype: str) -> str:
+    # m / purpose' / coin_type' / account' / script_type' / change / address_index
+    bip43_purpose = 48
+    coin = constants.net.BIP44_COIN_TYPE
+    account_id = int(account_id)
+    script_type_int = PURPOSE48_SCRIPT_TYPES.get(xtype)
+    if script_type_int is None:
+        raise Exception('unknown xtype: {}'.format(xtype))
+    der = "m/%d'/%d'/%d'/%d'" % (bip43_purpose, coin, account_id, script_type_int)
     return normalize_bip32_derivation(der)
 
 

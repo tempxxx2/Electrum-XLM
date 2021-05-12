@@ -35,7 +35,7 @@ from . import bitcoin
 from . import keystore
 from . import mnemonic
 from .bip32 import is_bip32_derivation, xpub_type, normalize_bip32_derivation, BIP32Node
-from .keystore import bip44_derivation, Hardware_KeyStore, KeyStore, bip39_to_seed
+from .keystore import bip44_derivation, purpose48_derivation, Hardware_KeyStore, KeyStore, bip39_to_seed
 from .wallet import (Imported_Wallet, Standard_Wallet, Multisig_Wallet,
                      wallet_types, Wallet, Abstract_Wallet)
 from .storage import WalletStorage, StorageEncryptionVersion
@@ -420,9 +420,10 @@ class BaseWizard(Logger):
             # There is no general standard for HD multisig.
             # For legacy, this is partially compatible with BIP45; assumes index=0
             # For segwit, a custom path is used, as there is no standard at all.
-            default_choice_idx = 0
+            default_choice_idx = 1
             choices = [
-                ('standard',   'legacy multisig (p2sh)',            normalize_bip32_derivation("m/45'/0")),
+                ('standard', 'legacy multisig (p2sh)',    normalize_bip32_derivation("m/45'/0")),
+                ('standard', 'purpose48 multisig (p2sh)', purpose48_derivation(0, xtype='standard')),
             ]
             # if this is not the first cosigner, pre-select the expected script type,
             # and hide the choices
