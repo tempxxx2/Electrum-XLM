@@ -78,6 +78,12 @@ Builder.load_string('''
                     action: partial(root.boolean_dialog, 'use_change', _('Use change addresses'), self.message)
                 CardSeparator
                 SettingsItem:
+                    status: _('Yes') if root.show_tx_type else _('No')
+                    title: _('Show tx type') + ': ' + self.status
+                    description: _('Show transaction type in wallet history')
+                    action: root.trigger_show_tx_type
+                CardSeparator
+                SettingsItem:
                     title: _('Password')
                     description: _('Change your password') if app._use_single_password else _("Change your password for this wallet.")
                     action: root.change_password
@@ -96,6 +102,7 @@ Builder.load_string('''
 class SettingsDialog(Factory.Popup):
 
     labels_plugin_on = BooleanProperty(False)
+    show_tx_type = BooleanProperty(False)
 
     def __init__(self, app):
         self.app = app
@@ -110,6 +117,8 @@ class SettingsDialog(Factory.Popup):
         self._language_dialog = None
         self._unit_dialog = None
         self._coinselect_dialog = None
+        def_dip2 = not self.app.wallet.psman.unsupported
+        self.show_tx_type = self.config.get('show_dip2_tx_type', def_dip2)
 
     def update(self):
         self.wallet = self.app.wallet
@@ -225,3 +234,9 @@ class SettingsDialog(Factory.Popup):
                 label.status = self.fx_status()
             self._fx_dialog = FxDialog(self.app, self.plugins, self.config, cb)
         self._fx_dialog.open()
+
+    def trigger_show_tx_type(self, dt):
+        self.show_tx_type = show_dip2 = not self.show_tx_type
+        self.config.set_key('show_dip2_tx_type', show_dip2, True)
+        if self.app.history_screen:
+            self.app.history_screen.update(reload_history=False)
