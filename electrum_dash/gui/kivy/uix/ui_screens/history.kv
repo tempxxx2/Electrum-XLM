@@ -59,6 +59,13 @@
             orientation: 'vertical'
             Widget
             CardLabel:
+                color: 0.65, 0.65, 0.95, 1
+                text: root.tx_type
+                shorten: True
+                shorten_from: 'right'
+                font_size: '12sp'
+            Widget
+            CardLabel:
                 color: 0.95, 0.95, 0.95, 1
                 text: root.message
                 shorten: True
@@ -89,7 +96,7 @@
 <HistoryRecycleView@RecycleView>:
     viewclass: 'HistoryItem'
     HistBoxLayout:
-        default_size: None, dp(56)
+        default_size: None, dp(64)
         default_size_hint: 1, None
         size_hint: 1, None
         height: self.minimum_height
