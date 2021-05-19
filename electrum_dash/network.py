@@ -266,6 +266,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
     _closing_ifaces: Set[ServerAddr]
     default_server: ServerAddr
     _recent_servers: List[ServerAddr]
+    _limits_info: Dict[ServerAddr, Dict]
 
     def __init__(self, config: SimpleConfig, *, daemon: 'Daemon' = None):
         global _INSTANCE
@@ -335,6 +336,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
 
         self.server_peers = {}  # returned by interface (servers that the main interface knows about)
         self._recent_servers = self._read_recent_servers()  # note: needs self.recent_servers_lock
+        self._limits_info = {}  # save information on encountered server limits
 
         self.banner = ''
         self.donation_address = ''
@@ -1581,3 +1583,21 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             for server in servers:
                 await group.spawn(get_response(server))
         return responses
+
+    @property
+    def blockchain_completeness(self):
+        server_height = self.get_server_height()
+        if not server_height:
+            return 0.0
+        height = self.get_local_height()
+        return min(1.0, height / server_height)
+
+    def network_data_readiness(self):
+        if not self.interface:
+            return 0
+        perc = 0
+        perc += self.blockchain_completeness
+        perc += self.mn_list.protx_list_completeness
+        perc += self.mn_list.protx_info_completeness
+        perc *= 100/3
+        return min(100, round(perc))

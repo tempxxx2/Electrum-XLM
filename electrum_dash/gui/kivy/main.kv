@@ -517,6 +517,14 @@ BoxLayout:
                     name: 'plugins'
                     text: _('Plugins')
 
+    ProgressBar:
+        id: top_prog_bar
+        size_hint: 1, None
+        height: '5dp'
+        padding: 0
+        max: 100
+        value: 0
+
     ScreenManager:
         id: manager
         ScreenTabs:

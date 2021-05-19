@@ -138,7 +138,8 @@ class MNList(Logger):
         self.sent_protx_diff = asyncio.Queue(1)
 
         # Wait for wallet updated before request LLMQ/ProTx diffs
-        self.wallet_updated = False
+        self.blockchain_loaded = False
+        self.wallets_updated = False
 
     @staticmethod
     def get_instance():
@@ -176,6 +177,18 @@ class MNList(Logger):
             return False
         else:
             return True
+
+    @property
+    def protx_list_completeness(self):
+        if not self.network:
+            return 0.0
+        if not self.network.interface:
+            return 0.0
+        server_height = self.network.get_server_height()
+        act_h = constants.net.DIP3_ACTIVATION_HEIGHT
+        if server_height <= act_h:
+            return 0.0
+        return min(1.0, (self.protx_height - act_h) / (server_height - act_h))
 
     @property
     def protx_info_completeness(self):
@@ -330,19 +343,37 @@ class MNList(Logger):
         util.trigger_callback(key, value)
 
     async def on_network_status(self, event):
-        if not self.wallet_updated:
+        if not self.wallets_updated:
             return
         if (not self.dash_net_enabled
                 and self.network.is_connected()
                 and self.protx_loading):
             await self.network.request_protx_diff()
 
+    async def on_bchain_updated(self, key):
+        if (not self.blockchain_loaded
+                and self.network.blockchain_completeness >= 1.0):
+            self.blockchain_loaded = True
+        if not self.blockchain_loaded:
+            return
+        if not self.wallets_updated:
+            await self.on_wallet_updated('wallet_updated', None)
+
     async def on_wallet_updated(self, key, val):
-        self.wallet_updated = True
-        await self.on_network_updated('network_updated')
+        if not self.blockchain_loaded:
+            return
+        if not self.wallets_updated:
+            for w in self.network.daemon.get_wallets().values():
+                if not w.is_up_to_date():
+                    return
+            self.wallets_updated = True
+        util.trigger_callback('network_updated')
 
     async def on_network_updated(self, key):
-        if not self.wallet_updated:
+        if (not self.blockchain_loaded
+                and self.network.blockchain_completeness >= 1.0):
+            util.trigger_callback('blockchain_updated')
+        if not self.wallets_updated:
             return
         if self.dash_net_enabled:
             if self.llmq_loading:
@@ -368,7 +399,7 @@ class MNList(Logger):
             self.dash_net_enabled = True
         elif status == 'disabled':
             self.dash_net_enabled = False
-        if not self.wallet_updated:
+        if not self.wallets_updated:
             return
         if self.dash_net_enabled:
             if self.llmq_loading:
@@ -384,6 +415,7 @@ class MNList(Logger):
         util.register_callback(self.on_protx_info, ['protx-info'])
         util.register_callback(self.on_network_status, ['status'])
         util.register_callback(self.on_network_updated, ['network_updated'])
+        util.register_callback(self.on_bchain_updated, ['blockchain_updated'])
         util.register_callback(self.on_wallet_updated, ['wallet_updated'])
         # dash_net
         util.register_callback(self.on_dash_net_updated, ['dash-net-updated'])
@@ -398,6 +430,7 @@ class MNList(Logger):
         util.unregister_callback(self.on_network_updated)
         util.unregister_callback(self.on_network_status)
         util.unregister_callback(self.on_wallet_updated)
+        util.unregister_callback(self.on_bchain_updated)
         # dash_net
         util.unregister_callback(self.on_dash_net_updated)
         util.unregister_callback(self.on_mnlistdiff)

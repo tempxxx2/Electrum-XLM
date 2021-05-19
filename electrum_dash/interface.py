@@ -26,6 +26,7 @@ import os
 import re
 import ssl
 import sys
+import time
 import traceback
 import asyncio
 import socket
@@ -630,6 +631,19 @@ class Interface(Logger):
         return (self.network.interface == self or
                 self.network.interface is None and self.network.default_server == self.server)
 
+    def process_excessive_resource_usage(self, e):
+        server = str(self.server)
+        limits_info = self.network._limits_info.get(server, {})
+        notified = limits_info.get('notified', 0)
+        now_t = time.time()
+        if now_t - notified > 60:
+            limits_info['notified'] = now_t
+            friendly_name = self.server.to_friendly_name()
+            msg = (f'Server {friendly_name} disconnected: {e.message}.\n\n'
+                   f'Possibly limits should be raised on {friendly_name}.')
+            util.trigger_callback('excessive-resource-usage', msg)
+        self.network._limits_info[server] = limits_info
+
     async def open_session(self, sslc, exit_early=False):
         session_factory = lambda *args, iface=self, **kwargs: NotificationSession(*args, **kwargs, interface=iface)
         async with _RSClient(session_factory=session_factory,
@@ -640,6 +654,8 @@ class Interface(Logger):
             try:
                 ver = await session.send_request('server.version', [self.client_name(), version.PROTOCOL_VERSION])
             except aiorpcx.jsonrpc.RPCError as e:
+                if e.code == JSONRPC.EXCESSIVE_RESOURCE_USAGE:
+                    self.process_excessive_resource_usage(e)
                 raise GracefulDisconnect(e)  # probably 'unsupported protocol version'
             if exit_early:
                 return
@@ -661,6 +677,8 @@ class Interface(Logger):
                 if e.code in (JSONRPC.EXCESSIVE_RESOURCE_USAGE,
                               JSONRPC.SERVER_BUSY,
                               JSONRPC.METHOD_NOT_FOUND):
+                    if e.code == JSONRPC.EXCESSIVE_RESOURCE_USAGE:
+                        self.process_excessive_resource_usage(e)
                     raise GracefulDisconnect(e, log_level=logging.WARNING) from e
                 raise
 
