@@ -728,6 +728,10 @@ class PSDataMixin:
         # enable ps_keystore and syncronize addresses
         if not self.ps_keystore:
             self.enable_ps_keystore()
+        # set ps_keystore_has_history flag
+        if w.db.get_ps_txs() or w.db.get_ps_txs_removed():
+            if w.db.get_history(main_ks=False):
+                self.ps_keystore_has_history = True
         # check last_mix_stop_time if it was not saved on wallet crash
         last_mix_start_time = self.last_mix_start_time
         last_mix_stop_time = self.last_mix_stop_time
@@ -1503,10 +1507,13 @@ class PSDataMixin:
             return 'Excess change outputs'
 
         for i, (o, prev_h, prev_n) in enumerate(outputs):
-            if o.address == txin0_addr:
+            addr = o.address
+            if addr == txin0_addr:
                 continue
             val = o.value
             if val in CREATE_COLLATERAL_VALS:
+                if self.ps_keystore_has_history and not self.is_ps_ks(addr):
+                    return 'Destination is not on ps_keystore'
                 if collateral_cnt > 0:
                     return f'Excess collateral output i={i}'
                 else:
@@ -1522,6 +1529,8 @@ class PSDataMixin:
                     else:
                         collateral_cnt += 1
             elif val in PS_DENOMS_VALS:
+                if self.ps_keystore_has_history and not self.is_ps_ks(addr):
+                    return 'Destination is not on ps_keystore'
                 if val < last_denom_val:  # must increase or be the same
                     return (f'Unsuitable denom value={val}, must be'
                             f' {last_denom_val} or greater')
@@ -1629,10 +1638,13 @@ class PSDataMixin:
             return 'Excess change outputs'
 
         for i, (o, prev_h, prev_n) in enumerate(outputs):
-            if o.address == txin0_addr:
+            addr = o.address
+            if addr == txin0_addr:
                 continue
             val = o.value
             if val in CREATE_COLLATERAL_VALS:
+                if self.ps_keystore_has_history and not self.is_ps_ks(addr):
+                    return 'Destination is not on ps_keystore'
                 if collateral_cnt > 0:
                     return f'Excess collateral output i={i}'
                 else:
