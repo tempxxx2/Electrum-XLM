@@ -1185,6 +1185,7 @@ class PSDataMixin:
         if not self.ps_collateral_cnt and res_outputs_amounts:
             new_collateral_cnt -= 1
             res_outputs_amounts[0].insert(0, CREATE_COLLATERAL_VAL)
+            new_denoms_val += CREATE_COLLATERAL_VAL
         new_collaterals_val = CREATE_COLLATERAL_VAL * new_collateral_cnt
 
         # calc new denoms fee
