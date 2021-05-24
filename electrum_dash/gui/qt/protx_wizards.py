@@ -1012,7 +1012,7 @@ class SaveDip3WizardPage(QWizardPage):
                 return False
         self.new_mn.alias = alias
 
-        dip3_tab = parent.parent()
+        dip3_tab = parent.parent
         if start_id == parent.OPERATION_TYPE_PAGE:
             parent.manager.add_mn(self.new_mn)
             dip3_tab.w_model.reload_data()
@@ -1653,7 +1653,8 @@ class Dip3MasternodeWizard(QWizard):
                        UPD_SRV_PAGE, UPD_REG_PAGE]
 
     def __init__(self, parent, mn=None, start_id=None):
-        super(Dip3MasternodeWizard, self).__init__(parent)
+        super(Dip3MasternodeWizard, self).__init__()
+        self.parent = parent
         self.gui = parent.gui
         self.manager = parent.manager
         self.wallet = w = parent.wallet
@@ -1680,9 +1681,9 @@ class Dip3MasternodeWizard(QWizard):
 
         if start_id:
             self.setStartId(start_id)
-            title = _('Update DIP3 Masternode: {}').format(mn.alias)
+            title = _('Update DIP3 Masternode: {} - {}').format(mn.alias, w)
         else:
-            title = _('Add DIP3 Masternode')
+            title = _('Add DIP3 Masternode - {}').format(w)
 
         logo = QPixmap(icon_path('tab_dip3.png'))
         logo = logo.scaledToWidth(32, mode=Qt.SmoothTransformation)
@@ -1691,6 +1692,13 @@ class Dip3MasternodeWizard(QWizard):
         self.setWindowTitle(title)
         self.setWindowIcon(read_QIcon('electrum-dash.png'))
         self.setMinimumSize(1000, 450)
+
+    def closeEvent(self, event):
+        event.accept()
+        self.parent.w_cur_wizard = None
+
+    def done(self, r):
+        self.close()
 
     def validate_alias(self, alias):
         if not alias:
@@ -1853,10 +1861,11 @@ class Dip3FileWizard(QWizard):
     DONE_PAGE = 4
 
     def __init__(self, parent, mn=None, start_id=None):
-        super(Dip3FileWizard, self).__init__(parent)
+        super(Dip3FileWizard, self).__init__()
+        self.parent = parent
         self.gui = parent.gui
         self.manager = parent.manager
-        self.wallet = parent.wallet
+        self.wallet = w = parent.wallet
 
         self.setPage(self.OP_TYPE_PAGE, FileOpTypeWizardPage(self))
         self.setPage(self.EXPORT_PAGE, ExportToFileWizardPage(self))
@@ -1868,7 +1877,7 @@ class Dip3FileWizard(QWizard):
         self.skipped_aliases = []
         self.imported_path = None
 
-        title = 'Export/Import DIP3 Masternodes to/from file'
+        title = _('Export/Import DIP3 Masternodes to/from file - {}').format(w)
         logo = QPixmap(icon_path('tab_dip3.png'))
         logo = logo.scaledToWidth(32, mode=Qt.SmoothTransformation)
         self.setWizardStyle(QWizard.ClassicStyle)
@@ -1876,6 +1885,13 @@ class Dip3FileWizard(QWizard):
         self.setWindowTitle(title)
         self.setWindowIcon(read_QIcon('electrum-dash.png'))
         self.setMinimumSize(1000, 450)
+
+    def closeEvent(self, event):
+        event.accept()
+        self.parent.w_cur_wizard = None
+
+    def done(self, r):
+        self.close()
 
 
 class FileOpTypeWizardPage(QWizardPage):
@@ -2093,7 +2109,7 @@ class ImportFromFileWizardPage(QWizardPage):
                 self.parent.manager.add_mn(mn)
                 self.parent.imported_aliases.append(ia)
         if len(self.parent.imported_aliases) > 0:
-            dip3_tab = self.parent.parent()
+            dip3_tab = self.parent.parent
             dip3_tab.w_model.reload_data()
         self.parent.imported_path = self.path
         return True

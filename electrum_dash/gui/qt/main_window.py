@@ -3424,7 +3424,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self._cleaned_up = True
         self.stop_get_data_threads()
         hide_ps_dialog(self)
-        self.dip3_tab.unregister_callbacks()
+        self.dip3_tab.cleanup()
         util.unregister_callback(self.on_ps_callback)
         if self.network:
             self.wallet.protx_manager.clean_up()

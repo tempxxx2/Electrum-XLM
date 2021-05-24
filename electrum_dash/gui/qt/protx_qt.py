@@ -455,6 +455,20 @@ class Dip3TabBar(VTabBar):
             mn_list.reset()
 
 
+def mn_action(func):
+    def check_current_wizard(self, *args, **kwargs):
+        if self.w_cur_wizard is None:
+            return func(self)
+        else:
+            msg = _('Some wizard already running,'
+                    ' do you want to raise wizard window?')
+            if self.gui.question(msg):
+                self.w_cur_wizard.show()
+                self.w_cur_wizard.raise_()
+                self.w_cur_wizard.activateWindow()
+    return check_current_wizard
+
+
 class Dip3TabWidget(QTabWidget):
     # Signals need to notify from not Qt thread
     alias_updated = pyqtSignal(str)
@@ -476,6 +490,7 @@ class Dip3TabWidget(QTabWidget):
         self.w_cur_alias = ''
         self.w_cur_state = ''
         self.w_cur_idx = None
+        self.w_cur_wizard = None
 
         self.wallet_mn_tab = self.create_wallet_mn_tab()
         if self.mn_list:
@@ -498,6 +513,11 @@ class Dip3TabWidget(QTabWidget):
         self.diff_updated.connect(self.on_diff_updated)
         self.info_updated.connect(self.on_info_updated)
         self.network_updated.connect(self.on_network_updated)
+
+    def cleanup(self):
+        self.unregister_callbacks()
+        if self.w_cur_wizard:
+            self.w_cur_wizard.close()
 
     def unregister_callbacks(self):
         if self.mn_list:
@@ -803,16 +823,17 @@ class Dip3TabWidget(QTabWidget):
 
         menu.exec_(self.w_view.viewport().mapToGlobal(position))
 
-    @pyqtSlot()
+    @mn_action
     def on_new_bls(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or not mn.is_operated:
             return
         start_id = Dip3MasternodeWizard.BLS_KEYS_PAGE
         wiz = Dip3MasternodeWizard(self, mn=mn, start_id=start_id)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_update_params(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or mn.protx_hash:
@@ -822,9 +843,10 @@ class Dip3TabWidget(QTabWidget):
         else:
             start_id = Dip3MasternodeWizard.SERVICE_PAGE
         wiz = Dip3MasternodeWizard(self, mn=mn, start_id=start_id)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_make_pro_reg_tx(self):
         alias = self.w_cur_alias
         try:
@@ -846,26 +868,29 @@ class Dip3TabWidget(QTabWidget):
         gui.show_extra_payload()
         gui.tabs.setCurrentIndex(self.gui.tabs.indexOf(self.gui.send_tab))
 
-    @pyqtSlot()
+    @mn_action
     def on_file(self):
         wiz = Dip3FileWizard(self)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_add_masternode(self):
         wiz = Dip3MasternodeWizard(self)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_make_pro_up_srv_tx(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or not mn.protx_hash:
             return
         wiz = Dip3MasternodeWizard(self, mn=mn,
                                    start_id=Dip3MasternodeWizard.UPD_SRV_PAGE)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_make_pro_up_rev_tx(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or not mn.protx_hash:
@@ -889,16 +914,17 @@ class Dip3TabWidget(QTabWidget):
             gui.show_extra_payload()
             gui.tabs.setCurrentIndex(gui.tabs.indexOf(gui.send_tab))
 
-    @pyqtSlot()
+    @mn_action
     def on_make_pro_up_reg_tx(self):
         mn = self.manager.mns.get(self.w_cur_alias)
         if not mn or not mn.protx_hash:
             return
         wiz = Dip3MasternodeWizard(self, mn=mn,
                                    start_id=Dip3MasternodeWizard.UPD_REG_PAGE)
-        wiz.open()
+        wiz.show()
+        self.w_cur_wizard = wiz
 
-    @pyqtSlot()
+    @mn_action
     def on_del_masternode(self):
         alias = self.w_cur_alias
         mn = self.manager.mns.get(alias)
@@ -914,7 +940,7 @@ class Dip3TabWidget(QTabWidget):
         self.manager.remove_mn(self.w_cur_alias)
         self.w_model.reload_data()
 
-    @pyqtSlot()
+    @mn_action
     def on_clear_protx(self):
         alias = self.w_cur_alias
         mn = self.manager.mns.get(alias)
