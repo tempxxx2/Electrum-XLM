@@ -327,7 +327,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                          'banner', 'verified', 'fee', 'fee_histogram', 'on_quotes',
                          'on_history', 'payment_failed', 'payment_succeeded',
                          'invoice_status', 'request_status',
-                         'cert_mismatch', 'verified-islock']
+                         'cert_mismatch', 'verified-islock',
+                         'excessive-resource-usage']
             # To avoid leaking references to "self" that prevent the
             # window from being GC-ed when closed, callbacks should be
             # methods of this class only, and specifically not be
@@ -628,6 +629,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.history_model.on_fee_histogram()
         elif event == 'cert_mismatch':
             self.show_cert_mismatch_error()
+        elif event == 'excessive-resource-usage':
+            self.notify(args[0])
         else:
             self.logger.info(f"unexpected network event: {event} {args}")
 

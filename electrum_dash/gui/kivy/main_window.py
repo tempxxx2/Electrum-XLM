@@ -403,6 +403,7 @@ class ElectrumWindow(App, Logger):
         self._trigger_update_status = Clock.create_trigger(self.update_status, .5)
         self._trigger_update_history = Clock.create_trigger(self.update_history, .5)
         self._trigger_update_interfaces = Clock.create_trigger(self.update_interfaces, .5)
+        self._trigger_update_readiness = Clock.create_trigger(self.update_readiness, .5)
 
         self._periodic_update_status_during_sync = Clock.schedule_interval(self.update_wallet_synchronizing_progress, .5)
 
@@ -646,7 +647,7 @@ class ElectrumWindow(App, Logger):
         if self.network:
             interests = ['wallet_updated', 'network_updated', 'blockchain_updated',
                          'status', 'new_transaction', 'verified',
-                         'verified-islock']
+                         'verified-islock', 'excessive-resource-usage']
             util.register_callback(self.on_network_event, interests)
             util.register_callback(self.on_fee, ['fee'])
             util.register_callback(self.on_fee_histogram, ['fee_histogram'])
@@ -656,6 +657,9 @@ class ElectrumWindow(App, Logger):
             util.register_callback(self.on_request_status, ['request_status'])
             util.register_callback(self.on_payment_failed, ['payment_failed'])
             util.register_callback(self.on_payment_succeeded, ['payment_succeeded'])
+            util.register_callback(self.on_mn_list_updated,
+                                   ['mn-list-diff-updated',
+                                    'mn-list-info-updated'])
         # load wallet
         self.load_wallet_by_name(self.electrum_config.get_wallet_path(use_gui_last_wallet=True))
         # URI passed in config
@@ -888,12 +892,14 @@ class ElectrumWindow(App, Logger):
         if event == 'network_updated':
             self._trigger_update_interfaces()
             self._trigger_update_status()
+            self._trigger_update_readiness()
         elif event == 'wallet_updated':
             self._trigger_update_wallet()
             self._trigger_update_status()
         elif event == 'blockchain_updated':
             # to update number of confirmations in history
             self._trigger_update_wallet()
+            self._trigger_update_readiness()
         elif event == 'status':
             self._trigger_update_status()
         elif event == 'new_transaction':
@@ -904,6 +910,8 @@ class ElectrumWindow(App, Logger):
             self._trigger_update_wallet()
         elif event == 'verified-islock':
             self._trigger_update_wallet()
+        elif event == 'excessive-resource-usage':
+            self.show_info(args[0])
 
     def on_ps_callback(self, event, *args):
         Clock.schedule_once(lambda dt: self.on_ps_event(event, *args))
@@ -1591,3 +1599,25 @@ class ElectrumWindow(App, Logger):
                 self.show_error("Invalid PIN")
                 return
         self.protected(_("Decrypt your private key?"), show_private_key, (addr, pk_label))
+
+    def set_top_progress(self, value):
+        if 'top_prog_bar' in self.root.ids:
+            self.root.ids.top_prog_bar.value = value
+
+    def get_top_progress(self):
+        if 'top_prog_bar' in self.root.ids:
+            return self.root.ids.top_prog_bar.value
+        else:
+            return 100
+
+    def on_mn_list_updated(self, event, *args):
+        self._trigger_update_readiness()
+
+    def update_readiness(self, dt):
+        if self.get_top_progress() >= 100:
+            return
+        if self.network:
+            readiness = self.network.network_data_readiness()
+        else:
+            readiness = 0
+        self.set_top_progress(readiness)
