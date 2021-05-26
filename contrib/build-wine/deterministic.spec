@@ -44,6 +44,7 @@ hiddenimports += [
     'electrum_dash.plugins.keepkey.qt',
     'electrum_dash.plugins.revealer.qt',
     'electrum_dash.plugins.labels.qt',
+    'electrum_dash.plugins.scan_over_gap.qt',
     'electrum_dash.plugins.trezor.qt',
     'electrum_dash.plugins.safe_t.client',
     'electrum_dash.plugins.safe_t.qt',

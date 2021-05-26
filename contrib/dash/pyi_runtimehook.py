@@ -20,6 +20,7 @@ OTHER_PLUGINS= [
     'email_requests',
     'labels',
     'revealer',
+    'scan_over_gap',
     'virtualkeyboard',
 ]
 
