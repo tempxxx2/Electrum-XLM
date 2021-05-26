@@ -921,6 +921,8 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
                 tx_type = tx_item['tx_type']
                 tx_type_name = SPEC_TX_NAMES.get(tx_type, str(tx_type))
                 tx_item['tx_type'] = tx_type_name
+            else:
+                tx_item['tx_type'] = ''
             group_data = tx_item['group_data']
             if group_data:
                 group_delta, group_balance, group_txids = group_data
