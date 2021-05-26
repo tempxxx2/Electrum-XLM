@@ -20,20 +20,20 @@ docker run --rm \
 
 
 BUILD_DIR=/root/build
-TOR_PROXY_VERSION=0.4.2.6
+TOR_PROXY_VERSION=0.4.5.7
 TOR_PROXY_PATH=https://github.com/zebra-lucky/tor-proxy/releases/download
 TOR_DIST=dist/tor-proxy-setup.exe
 
 TOR_FILE=${TOR_PROXY_VERSION}/tor-proxy-${TOR_PROXY_VERSION}-win32-setup.exe
 wget -O ${TOR_DIST} ${TOR_PROXY_PATH}/${TOR_FILE}
-TOR_SHA=243d364015d340142b6a6d701c6509261e4574fa3009ba5febbe3982f25e7b46
+TOR_SHA=233ee2c8f4cbab6ffff74479156d91929564e7af8f9ff614e793f59fb51ac0f3
 echo "$TOR_SHA  $TOR_DIST" > sha256.txt
 shasum -a256 -s -c sha256.txt
 
 
 export WINEARCH=win32
 export WINEPREFIX=/root/.wine-32
-export PYHOME=$WINEPREFIX/drive_c/Python37
+export PYHOME=$WINEPREFIX/drive_c/Python38
 
 
 ZBARW_PATH=https://github.com/zebra-lucky/zbarw/releases/download/20180620
@@ -52,9 +52,11 @@ echo "$X11_HASH_SHA  $X11_HASH_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
 unzip ${X11_HASH_FILE} && rm ${X11_HASH_FILE} sha256.txt
 
-LSECP256K1_PATH=https://github.com/zebra-lucky/secp256k1/releases/download/0.1
-LSECP256K1_FILE=libsecp256k1-0.1-win32.zip
-LSECP256K1_SHA=f750bbda859309f7dd7ab09e678995fead58654423e418ede9a46acc3abfcc66
+LSECP256K1_PATH=https://github.com/zebra-lucky/secp256k1/releases/download/
+LSECP256K1_VER=210521
+LSECP256K1_PATH=${LSECP256K1_PATH}${LSECP256K1_VER}
+LSECP256K1_FILE=libsecp256k1-${LSECP256K1_VER}-win32.zip
+LSECP256K1_SHA=f3f52750b2b1f0821eccf3ffd296af929b6f5488659ec51f18fad9a85c9df331
 wget ${LSECP256K1_PATH}/${LSECP256K1_FILE}
 echo "$LSECP256K1_SHA  $LSECP256K1_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
@@ -69,13 +71,13 @@ docker run --rm \
     -v $(pwd):$BUILD_DIR \
     -v $(pwd):$WINEPREFIX/drive_c/electrum-dash \
     -w $BUILD_DIR \
-    -t zebralucky/electrum-dash-winebuild:Wine40x \
+    -t zebralucky/electrum-dash-winebuild:Wine41x \
     $BUILD_DIR/contrib/build-wine/build.sh
 
 
 export WINEARCH=win64
 export WINEPREFIX=/root/.wine-64
-export PYHOME=$WINEPREFIX/drive_c/Python37
+export PYHOME=$WINEPREFIX/drive_c/Python38
 
 
 ZBARW_FILE=zbarw-zbarcam-0.10-win64.zip
@@ -92,8 +94,8 @@ echo "$X11_HASH_SHA  $X11_HASH_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
 unzip ${X11_HASH_FILE} && rm ${X11_HASH_FILE} sha256.txt
 
-LSECP256K1_FILE=libsecp256k1-0.1-win64.zip
-LSECP256K1_SHA=a7b4e39c69bfc363edd2d86acb88c4b9e30b7d1c0c3281a0985a10c8ce3e2cc0
+LSECP256K1_FILE=libsecp256k1-${LSECP256K1_VER}-win64.zip
+LSECP256K1_SHA=ea8722dcd35990f933bb0131de878013e6b6ce04783df4fb4b34dcc4628f2929
 wget ${LSECP256K1_PATH}/${LSECP256K1_FILE}
 echo "$LSECP256K1_SHA  $LSECP256K1_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
@@ -102,7 +104,7 @@ unzip ${LSECP256K1_FILE} && rm ${LSECP256K1_FILE} sha256.txt
 rm ${TOR_DIST}
 TOR_FILE=${TOR_PROXY_VERSION}/tor-proxy-${TOR_PROXY_VERSION}-win64-setup.exe
 wget -O ${TOR_DIST} ${TOR_PROXY_PATH}/${TOR_FILE}
-TOR_SHA=0fcd79d167f866f570e6714974309b95d82f87fe872aca86067a52e811fb9421
+TOR_SHA=514387e3b45eccd9b98e95450ea201ced49886cc4f0980d4f0f6f7a4a51aebe9
 echo "$TOR_SHA  $TOR_DIST" > sha256.txt
 shasum -a256 -s -c sha256.txt
 rm sha256.txt
@@ -116,5 +118,5 @@ docker run --rm \
     -v $(pwd):$BUILD_DIR \
     -v $(pwd):$WINEPREFIX/drive_c/electrum-dash \
     -w $BUILD_DIR \
-    -t zebralucky/electrum-dash-winebuild:Wine40x \
+    -t zebralucky/electrum-dash-winebuild:Wine41x \
     $BUILD_DIR/contrib/build-wine/build.sh
