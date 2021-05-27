@@ -170,18 +170,26 @@ class StackTraces(threading.Thread):
             self._code = code
             if self._traceback_path is not None:
                 filename, traceback = self._traceback()
+                if os.path.isfile(filename + '.tmp'):
+                    os.chmod(filename + '.tmp', stat.S_IWRITE)
+                    os.remove(filename + '.tmp')
                 with open(filename + '.tmp', 'w') as fout:
-                    os.chmod(filename + '.tmp', stat.S_IREAD)
                     fout.write(traceback)
+                if os.path.isfile(filename):
+                    os.chmod(filename, stat.S_IWRITE)
                 shutil.move(filename + '.tmp', filename)
                 os.chmod(filename, stat.S_IREAD)
 
         if stats:
             if self._stats_path is not None:
                 filename, stats = self._stats(True)
+                if os.path.isfile(filename + '.tmp'):
+                    os.chmod(filename + '.tmp', stat.S_IWRITE)
+                    os.remove(filename + '.tmp')
                 with open(filename + '.tmp', 'w') as fout:
-                    os.chmod(filename + '.tmp', stat.S_IREAD)
                     fout.write(stats)
+                if os.path.isfile(filename):
+                    os.chmod(filename, stat.S_IWRITE)
                 shutil.move(filename + '.tmp', filename)
                 os.chmod(filename, stat.S_IREAD)
 

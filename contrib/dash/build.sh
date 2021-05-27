@@ -1,39 +1,12 @@
 #!/bin/bash
 
 
-function read_jks_storepass {
-    KEYSTORE=~/.jks/keystore
-    KEYSTORE_ARG="-keystore $KEYSTORE"
-    KEYTOOL_CMD="keytool -list -storepass:env JKS_STOREPASS $KEYSTORE_ARG"
-    while [[ -z $JKS_STOREPASS ]]; do
-        echo -n Input $KEYSTORE keystore password:
-        read -s JKS_STOREPASS
-        echo
-        export JKS_STOREPASS
-        keytool_res=`$KEYTOOL_CMD`
-        if [[ $? == 0 ]]; then
-            break
-        else
-            echo Wrong password
-            export JKS_STOREPASS=''
-        fi
-    done
-    export JKS_KEYPASS=$JKS_STOREPASS
-}
-
-
-if [[ ${OSTYPE} == "linux-gnu" ]]; then
-    echo "Build for Linux/Windows/Android"
-elif [[ ${OSTYPE} == "darwin"* ]]; then
-    echo "Build for macOS"
-else
-    echo "Unknown OS: ${OSTYPE}"
-    exit 1
-fi
-
-
-BUILD_DIST_DIR=build/electrum-dash/dist
-BUILD_BIN_DIR=build/electrum-dash/bin
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+REPO_DIR="$(realpath $SCRIPT_DIR/../../)"
+ACTIONS_DIR="$SCRIPT_DIR/actions"
+TRAVIS_DIR="$SCRIPT_DIR/travis"
+BUILD_DIST_DIR="$REPO_DIR/dist"
+BUILD_BIN_DIR="$REPO_DIR/bin"
 NAME=Dash-Electrum
 TNAME=Dash-Electrum-Testnet
 DEB_NAME=electrum-dash
@@ -41,43 +14,23 @@ APK_NAME=Electrum_DASH
 APK_TNAME=Electrum_DASH_Testnet
 UAPK_TAIL=release-unsigned.apk
 APK_TAIL=release.apk
-export APP_ANDROID_ARCH=armeabi-v7a
-export APP_ANDROID_ARCH=arm64-v8a
 
 
-source contrib/dash/travis/electrum_dash_version_env.sh
-if [[ -n $IS_RELEASE ]]; then
-    echo electrum-dash version is $DASH_ELECTRUM_VERSION, release build
-else
-    echo electrum-dash version is $DASH_ELECTRUM_VERSION
-fi
-mkdir -p dist
-
-
-if [[ "$OSTYPE" == "linux-gnu" ]]; then
-    # Build sdist/AppImage/Windows
+function build_sdist {
     sudo rm -rf build
-    mkdir -p build && cp contrib/dash/travis/* ./build/
-    ./build/before_install-linux.sh
-    ./build/before_install-linux-apk.sh
-    ./build/travis-build-linux.sh
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}.tar.gz \
-        dist/
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}.zip \
-        dist/
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}-x86_64.AppImage \
-        dist/
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}-setup-win32.exe \
-        dist/
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}-setup-win64.exe \
-        dist/
+    mkdir -p build
+    $ACTIONS_DIR/install-linux.sh
+    $ACTIONS_DIR/script-linux.sh
+}
 
+
+function build_ppa {
     # Build deb packages
     PEP440_PUBVER_PATTERN="^((\d+)!)?"
     PEP440_PUBVER_PATTERN=${PEP440_PUBVER_PATTERN}"(([0-9]+)(\.[0-9]+)*)"
     PEP440_PUBVER_PATTERN=${PEP440_PUBVER_PATTERN}"([a-zA-Z]+[0-9]+)?"
     PEP440_PUBVER_PATTERN=${PEP440_PUBVER_PATTERN}"((\.[a-zA-Z]+[0-9]+)*)$"
-    if [[ ${DASH_ELECTRUM_VERSION} =~ ${PEP440_PUBVER_PATTERN} ]]; then
+    if [[ ${DDASH_ELECTRUM_VERSION} =~ ${PEP440_PUBVER_PATTERN} ]]; then
         if [[ -n ${BASH_REMATCH[1]} ]]; then
             DEB_VERSION="${BASH_REMATCH[2]}:"
         fi
@@ -88,8 +41,8 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
         if [[ -n ${BASH_REMATCH[7]} ]]; then
             DEB_VERSION="${DEB_VERSION}${BASH_REMATCH[7]}"
         fi
-        DEB_SERIES=("xenial" "bionic" "disco" "eoan")
-        DEB_SER_VER=("16.04.1" "18.04.1" "19.04.1" "19.10.1")
+        DEB_SERIES=("xenial" "bionic" "focal" "groovy" "hirsute")
+        DEB_SER_VER=("16.04.1" "18.04.1" "20.04.1" "20.10.1" "21.04.1")
 
         pushd build
         sudo rm -rf electrum-dash
@@ -127,6 +80,34 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
         echo Version does not match PEP440 pubversion patter
         echo Skip deb packages build
     fi
+}
+
+
+function read_jks_storepass {
+    KEYSTORE=~/.jks/keystore
+    KEYSTORE_ARG="-keystore $KEYSTORE"
+    KEYTOOL_CMD="keytool -list -storepass:env JKS_STOREPASS $KEYSTORE_ARG"
+    while [[ -z $JKS_STOREPASS ]]; do
+        echo -n Input $KEYSTORE keystore password:
+        read -s JKS_STOREPASS
+        echo
+        export JKS_STOREPASS
+        keytool_res=`$KEYTOOL_CMD`
+        if [[ $? == 0 ]]; then
+            break
+        else
+            echo Wrong password
+            export JKS_STOREPASS=''
+        fi
+    done
+    export JKS_KEYPASS=$JKS_STOREPASS
+}
+
+
+function build_apk {
+    ./build/contrib/actions/before_install-linux-apk.sh
+    export APP_ANDROID_ARCH=armeabi-v7a
+    #export APP_ANDROID_ARCH=arm64-v8a
 
     # Build mainnet release apk
     if [[ -n $IS_RELEASE ]]; then
@@ -135,7 +116,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
         export ELECTRUM_MAINNET=true
         ./build/travis-build-linux-apk.sh
         cp ${BUILD_BIN_DIR}/${APK_NAME}-$DASH_ELECTRUM_APK_VERSION-$APP_ANDROID_ARCH-$UAPK_TAIL \
-            dist/
+            ${BUILD_DIST_DIR}
     fi
 
     # Build testnet release apk
@@ -144,10 +125,11 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
     export ELECTRUM_MAINNET=false
     ./build/travis-build-linux-apk.sh
     cp ${BUILD_BIN_DIR}/${APK_TNAME}-$DASH_ELECTRUM_APK_VERSION-$APP_ANDROID_ARCH-$UAPK_TAIL \
-        dist/
+        ${BUILD_DIST_DIR}
+}
 
-    sudo rm -rf build
 
+function sign_apk {
     read_jks_storepass
 
     # Sign mainnet apk
@@ -185,12 +167,35 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
         dist/${TNAME}-$DASH_ELECTRUM_APK_VERSION-$APP_ANDROID_ARCH-$APK_TAIL \
 
     rm dist/${APK_TNAME}-$DASH_ELECTRUM_APK_VERSION-$APP_ANDROID_ARCH-$UAPK_TAIL
+}
+
+
+function build_macos_dmg {
+    $ACTIONS_DIR/install-osx.sh
+    $ACTIONS_DIR/script-osx.sh
+}
+
+function build_linux {
+    build_sdist
+}
+
+
+source contrib/dash/travis/electrum_dash_version_env.sh
+if [[ -n $IS_RELEASE ]]; then
+    echo electrum-dash version is $DASH_ELECTRUM_VERSION, release build
 else
-    # Build macOS
-    sudo rm -rf build
-    mkdir -p build && cp contrib/dash/travis/* ./build/
-    ./build/before_install-osx.sh
-    ./build/travis-build-osx.sh
-    cp ${BUILD_DIST_DIR}/${NAME}-${DASH_ELECTRUM_VERSION}-macosx.dmg \
-        dist/
+    echo electrum-dash version is $DASH_ELECTRUM_VERSION
+fi
+mkdir -p dist
+
+
+if [[ ${OSTYPE} == "linux-gnu" ]]; then
+    echo "Build for Linux/Windows/Android"
+    build_linux $1
+elif [[ ${OSTYPE} == "darwin"* ]]; then
+    echo "Build for macOS"
+    build_macos_dmg $1
+else
+    echo "Unknown OS: ${OSTYPE}"
+    exit 1
 fi

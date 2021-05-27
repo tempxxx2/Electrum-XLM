@@ -44,6 +44,7 @@ hiddenimports += [
     'electrum_dash.plugins.keepkey.qt',
     'electrum_dash.plugins.revealer.qt',
     'electrum_dash.plugins.labels.qt',
+    'electrum_dash.plugins.scan_over_gap.qt',
     'electrum_dash.plugins.trezor.qt',
     'electrum_dash.plugins.safe_t.client',
     'electrum_dash.plugins.safe_t.qt',
@@ -67,7 +68,7 @@ datas += collect_data_files('keepkeylib')
 
 binaries = []
 # Add libusb so Trezor and Safe-T mini will work
-binaries += [('C:/Python37/libusb-1.0.dll', '.')]
+binaries += [('C:/Python38/libusb-1.0.dll', '.')]
 binaries += [('C:/x11_hash/libx11hash-0.dll', '.')]
 binaries += [('C:/libsecp256k1/libsecp256k1-0.dll', '.')]
 binaries += [('C:/zbarw/libzbar-0.dll', '.')]

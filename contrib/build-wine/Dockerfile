@@ -1,20 +1,22 @@
 FROM ubuntu:18.04
 LABEL maintainer "Andriy Khavryuchenko <akhavr@khavr.com>"
 
+ENV LC_ALL=C.UTF-8 LANG=C.UTF-8
+
 USER root
 WORKDIR /root
 
-env WKEY_SHA1 c51bcb8cc4a12abfbd7c7660eaf90f49674d15e222c262f27e6c96429111b822
-env WKEY_SHA2 78b185fabdb323971d13bd329fefc8038e08559aa51c4996de18db0639a51df6
+ENV WKEY_SHA1 c51bcb8cc4a12abfbd7c7660eaf90f49674d15e222c262f27e6c96429111b822
+ENV WKEY_SHA2 78b185fabdb323971d13bd329fefc8038e08559aa51c4996de18db0639a51df6
 
 RUN dpkg --add-architecture i386 \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         wget \
-        gnupg2=2.2.4-1ubuntu1.3 \
-        dirmngr=2.2.4-1ubuntu1.3 \
-        python3-software-properties=0.96.24.32.1 \
-        software-properties-common=0.96.24.32.1 \
+        gnupg2 \
+        dirmngr \
+        python3-software-properties \
+        software-properties-common \
     && wget -nc https://dl.winehq.org/wine-builds/Release.key \
     && echo "${WKEY_SHA1} Release.key" | sha256sum -c - \
     && apt-key add Release.key && rm Release.key \
@@ -22,32 +24,33 @@ RUN dpkg --add-architecture i386 \
     && echo "${WKEY_SHA2} winehq.key" | sha256sum -c - \
     && apt-key add winehq.key && rm winehq.key \
     && apt-add-repository -y https://dl.winehq.org/wine-builds/ubuntu/ \
+    && apt-add-repository -y ppa:zebra-lucky/ed-bdeps \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        wine-stable-amd64:amd64=4.0.3~bionic \
-        wine-stable-i386:i386=4.0.3~bionic \
-        wine-stable:amd64=4.0.3~bionic \
-        winehq-stable:amd64=4.0.3~bionic \
+        wine-stable-amd64:amd64=6.0.0~bionic-1 \
+        wine-stable-i386:i386=6.0.0~bionic-1 \
+        wine-stable:amd64=6.0.0~bionic-1 \
+        winehq-stable:amd64=6.0.0~bionic-1 \
         cabextract xauth xvfb ca-certificates zip unzip p7zip-full \
     && wget https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
     && chmod +x winetricks && mv winetricks /usr/local/bin \
     && rm -rf /var/lib/apt/lists/*
 
-ENV WINEPATH c:/git/cmd;c:/Python37;c:/Python37/Scripts
+ENV WINEPATH c:/git/cmd;c:/Python38;c:/Python38/Scripts
 ENV WINEDEBUG -all
 ENV WINEPREFIX /root/.wine-32
 ENV WINEARCH win32
-ENV PYHOME $WINEPREFIX/drive_c/Python37
+ENV PYHOME $WINEPREFIX/drive_c/Python38
 
-ENV PY_PATH https://python.org/ftp/python/3.7.9/
-ENV PY32_FILE python-3.7.9.exe
-ENV PY32_SHA 769bb7c74ad1df6d7d74071cc16a984ff6182e4016e11b8949b93db487977220
-ENV PY64_FILE python-3.7.9-amd64.exe
-ENV PY64_SHA e69ed52afb5a722e5c56f6c21d594e85c17cb29f12f18bb69751cf1714e0f987
+ENV PY_PATH https://python.org/ftp/python/3.8.8/
+ENV PY32_FILE python-3.8.8.exe
+ENV PY32_SHA 64667d3185c57c493760ce1ce35c8c529ca46ce7188e02fb75fac6fcf72b9510
+ENV PY64_FILE python-3.8.8-amd64.exe
+ENV PY64_SHA 0e4b57099657c2304132d961e6939eed0c7da3cc4f15078008f9d5ba0a30726e
 
-ENV LIBUSB_PATH https://github.com/libusb/libusb/releases/download/v1.0.23/
-ENV LIBUSB_FILE libusb-1.0.23.7z
-ENV LIBUSB_SHA d3087e7d09ec4e463f5f4b394dcfec0b90e835545318af1a75575de59d2dfaac
+ENV LIBUSB_PATH https://github.com/libusb/libusb/releases/download/v1.0.24/
+ENV LIBUSB_FILE libusb-1.0.24.7z
+ENV LIBUSB_SHA 620cec4dbe4868202949294157da5adb75c9fbb4f04266146fc833eef85f90fb
 
 ENV NSIS_FILE nsis-3.05-setup.exe
 ENV NSIS_PATH https://downloads.sourceforge.net/project/nsis/NSIS%203/3.05/
@@ -66,7 +69,7 @@ RUN echo 'download and install 32-bit Python/git/NSIS' \
     && wget -nv ${LIBUSB_PATH}${LIBUSB_FILE} \
     && echo "${LIBUSB_SHA} ${LIBUSB_FILE}" | sha256sum -c - \
     && 7z x -olibusb $LIBUSB_FILE -aos && rm $LIBUSB_FILE  \
-    && cp libusb/MS32/dll/libusb-1.0.dll $PYHOME/ \
+    && cp libusb/VS2019/MS32/dll/libusb-1.0.dll $PYHOME/ \
     \
     && wget -nv ${NSIS_PATH}${NSIS_FILE} \
     && echo "${NSIS_SHA} ${NSIS_FILE}" | sha256sum -c - \
@@ -77,7 +80,7 @@ RUN echo 'download and install 32-bit Python/git/NSIS' \
 
 ENV WINEPREFIX /root/.wine-64
 ENV WINEARCH win64
-ENV PYHOME $WINEPREFIX/drive_c/Python37
+ENV PYHOME $WINEPREFIX/drive_c/Python38
 
 RUN echo 'download and install 64-bit Python/git/NSIS' \
     && wineboot -i && xvfb-run -a winetricks win10 \
@@ -88,7 +91,7 @@ RUN echo 'download and install 64-bit Python/git/NSIS' \
         TargetDir=$PYHOME && rm $PY64_FILE \
     && wine python -m pip install -U pip \
     \
-    && cp libusb/MS64/dll/libusb-1.0.dll $PYHOME/ && rm -rf libusb \
+    && cp libusb/VS2019/MS64/dll/libusb-1.0.dll $PYHOME/ && rm -rf libusb \
     \
     && wine $NSIS_FILE /S  && rm $NSIS_FILE \
     \
