@@ -1,3 +1,19 @@
+# Release 4.1.2.1
+
+ * base_wizard.py, keystore.py: add purpose48 multisig #244
+ * dash_ps: enhance new denoms/collateral patterns #246
+ * commands load_wallet: add set current for commands option #247
+ * dash_ps: fix _calc_total_need_val #248
+ * qt dip3: make wizards modeless #251
+ * Fix kivy: show tx type again #252
+ * base_wizard.py: fix choose_keystore (create seed) #253
+ * kivy: add network data loading progress bar, notify
+   when server disconnected on excessive resource usage (limits) #254
+ * Renew build dependencies for macOS/Win, other fixes #255
+ * Win builds: custom PyInstaller bootloaders to minimize
+   AV false-positives #256
+
+
 # Release 4.1.2.0
 
  * The wallet creation wizard no longer asks for a seed type.

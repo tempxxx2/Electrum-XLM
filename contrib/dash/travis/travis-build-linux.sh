@@ -71,6 +71,15 @@ echo "$LSECP256K1_SHA  $LSECP256K1_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
 unzip ${LSECP256K1_FILE} && rm ${LSECP256K1_FILE} sha256.txt
 
+PINST_PATH=https://github.com/zebra-lucky/PyInstaller/releases/download/
+PINST_PATH=${PINST_PATH}v4.2_build_wheels
+PINST_FILE=pyinstaller-4.2-cp38-cp38-win32.whl
+PINST_SHA=59a2334e7d28c22d2d3aaf9232976ad2b6b9d3aa944d5f83c6f517c2580e8681
+wget -O dist/${PINST_FILE} ${PINST_PATH}/${PINST_FILE}
+echo "$PINST_SHA  dist/$PINST_FILE" > sha256.txt
+shasum -a256 -s -c sha256.txt
+rm sha256.txt
+
 
 docker run --rm \
     -e WINEARCH=$WINEARCH \
@@ -115,6 +124,13 @@ TOR_FILE=${TOR_PROXY_VERSION}/tor-proxy-${TOR_PROXY_VERSION}-win64-setup.exe
 wget -O ${TOR_DIST} ${TOR_PROXY_PATH}/${TOR_FILE}
 TOR_SHA=514387e3b45eccd9b98e95450ea201ced49886cc4f0980d4f0f6f7a4a51aebe9
 echo "$TOR_SHA  $TOR_DIST" > sha256.txt
+shasum -a256 -s -c sha256.txt
+rm sha256.txt
+
+PINST_FILE=pyinstaller-4.2-cp38-cp38-win_amd64.whl
+PINST_SHA=1643595ef49936b8787fb32b68fece8c5f79b7dcc25e1c29bb3a6652d1bd55da
+wget -O dist/${PINST_FILE} ${PINST_PATH}/${PINST_FILE}
+echo "$PINST_SHA  dist/$PINST_FILE" > sha256.txt
 shasum -a256 -s -c sha256.txt
 rm sha256.txt
 
