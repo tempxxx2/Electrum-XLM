@@ -255,7 +255,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         asyncio.ensure_future(self.clean_keypairs_on_timeout())
         asyncio.ensure_future(self.cleanup_staled_denominate_wfls())
         asyncio.ensure_future(self.trigger_postponed_notifications())
-        asyncio.ensure_future(self.broadcast_new_denoms_new_collateral_wfls())
 
     def on_stop_threads(self):
         if self.state == PSStates.Mixing:
@@ -471,22 +470,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.prepare_pay_collateral_wfl()
             await asyncio.sleep(0.25)
 
-    async def broadcast_new_denoms_new_collateral_wfls(self):
-        w = self.wallet
-        while True:
-            if self.enabled:
-                wfl = self.new_denoms_wfl
-                if wfl and wfl.completed and wfl.next_to_send(w):
-                    await self.broadcast_new_denoms_wfl()
-                await asyncio.sleep(0.25)
-                wfl = self.new_collateral_wfl
-                if wfl and wfl.completed and wfl.next_to_send(w):
-                    await self.broadcast_new_collateral_wfl()
-                await asyncio.sleep(0.25)
-            else:
-                await asyncio.sleep(1)
-
     async def _maintain_collateral_amount(self):
+        w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         while not self.main_taskgroup.closed():
@@ -494,6 +479,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             if wfl:
                 if not wfl.completed or not wfl.tx_order:
                     await self.cleanup_new_collateral_wfl()
+                elif wfl.next_to_send(w):
+                    await self.broadcast_new_collateral_wfl()
+                else:
+                    for txid in wfl.tx_order:
+                        tx = Transaction(wfl.tx_data[txid].raw_tx)
+                        self._process_by_new_collateral_wfl(txid, tx)
             elif (not self._not_enough_funds
                     and not self.ps_collateral_cnt
                     and not self.calc_need_denoms_amounts(use_cache=True)):
@@ -515,6 +506,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _maintain_denoms(self):
+        w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         while not self.main_taskgroup.closed():
@@ -522,6 +514,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             if wfl:
                 if not wfl.completed or not wfl.tx_order:
                     await self.cleanup_new_denoms_wfl()
+                elif wfl.next_to_send(w):
+                    await self.broadcast_new_denoms_wfl()
+                else:
+                    for txid in wfl.tx_order:
+                        tx = Transaction(wfl.tx_data[txid].raw_tx)
+                        self._process_by_new_denoms_wfl(txid, tx)
             elif (not self._not_enough_funds
                     and self.calc_need_denoms_amounts(use_cache=True)):
                 coins = await self.get_next_coins_for_mixing()
@@ -1114,7 +1112,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' collateral workflow: {wfl.lid}')
                 tx = Transaction(wfl.tx_data[txid].raw_tx)
-                self._process_by_new_collateral_wfl(txid, tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new'
                                          f' collateral workflow: {wfl.lid}')
@@ -1497,7 +1494,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                                      f' denoms workflow: {wfl.lid}')
                 self.last_denoms_tx_time = time.time()
                 tx = Transaction(wfl.tx_data[txid].raw_tx)
-                self._process_by_new_denoms_wfl(txid, tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new denoms'
                                          f' workflow: {wfl.lid}')
