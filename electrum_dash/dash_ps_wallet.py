@@ -2176,7 +2176,12 @@ class PSDataMixin:
         w.db.pop_ps_tx_removed(txid)
         w.db.add_ps_tx(txid, tx_type, completed=True)
 
-        # check if not enough small denoms
+        self._check_enough_sm_denoms(tx, tx_type)
+
+    def _check_enough_sm_denoms(self, tx, tx_type):
+        if self.calc_denoms_method == self.CalcDenomsMethod.ABS:
+            return
+        w = self.wallet
         check_denoms_by_vals = False
         if tx_type == PSTxTypes.NEW_DENOMS:
             txin0 = copy.deepcopy(tx.inputs()[0])
