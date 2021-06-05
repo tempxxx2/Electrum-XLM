@@ -99,15 +99,15 @@ def sort_utxos_by_ps_rounds(x):
     return ps_rounds
 
 
-def varint_size(size):
+def varint_size(val):
     '''Calc Bitcoin VarInt size in bytes'''
-    if size < 253:
+    if val < 253:
         return 1
-    elif size < 2**16:
+    elif val < 2**16:
         return 3
-    elif size < 2**32:
+    elif val < 2**32:
         return 5
-    elif size < 2**64:
+    elif val < 2**64:
         return 9
 
 
