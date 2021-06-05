@@ -59,6 +59,7 @@ PS_SAVED_TX_TYPES = list(map(lambda x: x.value, [PSTxTypes.NEW_DENOMS,
 
 
 def filter_log_line(line):
+    '''Filter out txids/addresses from log lines'''
     pos = 0
     output_line = ''
     while pos < len(line):
@@ -84,12 +85,14 @@ def filter_log_line(line):
 
 
 def ps_coin_rounds_str(ps_rounds):
+    '''Return string repr of coin rounds or coin type for PS related coins'''
     if ps_rounds not in PS_COIN_ROUNDS_STR:
         return str(ps_rounds)
     return PS_COIN_ROUNDS_STR[int(ps_rounds)]
 
 
 def sort_utxos_by_ps_rounds(x):
+    '''Key fn for sorting from UI based on PS coin rounds/related coin type'''
     ps_rounds = x.ps_rounds
     if ps_rounds is None:
         return PSCoinRounds.MINUSINF
@@ -97,6 +100,7 @@ def sort_utxos_by_ps_rounds(x):
 
 
 def varint_size(size):
+    '''Calc Bitcoin VarInt size in bytes'''
     if size < 253:
         return 1
     elif size < 2**16:
@@ -108,6 +112,7 @@ def varint_size(size):
 
 
 def calc_tx_size(in_cnt, out_cnt, max_size=False):
+    '''Calc P2PKH tx size based on inputs/outputs count (sig size can vary)'''
     # base size is 4 bytes version + 4 bytes lock_time
     max_tx_size = 4 + 4
     # in size is 36 bytes outpoint + 1b len + iscript + 4 bytes sequence_no
@@ -122,15 +127,16 @@ def calc_tx_size(in_cnt, out_cnt, max_size=False):
 
 
 def calc_tx_fee(in_cnt, out_cnt, fee_per_kb, max_size=False):
+    '''Calc P2PKH tx fee based on inputs/outputs count and fee_per_kb rate'''
     return round(calc_tx_size(in_cnt, out_cnt, max_size) * fee_per_kb / 1000)
 
 
 class PSCoinRounds(IntEnum):
-    '''PS Tx types'''
-    MINUSINF = -1e9
-    OTHER = -3
-    MIX_ORIGIN = -2
-    COLLATERAL = -1
+    '''PS related coin types'''
+    MINUSINF = -1e9     # For sorting/selecting by rounds non PS related coins
+    OTHER = -3          # Not PS coins arriwed on address used by PS txs
+    MIX_ORIGIN = -2     # Coins left as change from new denoms/collateral txs
+    COLLATERAL = -1     # collateral amount coins
 
 
 PS_COIN_ROUNDS_STR = {
@@ -141,23 +147,25 @@ PS_COIN_ROUNDS_STR = {
 }
 
 
-# PSManager states
 class PSStates(IntEnum):
-    Unsupported = 0
-    Disabled = 1
-    Initializing = 2
-    Ready = 3
-    StartMixing = 4
-    Mixing = 5
-    StopMixing = 6
-    FindingUntracked = 7
-    Errored = 8
-    Cleaning = 9
+    '''PSManager states'''
+    Unsupported = 0         # PS is unsupported on this wallet
+    Disabled = 1            # PS is disabled yet
+    Initializing = 2        # Check data, find untracked txs
+    Ready = 3               # Ready to mixing
+    StartMixing = 4         # Starting mixing process
+    Mixing = 5              # Mixing is running
+    StopMixing = 6          # Stopping mixing process
+    FindingUntracked = 7    # Finding untracked txs
+    Errored = 8             # Some error is encountered on PS data adding/check
+    Cleaning = 9            # Cleaning PS data
 
 
 class PSTxData:
     '''
-    uuid: unique id for addresses reservation
+    Transaction data placed to workflows
+
+    uuid: unique workflow id for addresses reservation
     tx_type: PSTxTypes type
     txid: tx hash
     raw_tx: raw tx data
@@ -203,6 +211,7 @@ class PSTxData:
         return True
 
     async def send(self, psman, ignore_next_send=False):
+        '''Try broadcast tx with electrum network, on fail make timeout'''
         err = ''
         if self.sent:
             return False, err
@@ -249,6 +258,7 @@ class PSTxWorkflow:
 
     @property
     def lid(self):
+        '''Light uuid used for logging, to lighten output for reading'''
         return self.uuid[:8] if self.uuid else self.uuid
 
     def _as_dict(self):
@@ -287,12 +297,14 @@ class PSTxWorkflow:
             return True
 
     def next_to_send(self, wallet):
+        '''Determine which tx should be broadcasted'''
         for txid in self.tx_order:
             tx_data = self.tx_data[txid]
             if not tx_data.sent and wallet.is_local_tx(txid):
                 return tx_data
 
     def add_tx(self, **kwargs):
+        '''Add tx to workflow'''
         txid = kwargs.pop('txid')
         raw_tx = kwargs.pop('raw_tx', None)
         tx_type = kwargs.pop('tx_type')
@@ -305,6 +317,7 @@ class PSTxWorkflow:
         return tx_data
 
     def pop_tx(self, txid):
+        '''Pop tx from workflow'''
         if txid in self.tx_data:
             res = self.tx_data.pop(txid)
         else:
@@ -338,6 +351,7 @@ class PSDenominateWorkflow:
 
     @property
     def lid(self):
+        '''Light uuid used for logging, to lighten output for reading'''
         return self.uuid[:8] if self.uuid else self.uuid
 
     def _as_dict(self):
@@ -370,6 +384,7 @@ class PSDenominateWorkflow:
 
 
 class PSLogSubCat(IntEnum):
+    '''Logging subcategories to colorize GUI logs'''
     NoCategory = 0
     WflOk = 1
     WflErr = 2
@@ -377,6 +392,7 @@ class PSLogSubCat(IntEnum):
 
 
 class PSManLogAdapter(logging.LoggerAdapter):
+    '''Logging adapter with subcategories to colorize GUI logs'''
 
     def __init__(self, logger, extra):
         super(PSManLogAdapter, self).__init__(logger, extra)
@@ -449,16 +465,16 @@ class PSOptsMixin:
     MAX_MIX_ROUNDS = 16
     MAX_MIX_ROUNDS_TESTNET = 256
 
-    DEFAULT_PRIVATESEND_SESSIONS = 4
+    DEFAULT_PRIVATESEND_SESSIONS = 4    # Number of concurrent mixing sessions
     MIN_PRIVATESEND_SESSIONS = 1
     MAX_PRIVATESEND_SESSIONS = 10
 
-    DEFAULT_GROUP_HISTORY = True
-    DEFAULT_NOTIFY_PS_TXS = False
-    DEFAULT_SUBSCRIBE_SPENT = False
-    DEFAULT_ALLOW_OTHERS = False
+    DEFAULT_GROUP_HISTORY = True        # Group txs in history views
+    DEFAULT_NOTIFY_PS_TXS = False       # GUI notify on PS txs arrival
+    DEFAULT_SUBSCRIBE_SPENT = False     # on server subscribe to spent ps addrs
+    DEFAULT_ALLOW_OTHERS = False        # Allow spend other ps coins as regular
 
-    POOL_MIN_PARTICIPANTS = 3
+    POOL_MIN_PARTICIPANTS = 3           # mixing pool participants
     POOL_MIN_PARTICIPANTS_TESTNET = 2
     POOL_MAX_PARTICIPANTS = 20
 
@@ -478,14 +494,16 @@ class PSOptsMixin:
     ]
 
     class CalcDenomsMethod(IntEnumWithCheck):
-        DEF = 0  # default
-        ABS = 1  # absolute
+        '''Method of need denoms count calulation'''
+        DEF = 0  # use keep amount to calc need denoms
+        ABS = 1  # use absolute denoms count set from UI
 
     def __init__(self, wallet):
         self._allow_others = self.DEFAULT_ALLOW_OTHERS
 
     @property
     def keep_amount(self):
+        '''Get current keep amount, on reaching which mixing is stopped'''
         if self.calc_denoms_method != self.CalcDenomsMethod.ABS:
             return self.wallet.db.get_ps_data('keep_amount',
                                               self.DEFAULT_KEEP_AMOUNT)
@@ -493,6 +511,7 @@ class PSOptsMixin:
 
     @keep_amount.setter
     def keep_amount(self, amount):
+        '''Set keep amount'''
         if self.state in self.mixing_running_states:
             return
         if self.calc_denoms_method == self.CalcDenomsMethod.ABS:
@@ -505,13 +524,16 @@ class PSOptsMixin:
 
     @property
     def min_keep_amount(self):
+        '''Minimal possible keep_amount'''
         return self.MIN_KEEP_AMOUNT
 
     @property
     def max_keep_amount(self):
+        '''Maximal possible keep_amount'''
         return self.MAX_KEEP_AMOUNT
 
     def keep_amount_data(self, full_txt=False):
+        '''Str data for UI keep_amount preference'''
         if full_txt:
             return _('This amount acts as a threshold to turn off'
                      " PrivateSend mixing once it's reached.")
@@ -520,11 +542,13 @@ class PSOptsMixin:
 
     @property
     def mix_rounds(self):
+        '''Get current mix rounds for denoms'''
         return self.wallet.db.get_ps_data('mix_rounds',
                                           self.DEFAULT_MIX_ROUNDS)
 
     @mix_rounds.setter
     def mix_rounds(self, rounds):
+        '''Set need mix rounds for denoms'''
         if self.state in self.mixing_running_states:
             return
         if self.mix_rounds == rounds:
@@ -537,10 +561,12 @@ class PSOptsMixin:
 
     @property
     def min_mix_rounds(self):
+        '''Minimal possible mix_rounds'''
         return self.MIN_MIX_ROUNDS
 
     @property
     def max_mix_rounds(self):
+        '''Maximal possible mix_rounds'''
         if constants.net.TESTNET:
             return self.MAX_MIX_ROUNDS_TESTNET
         else:
@@ -548,6 +574,7 @@ class PSOptsMixin:
 
     @property
     def pool_min_participants(self):
+        '''Minimal possible mixing pool participants'''
         if constants.net.TESTNET:
             return self.POOL_MIN_PARTICIPANTS_TESTNET
         else:
@@ -555,9 +582,11 @@ class PSOptsMixin:
 
     @property
     def pool_max_participants(self):
+        '''Maximal possible mixing pool participants'''
         return self.POOL_MAX_PARTICIPANTS
 
     def mix_rounds_data(self, full_txt=False):
+        '''Str data for UI mix_rounds preference'''
         if full_txt:
             return _('This setting determines the amount of individual'
                      ' masternodes that an input will be anonymized through.'
@@ -568,6 +597,8 @@ class PSOptsMixin:
 
     def create_sm_denoms_data(self, full_txt=False, enough_txt=False,
                               no_denoms_txt=False, confirm_txt=False):
+        '''Str data for UI create small denoms functionality'''
+
         confirm_str_end = _('Do you want to create small denoms from one big'
                             ' denom utxo? No change value will be created'
                             ' for privacy reasons.')
@@ -588,6 +619,7 @@ class PSOptsMixin:
 
     @property
     def group_history(self):
+        '''Check if PS txs is groupped in tx history'''
         if self.unsupported:
             return False
         return self.wallet.db.get_ps_data('group_history',
@@ -595,11 +627,13 @@ class PSOptsMixin:
 
     @group_history.setter
     def group_history(self, group_history):
+        '''Set if PS txs should be groupped in tx history'''
         if self.group_history == group_history:
             return
         self.wallet.db.set_ps_data('group_history', bool(group_history))
 
     def group_history_data(self, full_txt=False):
+        '''Str data for UI group_history preference'''
         if full_txt:
             return _('Group PrivateSend mixing transactions in wallet history')
         else:
@@ -607,16 +641,19 @@ class PSOptsMixin:
 
     @property
     def notify_ps_txs(self):
+        '''Check if arrival of new PS txs is notified in UI'''
         return self.wallet.db.get_ps_data('notify_ps_txs',
                                           self.DEFAULT_NOTIFY_PS_TXS)
 
     @notify_ps_txs.setter
     def notify_ps_txs(self, notify_ps_txs):
+        '''Set if arrival of new PS txs should be notified in UI'''
         if self.notify_ps_txs == notify_ps_txs:
             return
         self.wallet.db.set_ps_data('notify_ps_txs', bool(notify_ps_txs))
 
     def notify_ps_txs_data(self, full_txt=False):
+        '''Str data for UI notify_ps_txs preference'''
         if full_txt:
             return _('Notify when PrivateSend mixing transactions'
                      ' have arrived')
@@ -624,6 +661,7 @@ class PSOptsMixin:
             return _('Notify on PrivateSend transactions')
 
     def need_notify(self, txid):
+        '''Check if new tx with txid should be notified in UI'''
         if self.notify_ps_txs:
             return True
         tx_type, completed = self.wallet.db.get_ps_tx(txid)
@@ -634,24 +672,29 @@ class PSOptsMixin:
 
     @property
     def max_sessions(self):
+        '''Get maximal possible concurrent mixing sessions'''
         return self.wallet.db.get_ps_data('max_sessions',
                                           self.DEFAULT_PRIVATESEND_SESSIONS)
 
     @max_sessions.setter
     def max_sessions(self, max_sessions):
+        '''Set maximal possible concurrent mixing sessions'''
         if self.max_sessions == max_sessions:
             return
         self.wallet.db.set_ps_data('max_sessions', int(max_sessions))
 
     @property
     def min_max_sessions(self):
+        '''Minimal possible mix_sessions'''
         return self.MIN_PRIVATESEND_SESSIONS
 
     @property
     def max_max_sessions(self):
+        '''Maximal possible mix_sessions'''
         return self.MAX_PRIVATESEND_SESSIONS
 
     def max_sessions_data(self, full_txt=False):
+        '''Str data for UI max_sessions preference'''
         if full_txt:
             return _('Count of PrivateSend mixing session')
         else:
@@ -659,11 +702,13 @@ class PSOptsMixin:
 
     @property
     def kp_timeout(self):
+        '''Get timeout for keypairs cleaning after mixing stopped'''
         return self.wallet.db.get_ps_data('kp_timeout',
                                           self.DEFAULT_KP_TIMEOUT)
 
     @kp_timeout.setter
     def kp_timeout(self, kp_timeout):
+        '''Set timeout for keypairs cleaning after mixing stopped'''
         if self.kp_timeout == kp_timeout:
             return
         kp_timeout = min(int(kp_timeout), self.MAX_KP_TIMEOUT)
@@ -672,13 +717,16 @@ class PSOptsMixin:
 
     @property
     def min_kp_timeout(self):
+        '''Minimal possible kp_timeout'''
         return self.MIN_KP_TIMEOUT
 
     @property
     def max_kp_timeout(self):
+        '''Maximal possible kp_timeout'''
         return self.MAX_KP_TIMEOUT
 
     def kp_timeout_data(self, full_txt=False):
+        '''Str data for UI kp_timeout preference'''
         if full_txt:
             return _('Time in minutes to keep keypairs after mixing stopped.'
                      ' Keypairs is cached before mixing starts on wallets with'
@@ -688,11 +736,13 @@ class PSOptsMixin:
 
     @property
     def subscribe_spent(self):
+        '''Check if on server subsriptions for spent PS addresses done'''
         return self.wallet.db.get_ps_data('subscribe_spent',
                                           self.DEFAULT_SUBSCRIBE_SPENT)
 
     @subscribe_spent.setter
     def subscribe_spent(self, subscribe_spent):
+        '''Set if on server subsriptions for spent PS addresses done'''
         if self.subscribe_spent == subscribe_spent:
             return
         self.wallet.db.set_ps_data('subscribe_spent', bool(subscribe_spent))
@@ -706,6 +756,7 @@ class PSOptsMixin:
                 self.unsubscribe_spent_addr(addr, hist)
 
     def subscribe_spent_data(self, full_txt=False):
+        '''Str data for UI subscribe_spent preference'''
         if full_txt:
             return _('Subscribe to spent PS addresses'
                      ' on electrum servers')
@@ -714,16 +765,20 @@ class PSOptsMixin:
 
     @property
     def allow_others(self):
+        '''Check if other PS coins allowed to spend in regular txs'''
         return self._allow_others
 
     @allow_others.setter
     def allow_others(self, allow_others):
+        '''Set if other PS coins allowed to spend in regular txs'''
         if self._allow_others == allow_others:
             return
         self._allow_others = allow_others
 
     def allow_others_data(self, full_txt=False,
                           qt_question=False, kv_question=False):
+        '''Str data for UI allow_others preference'''
+
         expl = _('Other PS coins appears if some transaction other than'
                  ' mixing PrivateSend transactions types send funds to one'
                  ' of addresses used for PrivateSend mixing.\n\nIt is not'
@@ -752,19 +807,23 @@ class PSOptsMixin:
 
     @property
     def group_origin_coins_by_addr(self):
+        '''Check if inputs is groupped by address for new denoms/colalteral'''
         return self.wallet.db.get_ps_data('group_origin_coins_by_addr', False)
 
     @group_origin_coins_by_addr.setter
     def group_origin_coins_by_addr(self, group):
+        '''Set if inputs is groupped by address for new denoms/colalteral'''
         self.wallet.db.set_ps_data('group_origin_coins_by_addr', bool(group))
 
     def group_origin_coins_by_addr_data(self, full_txt=False):
+        '''Str data for UI group_origin_coins_by_addr preference'''
         if full_txt:
             return _('In new mix transactions group origin coins by address')
         else:
             return _('Group origin coins by address')
 
     def mixing_control_data(self, full_txt=False):
+        '''Str data for UI mixing control'''
         if full_txt:
             return _('Control PrivateSend mixing process')
         else:
@@ -789,50 +848,62 @@ class PSOptsMixin:
 
     @property
     def last_mix_start_time(self):
+        '''Get last mixing starting time'''
         return self.wallet.db.get_ps_data('last_mix_start_time', 0)  # Jan 1970
 
     @last_mix_start_time.setter
     def last_mix_start_time(self, time):
+        '''Set last mixing starting time'''
         self.wallet.db.set_ps_data('last_mix_start_time', time)
 
     @property
     def last_mix_stop_time(self):
+        '''Get last mixing stopped time'''
         return self.wallet.db.get_ps_data('last_mix_stop_time', 0)  # Jan 1970
 
     @last_mix_stop_time.setter
     def last_mix_stop_time(self, time):
+        '''Set last mixing stopped time'''
         self.wallet.db.set_ps_data('last_mix_stop_time', time)
 
     @property
     def last_denoms_tx_time(self):
+        '''Get time when last new denoms tx was created'''
         return self.wallet.db.get_ps_data('last_denoms_tx_time', 0)  # Jan 1970
 
     @last_denoms_tx_time.setter
     def last_denoms_tx_time(self, time):
+        '''Set time when last new denoms tx was created'''
         self.wallet.db.set_ps_data('last_denoms_tx_time', time)
 
     @property
     def last_mixed_tx_time(self):
+        '''Get time when last denominate tx arrived'''
         return self.wallet.db.get_ps_data('last_mixed_tx_time', 0)  # Jan 1970
 
     @last_mixed_tx_time.setter
     def last_mixed_tx_time(self, time):
+        '''Set time when last denominate tx arrived'''
         self.wallet.db.set_ps_data('last_mixed_tx_time', time)
 
     @property
     def wait_for_mn_txs_time(self):
+        '''Get time to wait for denominate or pay collateral tx from MNs'''
         return self.WAIT_FOR_MN_TXS_TIME_SEC
 
     @property
     def mix_stop_secs_ago(self):
+        '''Get time in secs from moment when mixing was stopped'''
         return round(time.time() - self.last_mix_stop_time)
 
     @property
     def mix_recently_run(self):
+        '''Check mix recently run and denominate/pay collateral can arrive'''
         return self.mix_stop_secs_ago < self.wait_for_mn_txs_time
 
     @property
     def double_spend_warn(self):
+        '''Str data for UI on possible double spending if mix recently run'''
         if self.state in self.mixing_running_states:
             wait_time = self.wait_for_mn_txs_time
             return _('PrivateSend mixing is currently run. To prevent'
@@ -849,12 +920,14 @@ class PSOptsMixin:
         return ''
 
     def dn_balance_data(self, full_txt=False):
+        '''Str for UI denominated balance data'''
         if full_txt:
             return _('Currently available denominated balance')
         else:
             return _('Denominated Balance')
 
     def ps_balance_data(self, full_txt=False):
+        '''Str for UI PS balance data'''
         if full_txt:
             return _('Currently available anonymized balance')
         else:
@@ -862,13 +935,16 @@ class PSOptsMixin:
 
     @property
     def show_warn_electrumx(self):
+        '''Check if warning about PS specific on electrum should be shown'''
         return self.wallet.db.get_ps_data('show_warn_electrumx', True)
 
     @show_warn_electrumx.setter
     def show_warn_electrumx(self, show):
+        '''Set if warning about PS specific on electrum should be shown'''
         self.wallet.db.set_ps_data('show_warn_electrumx', show)
 
     def warn_electrumx_data(self, full_txt=False, help_txt=False):
+        '''Str data for UI warning/preferences about PS specific on electrum'''
         if full_txt:
             return _('Privacy Warning: ElectrumX is a weak spot'
                      ' in PrivateSend privacy and knows all your'
@@ -882,16 +958,20 @@ class PSOptsMixin:
 
     @property
     def show_warn_ps_ks(self):
+        '''Check if warning on PS keystore left funds should be shown'''
         return self.wallet.db.get_ps_data('show_warn_ps_ks', True)
 
     @show_warn_ps_ks.setter
     def show_warn_ps_ks(self, show):
+        '''Set if warning on PS keystore left funds should be shown'''
         self.wallet.db.set_ps_data('show_warn_ps_ks', show)
 
     def warn_ps_ks_data(self):
+        '''Str data for UI warning on PS keystore left funds, for HW wallets'''
         return _('Show warning on exit if PS Keystore contain funds')
 
     def mixing_progress(self, count_on_rounds=None):
+        '''Get mixing progress in percents'''
         w = self.wallet
         dn_balance = sum(w.get_balance(include_ps=False, min_rounds=0))
         if dn_balance == 0:
@@ -911,6 +991,7 @@ class PSOptsMixin:
             return 99
 
     def mixing_progress_data(self, full_txt=False):
+        '''Str data for UI mixing progress'''
         if full_txt:
             return _('Mixing Progress in percents')
         else:
@@ -918,21 +999,25 @@ class PSOptsMixin:
 
     @property
     def calc_denoms_method(self):
+        '''Get denoms calculation method'''
         return self.wallet.db.get_ps_data('calc_denoms_method',
                                           self.CalcDenomsMethod.DEF)
 
     @calc_denoms_method.setter
     def calc_denoms_method(self, method):
+        '''Set denoms calculation method'''
         if self.state in self.mixing_running_states:
             return
         assert self.CalcDenomsMethod.has_value(method), 'wrong method'
         self.wallet.db.set_ps_data('calc_denoms_method', int(method))
 
     def calc_denoms_method_str(self, method):
+        '''Get str repr of denoms calculation method'''
         assert self.CalcDenomsMethod.has_value(method), 'wrong method'
         return self.CALC_DENOMS_METHOD_STR[method]
 
     def calc_denoms_method_data(self, full_txt=False):
+        '''Str data for UI on denoms calculation method'''
         if full_txt:
             return _('Denoms calculate method determines'
                      ' count of denoms created for mixing')
@@ -941,6 +1026,7 @@ class PSOptsMixin:
 
     @property
     def abs_denoms_cnt(self):
+        '''Get dict containg absolute denoms count by denom value key'''
         res = self.wallet.db.get_ps_data('abs_denoms_cnt', {})
         if res:
             return {v: res[str(v)] for v in PS_DENOMS_VALS}
@@ -948,6 +1034,7 @@ class PSOptsMixin:
 
     @abs_denoms_cnt.setter
     def abs_denoms_cnt(self, abs_denoms_cnt):
+        '''Set absolute denoms count dict: denom value => count'''
         if self.state in self.mixing_running_states:
             return
         assert type(abs_denoms_cnt) == dict, 'wrong type'
@@ -976,9 +1063,11 @@ class PSUtilsMixin:
         self.postponed_notifications = {}
 
     def postpone_notification(self, event, *args):
+        '''Postopne notification to send many analogous notifications as one'''
         self.postponed_notifications[event] = args
 
     async def trigger_postponed_notifications(self):
+        '''Trigger postopned notification'''
         while True:
             await asyncio.sleep(0.5)
             if self.enabled:
@@ -988,6 +1077,7 @@ class PSUtilsMixin:
                         util.trigger_callback(event, *args)
 
     async def broadcast_transaction(self, tx, *, timeout=None) -> None:
+        '''Broadcast transaction with additional checks'''
         if self.enabled:
             w = self.wallet
 
@@ -1013,11 +1103,13 @@ class PSUtilsMixin:
         await self.network.broadcast_transaction(tx, timeout=timeout)
 
     def clear_ps_data(self):
+        '''Clear all wallet.db PS data'''
         if self.loop:
             coro = self._clear_ps_data()
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
     async def _clear_ps_data(self):
+        '''Async clear all wallet.db PS data'''
         w = self.wallet
 
         def _do_clear_ps_data():
@@ -1050,6 +1142,7 @@ class PSUtilsMixin:
             w.save_db()
 
     def check_min_rounds(self, coins, min_rounds):
+        '''Check all coins have minimum rounds mixed'''
         for c in coins:
             ps_rounds = c.ps_rounds
             if ps_rounds is None or ps_rounds < min_rounds:
@@ -1058,6 +1151,7 @@ class PSUtilsMixin:
                                              f' failed')
 
     def check_enough_sm_denoms(self, denoms_by_values):
+        '''Check is enoguh small denoms in denominated coins'''
         if not denoms_by_values:
             return False
         for dval in PS_DENOMS_VALS[:-1]:
@@ -1066,6 +1160,7 @@ class PSUtilsMixin:
         return True
 
     def check_big_denoms_presented(self, denoms_by_values):
+        '''Check if non minimal denoms is presented'''
         if not denoms_by_values:
             return False
         for dval in PS_DENOMS_VALS[1:]:
@@ -1074,6 +1169,7 @@ class PSUtilsMixin:
         return False
 
     def get_biggest_denoms_by_min_round(self):
+        '''Select non minimal denoms sorted by minimum rounds/maximum value'''
         w = self.wallet
         coins = w.get_utxos(None,
                             mature_only=True, confirmed_funding_only=True,
@@ -1083,6 +1179,7 @@ class PSUtilsMixin:
         return sorted(coins, key=lambda x: (x.ps_rounds, -x.value_sats()))
 
     def check_protx_info_completeness(self):
+        '''Check ProTx diffs data is ready and mixing can be run'''
         if not self.network:
             return False
         mn_list = self.network.mn_list
@@ -1092,17 +1189,20 @@ class PSUtilsMixin:
             return True
 
     def check_llmq_ready(self):
+        '''Check LLMQ data is ready and mixing can be run'''
         if not self.network:
             return False
         mn_list = self.network.mn_list
         return mn_list.llmq_ready
 
     def find_untracked_ps_txs_from_gui(self):
+        '''Run find untracked transactions functionality from UI'''
         if self.loop:
             coro = self.find_untracked_ps_txs()
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
     async def find_untracked_ps_txs(self, log=True):
+        '''Async run find untracked transactions functionality'''
         w = self.wallet
         found = 0
         with self.state_lock:
@@ -1141,6 +1241,7 @@ class PSUtilsMixin:
         return found
 
     def _fix_uncompleted_ps_txs(self):
+        '''Try to fix uncompleted PS data if adding it previuosly is failed'''
         w = self.wallet
         ps_txs = w.db.get_ps_txs()
         ps_txs_removed = w.db.get_ps_txs_removed()
@@ -1181,6 +1282,7 @@ class PSUtilsMixin:
             self.postpone_notification('ps-data-changes', w)
 
     def _get_simplified_history(self):
+        '''Get light version of tx history for find untracked functionality'''
         w = self.wallet
         history = []
         for txid in w.db.list_transactions():
@@ -1198,6 +1300,7 @@ class PSUtilsMixin:
 
     @profiler
     def _find_untracked_ps_txs(self, log):
+        '''Run find untracked txs functionality'''
         if log:
             self.logger.info('Finding untracked PrivateSend transactions')
         history = self._get_simplified_history()
@@ -1246,6 +1349,8 @@ class PSUtilsMixin:
         return found
 
     def prob_denominate_tx_coin(self, c, check_inputs_vals=False):
+        '''Try to detect possible outputs of denominate tx
+        to send PS transatcions on HW wallet with no PS Keystore/PS data'''
         w = self.wallet
         val = c.value_sats()
         if val not in PS_DENOMS_VALS:
@@ -1303,6 +1408,7 @@ class PSUtilsMixin:
         return True
 
     def find_common_ancestor(self, utxo_a, utxo_b, search_depth=5):
+        '''Try find common ancestor of utxo_a, utxo_b'''
         w = self.wallet
         min_common_depth = 1e9
         cur_depth = 0
