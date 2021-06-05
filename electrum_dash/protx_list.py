@@ -248,6 +248,7 @@ class MNList(Logger):
                 for k, v in rl['llmq_hashes'].items():
                     rl['llmq_hashes'][k] = bfh(v)[::-1]
                 return rl
+                self.logger.debug(f'loaded {RECENT_LIST_FNAME}')
         except Exception as e:
             self.logger.info(f'_read_recent_list: {str(e)}')
             return DEFAULT_MN_LIST
@@ -276,6 +277,7 @@ class MNList(Logger):
             s = json.dumps(rlc, indent=4)
             with gzip.open(path, 'wb') as f:
                 f.write(s.encode('utf-8'))
+            self.logger.debug(f'saved {RECENT_LIST_FNAME}')
         except Exception as e:
             self.logger.info(f'_save_recent_list: {str(e)}')
 
@@ -543,6 +545,8 @@ class MNList(Logger):
     async def on_mnlistdiff(self, event, value):
         '''Process and check MNListDiff payload'''
         base_height, height = value['params']
+        self.logger.debug(f'on_mnlistdiff base_height={base_height}'
+                          f' height={height}')
         try:
             q_base_height, q_height = self.sent_getmnlistd.get_nowait()
             if q_base_height != base_height or q_height != height:
@@ -563,6 +567,7 @@ class MNList(Logger):
         diff = value['result']
 
         def process_mnlistdiff():
+            self.logger.debug('process_mnlistdiff')
             cbtx = diff.cbTx
             if cbtx.tx_type:
                 if cbtx.tx_type != 5:
@@ -683,6 +688,8 @@ class MNList(Logger):
     async def on_protx_diff(self, key, value):
         '''Process and check protx.diff data'''
         base_height, height = value.get('params')
+        self.logger.debug(f'on_protx_diff base_height={base_height}'
+                          f' height={height}')
         try:
             q_base_height, q_height = self.sent_protx_diff.get_nowait()
             if q_base_height != base_height or q_height != height:
@@ -705,6 +712,7 @@ class MNList(Logger):
         diff = value.get('result')
 
         def process_protx_diff():
+            self.logger.debug('process_protx_diff')
             cbtx = Transaction(diff.get('cbTx', ''))
             cbtx.deserialize()
             if cbtx.tx_type:
