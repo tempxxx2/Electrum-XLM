@@ -1974,16 +1974,3 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             self.clear_denominate_wfl(wfl.uuid)
         self.logger.wfl_done(f'Finished processing of denominate'
                              f' workflow: {wfl.lid} with tx: {txid}')
-
-    def get_workflow_tx_info(self, wfl):
-        w = self.wallet
-        tx_cnt = len(wfl.tx_order)
-        tx_type = None if not tx_cnt else wfl.tx_data[wfl.tx_order[0]].tx_type
-        total = 0
-        total_fee = 0
-        for txid in wfl.tx_order:
-            tx = Transaction(wfl.tx_data[txid].raw_tx)
-            tx_info = w.get_tx_info(tx)
-            total += tx_info.amount
-            total_fee += tx_info.fee
-        return tx_type, tx_cnt, total, total_fee
