@@ -679,6 +679,8 @@ class DashNet(Logger):
         base_height = mn_list.protx_height if get_mns else mn_list.llmq_height
 
         height = self.network.get_local_height()
+        self.logger.debug(f'getmnlistd base_height={base_height}'
+                          f' height={height}')
         if get_mns:
             if not height or height <= base_height:
                 return
@@ -705,6 +707,9 @@ class DashNet(Logger):
             res = None
             err = None
             p = await self.get_random_peer()
+            self.logger.debug(f'{p.diagnostic_name()}.getmnlistd'
+                              f' base_height={base_height}'
+                              f' height={height}')
             res = await p.getmnlistd(*params)
         except asyncio.TimeoutError:
             err = f'getmnlistd(get_mns={get_mns} params={params}): timeout'
