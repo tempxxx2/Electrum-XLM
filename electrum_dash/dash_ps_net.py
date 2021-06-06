@@ -17,6 +17,7 @@ PRIVATESEND_SESSION_MSG_TIMEOUT = 40
 
 
 class PSDenoms(IntEnum):
+    '''Denoms values designated in P2P protocol'''
     D10 = 1
     D1 = 2
     D0_1 = 4
@@ -25,6 +26,7 @@ class PSDenoms(IntEnum):
 
 
 class PSMixSession:
+    '''P2P session with mixing masternode'''
 
     def __init__(self, psman, denom_value, denom, dsq, wfl_lid):
         self.logger = psman.logger
@@ -90,6 +92,8 @@ class PSMixSession:
                          f' peer: {self.peer_str}')
 
     def verify_ds_msg_sig(self, ds_msg):
+        '''Verify BLS signature of dsq message from masternode based on
+        SML entry for masternode from protx_list'''
         if not self.sml_entry:
             return False
         mn_pub_key = self.sml_entry.pubKeyOperator
@@ -101,6 +105,7 @@ class PSMixSession:
         return bls.BLS.verify(sig)
 
     def verify_final_tx(self, tx, denominate_wfl):
+        '''Verify final tx from dsf message'''
         inputs = denominate_wfl.inputs
         outputs = denominate_wfl.outputs
         icnt = 0
@@ -117,11 +122,13 @@ class PSMixSession:
             return False
 
     async def send_dsa(self, pay_collateral_tx):
+        '''Send dsa message to join or create mixing queue'''
         msg = DashDsaMsg(self.denom, pay_collateral_tx)
         await self.dash_peer.send_msg('dsa', msg.serialize())
         self.logger.debug(f'{self.wfl_lid}: dsa sent')
 
     async def send_dsi(self, inputs, pay_collateral_tx, outputs):
+        '''Send dsi message containing inputs to mix, output addresses'''
         scriptSig = b''
         sequence = 0xffffffff
         vecTxDSIn = []
@@ -139,6 +146,7 @@ class PSMixSession:
         self.logger.debug(f'{self.wfl_lid}: dsi sent')
 
     async def send_dss(self, signed_inputs):
+        '''Send dss message containing signed inputs of dsf message final tx'''
         msg = DashDssMsg(signed_inputs)
         await self.dash_peer.send_msg('dss', msg.serialize())
 
@@ -176,6 +184,7 @@ class PSMixSession:
             return None, None
 
     def on_dssu(self, dssu):
+        '''Process dssu message from masternode, containing state update'''
         session_id = dssu.sessionID
         if not self.session_id:
             if session_id:
@@ -204,6 +213,8 @@ class PSMixSession:
             raise Exception(f'Unknown dssu statusUpdate: {dssu.statusUpdate}')
 
     def on_dsq(self, dsq):
+        '''Process dsq messages broadcasted from masternodes,
+        and informing about existing queue states'''
         denom = dsq.nDenom
         if denom != self.denom:
             raise Exception(f'Wrong denom in dsq msg: {denom},'
@@ -219,6 +230,7 @@ class PSMixSession:
         self.nTime = dsq.nTime
 
     def on_dsf(self, dsf, denominate_wfl):
+        '''Process dsf message from masternode, containing final tx to sign'''
         session_id = dsf.sessionID
         if self.session_id != session_id:
             raise Exception(f'Wrong session id {session_id},'
@@ -228,6 +240,8 @@ class PSMixSession:
         return dsf.txFinal
 
     def on_dsc(self, dsc):
+        '''Process dsc message from masternode,
+        which indicates mixing session is complete'''
         session_id = dsc.sessionID
         if self.session_id != session_id:
             raise Exception(f'Wrong session id {session_id},'
