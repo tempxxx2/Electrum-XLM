@@ -1385,8 +1385,9 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
     @log_exceptions
     async def stop(self, *, full_shutdown: bool = True):
         self.logger.info("stopping network")
-        self.mn_list.stop()
-        await self.dash_net.stop()
+        if full_shutdown:
+            self.mn_list.stop()
+            await self.dash_net.stop()
         # timeout: if full_shutdown, it is up to the caller to time us out,
         #          otherwise if e.g. restarting due to proxy changes, we time out fast
         async with (nullcontext() if full_shutdown else ignore_after(1)):
