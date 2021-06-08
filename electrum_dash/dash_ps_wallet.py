@@ -945,6 +945,8 @@ class PSDataMixin:
                     cnt = len(self._keypairs_cache[cache_type])
                     res.append(f'Keypairs cache type: {cache_type}'
                                f' cached keys: {cnt}')
+        if self.gather_mix_stat:
+            res.append(str(self.mix_stat))
         return res
 
     def first_unused_index(self, for_change=False, force_main_ks=False):
