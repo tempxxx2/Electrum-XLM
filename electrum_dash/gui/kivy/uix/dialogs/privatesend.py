@@ -346,6 +346,12 @@ Builder.load_string('''
                 title: root.allow_others_text + self.value
                 description: root.allow_others_help
                 action: root.toggle_allow_others
+            CardSeparator
+            SettingsItem:
+                value: ': ON' if root.gather_mix_stat else ': OFF'
+                title: root.gather_mix_stat_text + self.value
+                description: root.gather_mix_stat_help
+                action: root.toggle_gather_mix_stat
 
 
 <DenomsCalcMethodPopup@Popup>
@@ -720,6 +726,7 @@ class PSMixingTab(BoxLayout):
     group_history = BooleanProperty()
     subscribe_spent = BooleanProperty()
     allow_others = BooleanProperty()
+    gather_mix_stat = BooleanProperty()
     is_fiat_dn_balance = False
     is_fiat_ps_balance = False
 
@@ -771,6 +778,9 @@ class PSMixingTab(BoxLayout):
         self.allow_others_text = psman.allow_others_data()
         self.allow_others_help = psman.allow_others_data(full_txt=True)
 
+        self.gather_mix_stat_text = psman.gather_mix_stat_data()
+        self.gather_mix_stat_help = psman.gather_mix_stat_data(full_txt=True)
+
         super(PSMixingTab, self).__init__()
         self.update()
 
@@ -793,6 +803,7 @@ class PSMixingTab(BoxLayout):
         self.group_history = psman.group_history
         self.subscribe_spent = psman.subscribe_spent
         self.allow_others = psman.allow_others
+        self.gather_mix_stat = psman.gather_mix_stat
 
     def show_warn_electrumx(self, *args):
         EXWarnPopup(self.psman).open()
@@ -924,6 +935,15 @@ class PSMixingTab(BoxLayout):
             d = Question(q, on_q_answered)
             d.size_hint = (0.9, 0.9)
             d.open()
+
+    def toggle_gather_mix_stat(self, *args):
+        psman = self.psman
+        if psman.state in psman.mixing_running_states:
+            self.app.show_info(_('To change value stop mixing process'))
+            return
+        psman.gather_mix_stat = not psman.gather_mix_stat
+        self.gather_mix_stat = psman.gather_mix_stat
+        self.psdlg.info_tab.update()
 
     def show_coins_dialog(self, *args):
         self.app.coins_dialog()

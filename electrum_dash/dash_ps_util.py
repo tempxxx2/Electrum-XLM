@@ -764,6 +764,29 @@ class PSOptsMixin:
         else:
             return _('Group origin coins by address')
 
+    @property
+    def gather_mix_stat(self):
+        '''Check if mixing sessions statisitics should be gathered'''
+        if self.unsupported:
+            return False
+        return self.wallet.db.get_ps_data('gather_mix_stat', False)
+
+    @gather_mix_stat.setter
+    def gather_mix_stat(self, gather_mix_stat):
+        '''Change gathering mixing statistics option'''
+        if self.state in self.mixing_running_states:
+            return
+        if self.gather_mix_stat == gather_mix_stat:
+            return
+        self.wallet.db.set_ps_data('gather_mix_stat', bool(gather_mix_stat))
+
+    def gather_mix_stat_data(self, full_txt=False):
+        '''Str data for UI gather_mix_stat preference'''
+        if full_txt:
+            return _('Gather mixing sessions statistics')
+        else:
+            return _('Gather mixing statistics')
+
     def mixing_control_data(self, full_txt=False):
         if full_txt:
             return _('Control PrivateSend mixing process')
