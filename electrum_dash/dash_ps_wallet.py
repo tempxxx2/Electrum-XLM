@@ -2179,6 +2179,8 @@ class PSDataMixin:
         self._check_enough_sm_denoms(tx, tx_type)
 
     def _check_enough_sm_denoms(self, tx, tx_type):
+        '''Check if count of small denoms is engoug to make PS transaction
+        with reasonable fee. If not send notification to GUI'''
         if self.calc_denoms_method == self.CalcDenomsMethod.ABS:
             return
         w = self.wallet
