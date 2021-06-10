@@ -449,12 +449,16 @@ class DSMsgStat():
     timeout_cnt = attr.ib(type=int, default=0)
     peer_closed_cnt = attr.ib(type=int, default=0)
     error_cnt = attr.ib(type=int, default=0)
+    total_wait_sec = attr.ib(type=float, default=0)
     min_wait_sec = attr.ib(type=float, default=1e9)
     max_wait_sec = attr.ib(type=float, default=0.0)
 
     def __str__(self):
         min_wait_sec = 0.0 if self.min_wait_sec == 1e9 else self.min_wait_sec
+        success_cnt = self.success_cnt
+        avg_wait_sec = self.total_wait_sec / success_cnt if success_cnt else .0
         min_wait = round(min_wait_sec, 1)
+        avg_wait = round(avg_wait_sec, 1)
         max_wait = round(self.max_wait_sec, 1)
         return (f'all={self.sent_cnt},'
                 f' ok={self.success_cnt},'
@@ -462,7 +466,7 @@ class DSMsgStat():
                 f' timeout={self.timeout_cnt},'
                 f' closed={self.peer_closed_cnt},'
                 f' dssu={self.dssu_cnt},'
-                f' ok min/max={min_wait}/{max_wait} sec')
+                f' min/avg/max={min_wait}/{avg_wait}/{max_wait}sec')
 
     def send_msg(self):
         '''Called before sending outgoing ds messages'''
@@ -477,6 +481,7 @@ class DSMsgStat():
         '''Called on arrival of next mixing worflow message'''
         wait_sec = time.time() - self.msg_sent
         self.min_wait_sec = min(self.min_wait_sec, wait_sec)
+        self.total_wait_sec += wait_sec
         self.max_wait_sec = max(self.max_wait_sec, wait_sec)
         self.success_cnt += 1
 

@@ -278,6 +278,8 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert ms.dsa.error_cnt == ms.dsi.error_cnt == ms.dss.error_cnt == 0
         assert (ms.dsa.min_wait_sec == ms.dsi.min_wait_sec
                     == ms.dss.min_wait_sec == 1e9)
+        assert (ms.dsa.total_wait_sec == ms.dsi.total_wait_sec
+                    == ms.dss.total_wait_sec == 0)
         assert (ms.dsa.max_wait_sec == ms.dsi.max_wait_sec
                     == ms.dss.max_wait_sec == 0)
 
@@ -291,6 +293,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         ms.dsa.on_read_msg()
         assert ms.dsa.success_cnt == 1
         assert ms.dsa.min_wait_sec > 0
+        assert ms.dsa.total_wait_sec > 0
         assert ms.dsa.max_wait_sec > 0
 
         ms.dsi.send_msg()
