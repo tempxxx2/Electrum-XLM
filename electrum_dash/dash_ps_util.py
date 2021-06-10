@@ -880,16 +880,19 @@ class PSOptsMixin:
             return
         if self.gather_mix_stat == gather_mix_stat:
             return
+        self.clear_mix_stat()
         self.wallet.db.set_ps_data('gather_mix_stat', bool(gather_mix_stat))
 
     def clear_mix_stat(self):
         '''Clear psman.mix_stat dict'''
+        if self.state in self.mixing_running_states:
+            return
         self.mix_stat = MixingStats()
 
     def gather_mix_stat_data(self, full_txt=False):
         '''Str data for UI gather_mix_stat preference'''
         if full_txt:
-            return _('Gather mixing sessions statistics')
+            return _('Gather mixing sessions statistics (Reset on toggle)')
         else:
             return _('Gather mixing statistics')
 
