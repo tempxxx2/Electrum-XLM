@@ -315,11 +315,14 @@ class MNList(Logger):
         self.recent_list['sml_hashes'] = self.sml_hashes = {}
         self.recent_list['quorums'] = self.quorums = {}
         self.recent_list['llmq_hashes'] = self.llmq_hashes = {}
+        self.protx_info = {}
+        self.mns_outpoints = {}
         self._save_recent_list()
         self._save_protx_info(force=True)
         self.protx_state = MNList.DIP3_UNKNOWN
         self.diff_deleted_mns = []
         self.diff_hashes = []
+        self.notify('mn-list-diff-updated')
         if self.dash_net_enabled:
             coro = self.dash_net.getmnlistd()
         else:
