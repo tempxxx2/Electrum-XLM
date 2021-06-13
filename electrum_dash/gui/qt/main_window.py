@@ -1973,7 +1973,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         no_ps_data = psman.is_hw_ks and not psman.enabled
         def make_tx(fee_est):
             tx = self.wallet.make_unsigned_transaction(
-                coins=self.get_coins(min_rounds=min_rounds),
+                coins=inputs,
                 outputs=outputs,
                 fee=fee_est,
                 is_sweep=False,
@@ -2015,14 +2015,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             return
 
         cancelled, is_send, password, tx = conf_dlg.run()
+        if cancelled:
+            return
         if tx.tx_type:
             try:
                 tx.extra_payload.check_after_tx_prepared(tx)
             except DashTxError as e:
                 self.show_message(str(e))
                 return
-        if cancelled:
-            return
         if is_send:
             pr = self.payment_request
             self.save_pending_invoice()
