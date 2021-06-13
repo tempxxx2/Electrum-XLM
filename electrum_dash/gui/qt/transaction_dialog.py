@@ -281,7 +281,7 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
         action.triggered.connect(lambda: self.copy_to_clipboard(tx=gettx()))
         menu.addAction(action)
 
-        qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
+        qr_icon = "qrcode.png"
         action = QAction(read_QIcon(qr_icon), _("Show as QR code"), self)
         action.triggered.connect(lambda: self.show_qr(tx=gettx()))
         menu.addAction(action)
