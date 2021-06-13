@@ -948,16 +948,12 @@ class PreviewTxDialog(BaseTxDialog, TxEditor):
             self.feerate_e.setAmount(displayed_feerate)
 
         # show/hide fee rounding icon
+        if self.is_ps_tx:  # PS coinchooser does not use fee rounding
+            return
         feerounding = (fee - displayed_fee) if (fee and displayed_fee is not None) else 0
         self.set_feerounding_text(int(feerounding))
         self.feerounding_icon.setToolTip(self.feerounding_text)
         self.feerounding_icon.setVisible(abs(feerounding) >= 1)
-        if not self.is_ps_tx:  # PS coinchooser does not use fee rounding
-            feerounding = (fee - displayed_fee) if fee else 0
-            if abs(feerounding) >= 1:
-                self.set_feerounding_text(int(feerounding))
-                if self.config.get('show_fee', False):
-                    self.feerounding_icon.setVisible(True)
 
     def can_finalize(self):
         return (self.tx is not None
