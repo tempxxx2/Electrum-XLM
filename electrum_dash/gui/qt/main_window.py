@@ -1995,23 +1995,39 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         conf_dlg = ConfirmTxDialog(window=self, make_tx=make_tx,
                                    output_value=output_value,
                                    is_sweep=is_sweep, is_ps_tx=is_ps)
+        conf_dlg.bg_update(
+            lambda x: self._conf_dlg_after_bg_update(conf_dlg,
+                                                     external_keypairs))
+
+    def _conf_dlg_after_bg_update(self, conf_dlg, external_keypairs):
+        conf_dlg.update()
         if conf_dlg.not_enough_funds:
+            self._on_conf_dlg_not_enough_funds(conf_dlg, external_keypairs)
+        else:
+            self._conf_dlg_or_preview_dlg(conf_dlg, external_keypairs)
+
+    def _on_conf_dlg_not_enough_funds(self, conf_dlg, external_keypairs):
+
+        def enough_funds_cb(can_continue):
             # Check if we had enough funds excluding fees,
             # if so, still provide opportunity to set lower fees.
-            if not conf_dlg.have_enough_funds_assuming_zero_fees():
+            if can_continue:
+                self._conf_dlg_or_preview_dlg(conf_dlg, external_keypairs)
+            else:
                 text = self.get_text_not_enough_funds_mentioning_frozen()
                 self.show_message(text)
-                return
+        conf_dlg.bg_check_have_enough_funds_assuming_zero_fees(enough_funds_cb)
 
+    def _conf_dlg_or_preview_dlg(self, conf_dlg, external_keypairs):
         # shortcut to advanced preview (after "enough funds" check!)
         if self.config.get('advanced_preview'):
             preview_dlg = PreviewTxDialog(
                 window=self,
-                make_tx=make_tx,
+                make_tx=conf_dlg.make_tx,
                 external_keypairs=external_keypairs,
-                output_value=output_value,
-                is_ps_tx=is_ps)
-            preview_dlg.show()
+                output_value=conf_dlg.output_value,
+                is_ps_tx=conf_dlg.is_ps_tx)
+            preview_dlg.bg_update(lambda x: preview_dlg.update_and_show())
             return
 
         cancelled, is_send, password, tx = conf_dlg.run()
@@ -2034,11 +2050,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         else:
             preview_dlg = PreviewTxDialog(
                 window=self,
-                make_tx=make_tx,
+                make_tx=conf_dlg.make_tx,
                 external_keypairs=external_keypairs,
-                output_value=output_value,
-                is_ps_tx=is_ps)
-            preview_dlg.show()
+                output_value=conf_dlg.output_value,
+                is_ps_tx=conf_dlg.is_ps_tx)
+            preview_dlg.bg_update(lambda x: preview_dlg.update_and_show())
 
     def broadcast_or_show(self, tx: Transaction,
                           pr: Optional[paymentrequest.PaymentRequest]):

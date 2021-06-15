@@ -55,7 +55,7 @@ from .util import (MessageBoxMixin, read_QIcon, Buttons, icon_path,
                    char_width_in_lineedit, TRANSACTION_FILE_EXTENSION_FILTER_SEPARATE,
                    TRANSACTION_FILE_EXTENSION_FILTER_ONLY_COMPLETE_TX,
                    TRANSACTION_FILE_EXTENSION_FILTER_ONLY_PARTIAL_TX,
-                   BlockingWaitingDialog, getSaveFileName, ColorSchemeItem)
+                   WaitingDialog, getSaveFileName, ColorSchemeItem)
 
 from .fee_slider import FeeSlider, FeeComboBox
 from .confirm_tx_dialog import TxEditor
@@ -91,7 +91,7 @@ def show_transaction(tx: Transaction, *, parent: 'ElectrumWindow', desc=None, pr
         _logger.exception('unable to deserialize the transaction')
         parent.show_critical(_("Dash Electrum was unable to deserialize the transaction:") + "\n" + str(e))
     else:
-        d.show()
+        d.bg_update(lambda x: d.update_and_show())
 
 
 
@@ -241,11 +241,19 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
         # As a result, e.g. we might learn an imported address tx is segwit,
         # or that a beyond-gap-limit address is is_mine.
         # note: this might fetch prev txs over the network.
-        BlockingWaitingDialog(
-            self,
-            _("Adding info to tx, from wallet and network..."),
-            lambda: tx.add_info_from_wallet(self.wallet),
-        )
+
+    def bg_update(self, on_success):
+        parent = self.main_window
+        WaitingDialog(parent,
+                      _("Adding info to tx, from wallet and network..."),
+                      lambda: self.tx.add_info_from_wallet(parent.wallet),
+                      on_success, parent.on_error)
+
+    def update_and_show(self):
+        self.update()
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def do_broadcast(self):
         pr = self.main_window.payment_request
@@ -747,7 +755,6 @@ class TxDialog(BaseTxDialog):
     def __init__(self, tx: Transaction, *, parent: 'ElectrumWindow', desc, prompt_if_unsaved):
         BaseTxDialog.__init__(self, parent=parent, desc=desc, prompt_if_unsaved=prompt_if_unsaved, finalized=True)
         self.set_tx(tx)
-        self.update()
 
 
 class PreviewTxDialog(BaseTxDialog, TxEditor):
@@ -771,9 +778,12 @@ class PreviewTxDialog(BaseTxDialog, TxEditor):
         )
         BaseTxDialog.__init__(self, parent=window, desc='', prompt_if_unsaved=False,
                               finalized=False, external_keypairs=external_keypairs)
-        BlockingWaitingDialog(window, _("Preparing transaction..."),
-                              lambda: self.update_tx(fallback_to_zero_fee=True))
-        self.update()
+
+    def bg_update(self, on_success):
+        parent = self.main_window
+        WaitingDialog(parent, _("Preparing transaction..."),
+                      lambda: self.update_tx(fallback_to_zero_fee=True),
+                      on_success, parent.on_error)
 
     def create_fee_controls(self):
 
