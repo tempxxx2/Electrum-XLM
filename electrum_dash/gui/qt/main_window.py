@@ -95,7 +95,7 @@ from .util import (read_QIcon, ColorScheme, text_dialog, icon_path, WaitingDialo
                    import_meta_gui, export_meta_gui,
                    filename_field, address_field, char_width_in_lineedit, webopen,
                    TRANSACTION_FILE_EXTENSION_FILTER_ANY, MONOSPACE_FONT,
-                   getOpenFileName, getSaveFileName, BlockingWaitingDialog)
+                   getOpenFileName, getSaveFileName)
 from .util import ButtonsTextEdit, ButtonsLineEdit
 from .installwizard import WIF_HELP_TEXT
 from .history_list import HistoryList, HistoryModel
@@ -3522,22 +3522,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         grid.setRowStretch(len(plugins.descriptions.values()), 1)
         vbox.addLayout(Buttons(CloseButton(d)))
         d.exec_()
-
-    def _add_info_to_tx_from_wallet_and_network(self, tx: PartialTransaction) -> bool:
-        """Returns whether successful."""
-        # note side-effect: tx is being mutated
-        assert isinstance(tx, PartialTransaction)
-        try:
-            # note: this might download input utxos over network
-            BlockingWaitingDialog(
-                self,
-                _("Adding info to tx, from wallet and network..."),
-                lambda: tx.add_info_from_wallet(self.wallet, ignore_network_issues=False),
-            )
-        except NetworkException as e:
-            self.show_error(repr(e))
-            return False
-        return True
 
     def save_transaction_into_wallet(self, tx: Transaction):
         win = self.top_level_window()
