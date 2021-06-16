@@ -270,7 +270,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         tabs.addTab(self.create_history_tab(), read_QIcon("tab_history.png"), _('History'))
         tabs.addTab(self.send_tab, read_QIcon("tab_send.png"), _('Send'))
         tabs.addTab(self.receive_tab, read_QIcon("tab_receive.png"), _('Receive'))
-        self.update_avalaible_amount()
+        self.update_available_amount()
 
         def add_optional_tab(tabs, tab, icon, description, name):
             tab.tab_icon = icon
@@ -1178,7 +1178,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if wallet != self.wallet:
             return
         self.history_model.refresh('update_tabs')
-        self.update_avalaible_amount()
+        self.update_available_amount()
         self.update_receive_address_styling()
         self.request_list.update()
         self.address_list.update()
@@ -1840,7 +1840,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def on_ps_cb(self, is_ps):
         if self.max_button.isChecked():
             self.spend_max()
-        self.update_avalaible_amount()
+        self.update_available_amount()
         if is_ps:
             w = self.wallet
             psman = w.psman
@@ -1861,9 +1861,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.set_ps_cb_from_coins(coins)
         else:
             self.ps_cb.setChecked(False)
-        self.update_avalaible_amount()
+        self.update_available_amount()
 
-    def update_avalaible_amount(self, nonlocal_only=False):
+    def update_available_amount(self, nonlocal_only=False):
         if run_hook('abort_send', self):  # This and extra fee hooks added for
             return                        # code consistency (trustedcoin only)
         wallet = self.wallet
@@ -1903,7 +1903,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if not coins:
             if is_ps:
                 self.ps_cb.setChecked(False)
-            self.update_avalaible_amount()
+            self.update_available_amount()
             if self.max_button.isChecked():
                 self.spend_max()
             return
@@ -1923,7 +1923,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         else:
             if is_ps:
                 self.ps_cb.setChecked(False)
-        self.update_avalaible_amount()
+        self.update_available_amount()
         if self.max_button.isChecked():
             self.spend_max()
 
