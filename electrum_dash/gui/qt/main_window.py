@@ -259,6 +259,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         coincontrol_sb = self.create_coincontrol_statusbar()
 
         self.tabs = tabs = QTabWidget(self)
+        self.tabs.currentChanged.connect(self.on_tabs_switch)
         self.send_tab = self.create_send_tab()
         self.receive_tab = self.create_receive_tab()
         self.addresses_tab = self.create_addresses_tab()
@@ -381,6 +382,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self._update_check_thread = UpdateCheckThread()
             self._update_check_thread.checked.connect(on_version_received)
             self._update_check_thread.start()
+
+    def on_tabs_switch(self, x):
+        if self.tabs.currentIndex() == self.tabs.indexOf(self.send_tab):
+            self.update_available_amount()
 
     def show_backup_msg(self):
         if getattr(self.wallet.storage, 'backup_message', None):
@@ -1864,8 +1869,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.update_available_amount()
 
     def update_available_amount(self, nonlocal_only=False):
-        if run_hook('abort_send', self):  # This and extra fee hooks added for
-            return                        # code consistency (trustedcoin only)
+        if self.tabs.currentIndex() != self.tabs.indexOf(self.send_tab):
+            return
         wallet = self.wallet
         psman = wallet.psman
         is_ps = self.ps_cb.isChecked()
