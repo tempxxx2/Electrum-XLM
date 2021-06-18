@@ -99,7 +99,7 @@ class KeyPairsMixin:
 
     def on_wallet_password_set(self):
         '''After password set: need stop mixing as need password to sign txs.
-        After restarting mixign keypairs will be cached'''
+        After restarting mixing keypairs will be cached'''
         if self.state == PSStates.Mixing:
             self.stop_mixing(self.WALLET_PASSWORD_SET_MSG)
 
