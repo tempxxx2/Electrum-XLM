@@ -141,7 +141,7 @@ class ConfirmTxDialog(FeeSliderDialog, Factory.Popup):
         tx_size = tx.estimated_size()
         fee = tx.get_fee()
         self.ids.fee_label.text = self.app.format_amount_and_units(fee)
-        feerate = Decimal(fee) / Decimal(tx_size / 1000)  # duffs/kB
+        feerate = Decimal(fee) / Decimal(tx_size) * 1000  # duffs/kB
         self.ids.feerate_label.text = f'{feerate:.1f} duffs/kB'
         self.ids.amount_label.text = self.app.format_amount_and_units(amount)
         x_fee = run_hook('get_tx_extra_fee', self.app.wallet, tx)
