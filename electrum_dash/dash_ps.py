@@ -1156,7 +1156,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     self.set_new_collateral_wfl(wfl)
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' collateral workflow: {wfl.lid}')
-                tx = Transaction(wfl.tx_data[txid].raw_tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new'
                                          f' collateral workflow: {wfl.lid}')
@@ -1552,7 +1551,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' denoms workflow: {wfl.lid}')
                 self.last_denoms_tx_time = time.time()
-                tx = Transaction(wfl.tx_data[txid].raw_tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new denoms'
                                          f' workflow: {wfl.lid}')
