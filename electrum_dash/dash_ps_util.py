@@ -500,7 +500,7 @@ class DSMsgStat():
 
 @attr.s
 class MixingStats():
-    '''Outgoing ds messages statistics groupped together'''
+    '''Outgoing ds messages statistics grouped together'''
     dsa = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
     dsi = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
     dss = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
@@ -873,7 +873,7 @@ class PSOptsMixin:
 
     @property
     def gather_mix_stat(self):
-        '''Check if mixing sessions statisitics should be gathered'''
+        '''Check if mixing sessions statistics should be gathered'''
         if self.unsupported:
             return False
         return self.wallet.db.get_ps_data('gather_mix_stat', False)

@@ -1619,7 +1619,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                         self.mix_stat.dsa.on_read_msg()
                     break
                 else:
-                    raise Exception(f'Unsolisited cmd: {cmd} after dsa sent')
+                    raise Exception(f'Unsolicited cmd: {cmd} after dsa sent')
 
             pay_collateral_tx = self.get_pay_collateral_tx()
             if not pay_collateral_tx:
@@ -1641,7 +1641,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     final_tx = PartialTransaction.from_tx(res)
                     break
                 else:
-                    raise Exception(f'Unsolisited cmd: {cmd} after dsi sent')
+                    raise Exception(f'Unsolicited cmd: {cmd} after dsi sent')
 
             signed_inputs = self._sign_inputs(final_tx, wfl.inputs)
             if self.gather_mix_stat:
