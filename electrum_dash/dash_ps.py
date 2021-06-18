@@ -598,7 +598,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def start_mix_session(self, denom_value, dsq, wfl_lid):
-        '''Start mixing session on MN from dsq in wfl indentified by wfl_lid'''
+        '''Start mixing session on MN from dsq in wfl identified by wfl_lid'''
         n_denom = PS_DENOMS_DICT[denom_value]
         sess = PSMixSession(self, denom_value, n_denom, dsq, wfl_lid)
         peer_str = sess.peer_str
@@ -1631,7 +1631,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(self.wait_for_mn_txs_time/12)
 
     async def start_denominate_wfl(self):
-        '''Select suitable mastenode and start single denominate workflow '''
+        '''Select suitable masternode and start single denominate workflow '''
         wfl = None
         try:
             _start = self._start_denominate_wfl

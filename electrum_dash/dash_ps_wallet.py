@@ -109,10 +109,10 @@ class KeyPairsMixin:
         def _clean_kp_on_timeout():
             with self.keypairs_state_lock:
                 if self.keypairs_state == KPStates.Unused:
-                    self.logger.info('Cleaning Keyparis Cache'
+                    self.logger.info('Cleaning Keypairs Cache'
                                      ' on inactivity timeout')
                     self._cleanup_all_keypairs_cache()
-                    self.logger.info('Cleaned Keyparis Cache')
+                    self.logger.info('Cleaned Keypairs Cache')
                     self.keypairs_state = KPStates.Empty
         while True:
             if self.enabled:
@@ -179,7 +179,7 @@ class KeyPairsMixin:
         return need_sign_cnt, need_sign_change_cnt, new_collateral_cnt
 
     def calc_need_new_keypairs_cnt(self):
-        '''Calculate need keypairs count on mixing start/keyipairs caching'''
+        '''Calculate need keypairs count on mixing start/keypairs caching'''
         new_denoms_amounts_real = self.calc_need_denoms_amounts()
         new_denoms_cnt_real = sum([len(a) for a in new_denoms_amounts_real])
         new_denoms_val_real = sum([sum(a) for a in new_denoms_amounts_real])
@@ -206,7 +206,7 @@ class KeyPairsMixin:
 
     def check_need_new_keypairs(self):
         '''Check if need to cache new keypairs in addition
-        to possilby already cached'''
+        to possibly already cached'''
         w = self.wallet
         if not self.need_password():
             return False, None
@@ -272,7 +272,7 @@ class KeyPairsMixin:
 
     def _cache_keypairs(self, password):
         '''Cache keypairs on mixing start'''
-        self.logger.info('Making Keyparis Cache')
+        self.logger.info('Making Keypairs Cache')
         with self.keypairs_state_lock:
             self.keypairs_state = KPStates.Caching
 
@@ -316,7 +316,7 @@ class KeyPairsMixin:
 
         with self.keypairs_state_lock:
             self.keypairs_state = KPStates.Ready
-        self.logger.info('Keyparis Cache Done')
+        self.logger.info('Keypairs Cache Done')
 
     def _cache_kp_incoming(self, password):
         '''Cache keypairs for future incoming funds on main keystore'''
@@ -549,7 +549,7 @@ class KeyPairsMixin:
 
     def _cache_kp_tmp_reserved(self, password):
         '''Cache keypairs for PS Keystore addresses funded from HW keystore.
-        Addresses muts not be reserved for PS use, instead tmp reserved'''
+        Addresses must not be reserved for PS use, instead tmp reserved'''
         w = self.wallet
         addr = self.get_tmp_reserved_address()
         if not addr:
@@ -659,10 +659,10 @@ class KeyPairsMixin:
     def _cleanup_unfinished_keypairs_cache(self):
         '''Cleanup keypairs cache in unfinished state if mixing stopped'''
         with self.keypairs_state_lock:
-            self.logger.info('Cleaning unfinished Keyparis Cache')
+            self.logger.info('Cleaning unfinished Keypairs Cache')
             self._cleanup_all_keypairs_cache()
             self.keypairs_state = KPStates.Empty
-            self.logger.info('Cleaned Keyparis Cache')
+            self.logger.info('Cleaned Keypairs Cache')
 
     def _cleanup_all_keypairs_cache(self):
         '''Cleanup keypairs cache'''
@@ -676,7 +676,7 @@ class KeyPairsMixin:
             self._keypairs_cache.pop(cache_type)
 
     def get_keypairs(self):
-        '''Transofrm keypairs cache to dict suitable for Transaction.sign'''
+        '''Transform keypairs cache to dict suitable for Transaction.sign'''
         keypairs = {}
         for cache_type in KP_ALL_TYPES:
             if cache_type not in self._keypairs_cache:
@@ -926,7 +926,7 @@ class PSDataMixin:
             return PSDenominateWorkflow._from_uuid_and_tuple(uuid, wfl)
 
     def clear_denominate_wfl(self, uuid):
-        '''Clear denominate workflow indentified by uuid'''
+        '''Clear denominate workflow identified by uuid'''
         self.wallet.db.pop_ps_data('denominate_workflows', uuid)
         self.postpone_notification('ps-wfl-changes', self.wallet)
 
@@ -1040,13 +1040,13 @@ class PSDataMixin:
             self.spent_addrs.add(addr)
 
     def restore_spent_addrs(self, addrs):
-        '''Remov addresses from spent and subscribe on server again'''
+        '''Remove addresses from spent and subscribe on server again'''
         for addr in addrs:
             self.spent_addrs.remove(addr)
             self.subscribe_spent_addr(addr)
 
     def subscribe_spent_addr(self, addr):
-        '''Return previously unsubscribed address to syncrhonizer'''
+        '''Return previously unsubscribed address to synchronizer'''
         w = self.wallet
         if addr in self.unsubscribed_addrs:
             self.unsubscribed_addrs.remove(addr)
@@ -1055,7 +1055,7 @@ class PSDataMixin:
                 w.synchronizer.add(addr)
 
     def unsubscribe_spent_addr(self, addr, hist):
-        '''Unsubscribe spent address from syncrhonizer/electrum server'''
+        '''Unsubscribe spent address from synchronizer/electrum server'''
         if (self.subscribe_spent
                 or addr not in self.spent_addrs
                 or addr in self.unsubscribed_addrs
@@ -2006,7 +2006,7 @@ class PSDataMixin:
                 return 'Transaction input not found in ps_denoms'
 
     def _check_denominate_tx_io_on_wfl(self, txid, tx, wfl):
-        '''Check tx with txid is matched again denominate worfklow wfl'''
+        '''Check tx with txid is matched again denominate workflow wfl'''
         w = self.wallet
         icnt = 0
         ocnt = 0
@@ -2031,7 +2031,7 @@ class PSDataMixin:
     def _calc_rounds_for_denominate_tx(self, new_outpoints, input_rounds):
         '''Calculate output rounds for PS denoms data for denominate tx.
         If wallet have HW keystore then need check output addresses from
-        that kesytore and if presented put max rounds to that denoms,
+        that keystore and if presented put max rounds to that denoms,
         as mixed round denom is placed on hw keystore'''
         output_rounds = list(map(lambda x: x+1, input_rounds[:]))
         if self.is_hw_ks:
@@ -2368,7 +2368,7 @@ class PSDataMixin:
                     self.stop_mixing(msg)
         else:
             self.logger.info(f'_add_tx_type_ps_data: {txid}'
-                             f' unknonw type {tx_type}')
+                             f' unknown type {tx_type}')
 
     def _rm_ps_data(self, txid, tx, tx_type):
         '''Remove PS data from wallet for removed tx with txid
@@ -2398,7 +2398,7 @@ class PSDataMixin:
         w.db.add_ps_tx_removed(txid, tx_type, completed=True)
 
     def _rm_tx_ps_data(self, txid):
-        '''Remove txiid PS data from wallet.
+        '''Remove PS data from the wallet.
         Used from AddressSynchronizer.remove_transaction'''
         w = self.wallet
         tx = w.db.get_transaction(txid)
@@ -2416,7 +2416,7 @@ class PSDataMixin:
             except Exception as e:
                 self.logger.info(f'_rm_ps_data {txid} failed: {str(e)}')
         else:
-            self.logger.info(f'_rm_tx_ps_data: {txid} unknonw type {tx_type}')
+            self.logger.info(f'_rm_tx_ps_data: {txid} unknown type {tx_type}')
 
 
 class PSKeystoreMixin:
@@ -2443,7 +2443,7 @@ class PSKeystoreMixin:
         w.db.put('ps_keystore', main_ks_copy)
 
     def load_ps_keystore(self):
-        '''Load PS keystore from db and place instance to psman.ps_kestore'''
+        '''Load PS keystore from db and place instance to psman.ps_keystore'''
         w = self.wallet
         if 'ps_keystore' in w.db.data:
             self.ps_keystore = load_keystore(w.db, 'ps_keystore')
@@ -2460,7 +2460,7 @@ class PSKeystoreMixin:
             self.synchronize()
 
     def after_wallet_password_set(self, old_pw, new_pw):
-        '''Copy PS kestore from standard wallet bip32 keystore
+        '''Copy PS keystore from standard wallet bip32 keystore
         on wallet password change'''
         if not self.ps_keystore:
             return

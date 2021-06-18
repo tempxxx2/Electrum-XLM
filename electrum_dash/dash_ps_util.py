@@ -494,7 +494,7 @@ class PSOptsMixin:
     ]
 
     class CalcDenomsMethod(IntEnumWithCheck):
-        '''Method of need denoms count calulation'''
+        '''Method of need denoms count calculation'''
         DEF = 0  # use keep amount to calc need denoms
         ABS = 1  # use absolute denoms count set from UI
 
@@ -619,7 +619,7 @@ class PSOptsMixin:
 
     @property
     def group_history(self):
-        '''Check if PS txs is groupped in tx history'''
+        '''Check if PS txs is grouped in tx history'''
         if self.unsupported:
             return False
         return self.wallet.db.get_ps_data('group_history',
@@ -627,7 +627,7 @@ class PSOptsMixin:
 
     @group_history.setter
     def group_history(self, group_history):
-        '''Set if PS txs should be groupped in tx history'''
+        '''Set if PS txs should be grouped in tx history'''
         if self.group_history == group_history:
             return
         self.wallet.db.set_ps_data('group_history', bool(group_history))
@@ -736,13 +736,13 @@ class PSOptsMixin:
 
     @property
     def subscribe_spent(self):
-        '''Check if on server subsriptions for spent PS addresses done'''
+        '''Check if on server subscriptions for spent PS addresses done'''
         return self.wallet.db.get_ps_data('subscribe_spent',
                                           self.DEFAULT_SUBSCRIBE_SPENT)
 
     @subscribe_spent.setter
     def subscribe_spent(self, subscribe_spent):
-        '''Set if on server subsriptions for spent PS addresses done'''
+        '''Set if on server subscriptions for spent PS addresses done'''
         if self.subscribe_spent == subscribe_spent:
             return
         self.wallet.db.set_ps_data('subscribe_spent', bool(subscribe_spent))
@@ -807,12 +807,12 @@ class PSOptsMixin:
 
     @property
     def group_origin_coins_by_addr(self):
-        '''Check if inputs is groupped by address for new denoms/colalteral'''
+        '''Check if inputs is grouped by address for new denoms/collateral'''
         return self.wallet.db.get_ps_data('group_origin_coins_by_addr', False)
 
     @group_origin_coins_by_addr.setter
     def group_origin_coins_by_addr(self, group):
-        '''Set if inputs is groupped by address for new denoms/colalteral'''
+        '''Set if inputs is grouped by address for new denoms/collateral'''
         self.wallet.db.set_ps_data('group_origin_coins_by_addr', bool(group))
 
     def group_origin_coins_by_addr_data(self, full_txt=False):
@@ -1026,7 +1026,7 @@ class PSOptsMixin:
 
     @property
     def abs_denoms_cnt(self):
-        '''Get dict containg absolute denoms count by denom value key'''
+        '''Get dict containing absolute denoms count by denom value key'''
         res = self.wallet.db.get_ps_data('abs_denoms_cnt', {})
         if res:
             return {v: res[str(v)] for v in PS_DENOMS_VALS}
@@ -1063,11 +1063,11 @@ class PSUtilsMixin:
         self.postponed_notifications = {}
 
     def postpone_notification(self, event, *args):
-        '''Postopne notification to send many analogous notifications as one'''
+        '''Postpone notification to send many analogous notifications as one'''
         self.postponed_notifications[event] = args
 
     async def trigger_postponed_notifications(self):
-        '''Trigger postopned notification'''
+        '''Trigger postponed notification'''
         while True:
             await asyncio.sleep(0.5)
             if self.enabled:
@@ -1151,7 +1151,7 @@ class PSUtilsMixin:
                                              f' failed')
 
     def check_enough_sm_denoms(self, denoms_by_values):
-        '''Check is enoguh small denoms in denominated coins'''
+        '''Check is enough small denoms in denominated coins'''
         if not denoms_by_values:
             return False
         for dval in PS_DENOMS_VALS[:-1]:
@@ -1241,7 +1241,7 @@ class PSUtilsMixin:
         return found
 
     def _fix_uncompleted_ps_txs(self):
-        '''Try to fix uncompleted PS data if adding it previuosly is failed'''
+        '''Try to fix uncompleted PS data if adding it previously is failed'''
         w = self.wallet
         ps_txs = w.db.get_ps_txs()
         ps_txs_removed = w.db.get_ps_txs_removed()
@@ -1350,7 +1350,7 @@ class PSUtilsMixin:
 
     def prob_denominate_tx_coin(self, c, check_inputs_vals=False):
         '''Try to detect possible outputs of denominate tx
-        to send PS transatcions on HW wallet with no PS Keystore/PS data'''
+        to send PS transactions on HW wallet with no PS Keystore/PS data'''
         w = self.wallet
         val = c.value_sats()
         if val not in PS_DENOMS_VALS:
