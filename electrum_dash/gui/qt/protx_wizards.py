@@ -41,6 +41,9 @@ class HwWarnError(Exception): pass
 class UsedInWallet(Exception): pass
 
 
+class UsedInMNList(Exception): pass
+
+
 class SLineEdit(QLineEdit):
     '''QLineEdit with strip on text() method'''
     def text(self):
@@ -636,8 +639,8 @@ class BlsKeysWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
-        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
-        self.cb_ignore.hide()
+        self.cb_ignore_wallet = QCheckBox(_('Ignore use in other wallet MN'))
+        self.cb_ignore_mn_list = QCheckBox(_('Ignore use in registered MN'))
 
         layout.addWidget(self.bls_pub_label, 0, 0, 1, -1)
         layout.addWidget(self.bls_pub, 1, 0, 1, -1)
@@ -654,7 +657,8 @@ class BlsKeysWizardPage(QWizardPage):
 
         layout.addWidget(self.err_label, 10, 0)
         layout.addWidget(self.err, 10, 1)
-        layout.addWidget(self.cb_ignore, 12, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_wallet, 12, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_mn_list, 13, 0, 1, -1)
 
         layout.setColumnStretch(1, 1)
         layout.setRowStretch(2, 1)
@@ -678,6 +682,10 @@ class BlsKeysWizardPage(QWizardPage):
         start_id = parent.startId()
         self.op_reward_label.hide()
         self.op_reward.hide()
+        self.cb_ignore_wallet.hide()
+        self.cb_ignore_mn_list.hide()
+        self.cb_ignore_wallet.setChecked(False)
+        self.cb_ignore_mn_list.setChecked(False)
         if not new_mn.is_operated:
             self.bls_priv_label.hide()
             self.bls_priv.hide()
@@ -770,10 +778,16 @@ class BlsKeysWizardPage(QWizardPage):
             bls_priv = ''
 
         try:
-            ignore_used = self.cb_ignore.isChecked()
-            self.parent.validate_bls_pub(bls_pub, ignore_used)
+            ignore_wallet = self.cb_ignore_wallet.isChecked()
+            ignore_mn_list = self.cb_ignore_mn_list.isChecked()
+            self.parent.validate_bls_pub(bls_pub, ignore_wallet,
+                                         ignore_mn_list)
         except UsedInWallet as e:
-            self.cb_ignore.show()
+            self.cb_ignore_wallet.show()
+            self.show_error(str(e))
+            return False
+        except UsedInMNList as e:
+            self.cb_ignore_mn_list.show()
             self.show_error(str(e))
             return False
         except ValidationError as e:
@@ -1307,8 +1321,8 @@ class ServiceWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
-        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
-        self.cb_ignore.hide()
+        self.cb_ignore_wallet = QCheckBox(_('Ignore use in other wallet MN'))
+        self.cb_ignore_mn_list = QCheckBox(_('Ignore use in registered MN'))
 
         layout.addWidget(self.srv_addr_label, 0, 0)
         layout.addWidget(self.srv_addr, 0, 1)
@@ -1317,7 +1331,8 @@ class ServiceWizardPage(QWizardPage):
 
         layout.addWidget(self.err_label, 1, 0)
         layout.addWidget(self.err, 1, 1, 1, -1)
-        layout.addWidget(self.cb_ignore, 3, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_wallet, 3, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_mn_list, 4, 0, 1, -1)
         layout.setColumnStretch(1, 1)
         layout.setRowStretch(2, 1)
         self.setLayout(layout)
@@ -1344,6 +1359,10 @@ class ServiceWizardPage(QWizardPage):
     def initializePage(self):
         new_mn = self.parent.new_mn
         str_mn_service = str(new_mn.service)
+        self.cb_ignore_wallet.hide()
+        self.cb_ignore_mn_list.hide()
+        self.cb_ignore_wallet.setChecked(False)
+        self.cb_ignore_mn_list.setChecked(False)
         if self.cur_service is None or self.cur_service != str_mn_service:
             self.cur_service = str_mn_service
             self.srv_addr.setText(new_mn.service.ip)
@@ -1353,11 +1372,17 @@ class ServiceWizardPage(QWizardPage):
         ip = self.srv_addr.text()
         port = self.srv_port.text()
         try:
-            ignore_used = self.cb_ignore.isChecked()
+            ignore_wallet = self.cb_ignore_wallet.isChecked()
+            ignore_mn_list = self.cb_ignore_mn_list.isChecked()
             ip, port = self.parent.validate_service_ip_port(ip, port,
-                                                            ignore_used)
+                                                            ignore_wallet,
+                                                            ignore_mn_list)
         except UsedInWallet as e:
-            self.cb_ignore.show()
+            self.cb_ignore_wallet.show()
+            self.show_error(str(e))
+            return False
+        except UsedInMNList as e:
+            self.cb_ignore_mn_list.show()
             self.show_error(str(e))
             return False
         except ValidationError as e:
@@ -1404,8 +1429,8 @@ class UpdSrvWizardPage(QWizardPage):
         self.err.setObjectName('err-label')
         self.err_label.hide()
         self.err.hide()
-        self.cb_ignore = QCheckBox(_('Ignore and continue.'))
-        self.cb_ignore.hide()
+        self.cb_ignore_wallet = QCheckBox(_('Ignore use in other wallet MN'))
+        self.cb_ignore_mn_list = QCheckBox(_('Ignore use in registered MN'))
 
         layout.addWidget(self.srv_addr_label, 0, 0)
         layout.addWidget(self.srv_addr, 0, 1)
@@ -1416,7 +1441,8 @@ class UpdSrvWizardPage(QWizardPage):
 
         layout.addWidget(self.err_label, 2, 0)
         layout.addWidget(self.err, 2, 1, 1, -1)
-        layout.addWidget(self.cb_ignore, 4, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_wallet, 4, 0, 1, -1)
+        layout.addWidget(self.cb_ignore_mn_list, 5, 0, 1, -1)
         layout.setColumnStretch(1, 1)
         layout.setRowStretch(3, 1)
         self.setLayout(layout)
@@ -1437,6 +1463,10 @@ class UpdSrvWizardPage(QWizardPage):
         self.upd_mn = upd_mn = self.parent.new_mn
         if not upd_mn:
             return
+        self.cb_ignore_wallet.hide()
+        self.cb_ignore_mn_list.hide()
+        self.cb_ignore_wallet.setChecked(False)
+        self.cb_ignore_mn_list.setChecked(False)
         self.srv_addr.setText(upd_mn.service.ip)
         self.srv_port.setText('%d' % upd_mn.service.port)
 
@@ -1473,11 +1503,17 @@ class UpdSrvWizardPage(QWizardPage):
         ip = self.srv_addr.text()
         port = self.srv_port.text()
         try:
-            ignore_used = self.cb_ignore.isChecked()
+            ignore_wallet = self.cb_ignore_wallet.isChecked()
+            ignore_mn_list = self.cb_ignore_mn_list.isChecked()
             ip, port = self.parent.validate_service_ip_port(ip, port,
-                                                            ignore_used)
+                                                            ignore_wallet,
+                                                            ignore_mn_list)
         except UsedInWallet as e:
-            self.cb_ignore.show()
+            self.cb_ignore_wallet.show()
+            self.show_error(str(e))
+            return False
+        except UsedInMNList as e:
+            self.cb_ignore_mn_list.show()
             self.show_error(str(e))
             return False
         except ValidationError as e:
@@ -1720,7 +1756,8 @@ class Dip3MasternodeWizard(QWizard):
             raise ValidationError('Wrong service format specified')
         return ip, port
 
-    def validate_service_ip_port(self, ip, port, ignore_used):
+    def validate_service_ip_port(self, ip, port,
+                                 ignore_wallet, ignore_mn_list):
         try:
             if ip:
                 ipaddress.ip_address(ip)
@@ -1738,28 +1775,30 @@ class Dip3MasternodeWizard(QWizard):
         if start_id in self.UPD_ENTER_PAGES:
             skip_alias = self.new_mn.alias
         used = self.manager.find_service_use(serv, skip_alias=skip_alias,
-                                             ignore_used=ignore_used)
+                                             ignore_wallet=ignore_wallet,
+                                             ignore_mn_list=ignore_mn_list)
         if isinstance(used, str):
             err = _('Service {} used by: {}').format(serv, used)
             raise UsedInWallet(err)
         elif used:
             err = _('Service {} used by registered masternodes').format(serv)
-            raise ValidationError(err)
+            raise UsedInMNList(err)
         return ip, port
 
-    def validate_bls_pub(self, bls_pub, ignore_used):
+    def validate_bls_pub(self, bls_pub, ignore_wallet, ignore_mn_list):
         skip_alias = None
         start_id = self.startId()
         if start_id in self.UPD_ENTER_PAGES:
             skip_alias = self.new_mn.alias
         used = self.manager.find_bls_pub_use(bls_pub, skip_alias=skip_alias,
-                                             ignore_used=ignore_used)
+                                             ignore_wallet=ignore_wallet,
+                                             ignore_mn_list=ignore_mn_list)
         if isinstance(used, str):
-            err = _('pubKeyOperarot used by: {}').format(used)
+            err = _('pubKeyOperator used by: {}').format(used)
             raise UsedInWallet(err)
         elif used:
-            err = _('pubKeyOperarot used by registered masternodes')
-            raise ValidationError(err)
+            err = _('pubKeyOperator used by registered masternodes')
+            raise UsedInMNList(err)
 
     def validate_collateral(self, outpoint, addr, value, skip_alias=None):
         outpoint = outpoint.split(':')
