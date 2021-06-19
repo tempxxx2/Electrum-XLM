@@ -997,6 +997,11 @@ class Commands:
         # for the python console
         return sorted(known_commands.keys())
 
+    @command('w')
+    async def list_invoices(self, wallet: Abstract_Wallet = None):
+        l = wallet.get_invoices()
+        return [wallet.export_invoice(x) for x in l]
+
 
 def eval_bool(x: str) -> bool:
     if x == 'false': return False
