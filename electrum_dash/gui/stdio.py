@@ -13,7 +13,6 @@ from electrum_dash.util import format_satoshis
 from electrum_dash.bitcoin import is_address, COIN
 from electrum_dash.transaction import PartialTxOutput
 from electrum_dash.network import TxBroadcastError, BestEffortRequestFailed
-from electrum_dash.logging import console_stderr_handler
 from electrum_dash.dash_ps_util import filter_log_line, PSLogSubCat
 from electrum_dash.dash_tx import SPEC_TX_NAMES
 
@@ -60,8 +59,6 @@ class ElectrumGui:
 
         self.done = 0
         self.last_balance = ""
-
-        console_stderr_handler.setLevel(logging.CRITICAL)
 
         self.str_recipient = ""
         self.str_description = ""

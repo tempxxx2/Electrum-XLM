@@ -33,6 +33,7 @@ import base64
 import operator
 import asyncio
 import inspect
+from collections import defaultdict
 from functools import wraps, partial
 from itertools import repeat
 from decimal import Decimal
@@ -69,9 +70,12 @@ class NotSynchronizedException(Exception):
     pass
 
 
+def satoshis_or_max(amount):
+    return satoshis(amount) if amount != '!' else '!'
+
 def satoshis(amount):
     # satoshi conversion must not be performed by the parser
-    return int(COIN*Decimal(amount)) if amount not in ['!', None] else amount
+    return int(COIN*Decimal(amount)) if amount is not None else None
 
 def format_satoshis(x):
     return str(Decimal(x)/COIN) if x is not None else None
@@ -232,7 +236,7 @@ class Commands:
     @command('n')
     async def close_wallet(self, wallet_path=None):
         """Close wallet"""
-        return self.daemon.stop_wallet(wallet_path)
+        return await self.daemon._stop_wallet(wallet_path)
 
     @command('')
     async def create(self, passphrase=None, password=None, encrypt_file=True, seed_type=None, wallet_path=None):
@@ -393,21 +397,35 @@ class Commands:
         tx.sign(keypairs)
         return tx.serialize()
 
-    @command('wp')
-    async def signtransaction(self, tx, privkey=None, password=None, wallet: Abstract_Wallet = None):
-        """Sign a transaction. The wallet keys will be used unless a private key is provided."""
-        # TODO this command should be split in two... (1) *_with_wallet, (2) *_with_privkey
+    @command('')
+    async def signtransaction_with_privkey(self, tx, privkey):
+        """Sign a transaction. The provided list of private keys will be used to sign the transaction."""
         tx = tx_from_any(tx)
-        if privkey:
-            txin_type, privkey2, compressed = bitcoin.deserialize_privkey(privkey)
-            pubkey = ecc.ECPrivkey(privkey2).get_public_key_bytes(compressed=compressed)
-            for txin in tx.inputs():
-                if txin.address and txin.address == bitcoin.pubkey_to_address(txin_type, pubkey.hex()):
+
+        txins_dict = defaultdict(list)
+        for txin in tx.inputs():
+            txins_dict[txin.address].append(txin)
+
+        if not isinstance(privkey, list):
+            privkey = [privkey]
+
+        for priv in privkey:
+            txin_type, priv2, compressed = bitcoin.deserialize_privkey(priv)
+            pubkey = ecc.ECPrivkey(priv2).get_public_key_bytes(compressed=compressed)
+            address = bitcoin.pubkey_to_address(txin_type, pubkey.hex())
+            if address in txins_dict.keys():
+                for txin in txins_dict[address]:
                     txin.pubkeys = [pubkey]
                     txin.script_type = txin_type
-            tx.sign({pubkey.hex(): (privkey2, compressed)})
-        else:
-            wallet.sign_transaction(tx, password)
+                tx.sign({pubkey.hex(): (priv2, compressed)})
+
+        return tx.serialize()
+
+    @command('wp')
+    async def signtransaction(self, tx, password=None, wallet: Abstract_Wallet = None):
+        """Sign a transaction. The wallet keys will be used to sign the transaction."""
+        tx = tx_from_any(tx)
+        wallet.sign_transaction(tx, password)
         return tx.serialize()
 
     @command('')
@@ -621,7 +639,7 @@ class Commands:
         domain_coins = from_coins.split(',') if from_coins else None
         change_addr = self._resolver(change_addr, wallet)
         domain_addr = None if domain_addr is None else map(self._resolver, domain_addr, repeat(wallet))
-        amount_sat = satoshis(amount)
+        amount_sat = satoshis_or_max(amount)
         outputs = [PartialTxOutput.from_address_and_value(destination, amount_sat)]
         tx = wallet.create_transaction(
             outputs,
@@ -651,7 +669,7 @@ class Commands:
         final_outputs = []
         for address, amount in outputs:
             address = self._resolver(address, wallet)
-            amount_sat = satoshis(amount)
+            amount_sat = satoshis_or_max(amount)
             final_outputs.append(PartialTxOutput.from_address_and_value(address, amount_sat))
         tx = wallet.create_transaction(
             final_outputs,

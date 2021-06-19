@@ -383,7 +383,8 @@ class AddressList(MyTreeView):
     def __init__(self, parent, model):
         stretch_column = AddrColumns.LABEL
         super(AddressList, self).__init__(parent, self.create_menu,
-                                          stretch_column=stretch_column)
+                                          stretch_column=stretch_column,
+                                          editable_columns=[stretch_column])
         self.am = model
         self.setModel(model)
         self.wallet = self.parent.wallet
@@ -601,18 +602,19 @@ class AddressList(MyTreeView):
                     return
         self.setRowHidden(row, QModelIndex(), True)
 
-    def on_edited(self, idx, user_role, text):
-        if idx.isValid() and user_role:
-            self.wallet.set_label(user_role, text)
-            addr_item = idx.internalPointer()
-            addr_item['label'] = text
-            self.am.dataChanged.emit(idx, idx, [Qt.DisplayRole])
-            self.parent.update_completions()
+    def get_edit_key_from_coordinate(self, row, col):
+        if col == AddrColumns.LABEL:
+            idx = self.am.index(row, col, QModelIndex())
+            if idx.isValid():
+                key_idx = idx.sibling(idx.row(), AddrColumns.ADDRESS)
+                if key_idx.isValid():
+                    return self.am.data(key_idx, Qt.DisplayRole).value()
 
-    def get_text_and_userrole_from_coordinate(self, row, col, idx):
-        if not idx.isValid():
-            return None, None
+    def on_edited(self, idx, edit_key, *, text):
+        self.wallet.set_label(edit_key, text)
         addr_item = idx.internalPointer()
-        if not addr_item:
-            return None, None
-        return self.am.data(idx, Qt.DisplayRole).value(), addr_item['addr']
+        addr_item['label'] = text
+        self.am.dataChanged.emit(idx, idx, [Qt.DisplayRole])
+        self.parent.history_model.refresh('address label edited')
+        self.parent.utxo_list.update()
+        self.parent.update_completions()

@@ -1,47 +1,32 @@
 import asyncio
-from weakref import ref
 from decimal import Decimal
-import re
 import copy
 import threading
-import traceback, sys
 from typing import TYPE_CHECKING, List, Optional, Dict, Any
 
 from kivy.app import App
-from kivy.cache import Cache
 from kivy.clock import Clock
-from kivy.compat import string_types
-from kivy.properties import (ObjectProperty, DictProperty, NumericProperty,
-                             ListProperty, StringProperty, BooleanProperty)
-
+from kivy.properties import ObjectProperty, BooleanProperty
+from kivy.lang import Builder
+from kivy.factory import Factory
 from kivy.uix.recycleview import RecycleView
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.recycleboxlayout import RecycleBoxLayout
-from kivy.uix.label import Label
-from kivy.uix.behaviors import ToggleButtonBehavior
-from kivy.uix.image import Image
 
-from kivy.lang import Builder
-from kivy.factory import Factory
-from kivy.utils import platform
-
-from electrum_dash.util import profiler, parse_URI, format_time, InvalidPassword, NotEnoughFunds, Fiat
 from electrum_dash.invoices import (PR_TYPE_ONCHAIN, PR_DEFAULT_EXPIRATION_WHEN_CREATING,
                                     PR_PAID, PR_UNKNOWN, PR_EXPIRED, PR_INFLIGHT,
                                     pr_expiration_values, Invoice, OnchainInvoice,
                                     InvoiceExt)
 from electrum_dash import bitcoin, constants
-from electrum_dash.transaction import Transaction, tx_from_any, PartialTransaction, PartialTxOutput
-from electrum_dash.util import parse_URI, InvalidBitcoinURI, TxMinedInfo
-from electrum_dash.wallet import InternalAddressCorruption
-from electrum_dash import simple_config
+from electrum_dash.transaction import tx_from_any, PartialTxOutput
+from electrum_dash.util import (parse_URI, InvalidBitcoinURI, TxMinedInfo,
+                                profiler, InvoiceError)
 from electrum_dash.logging import Logger
 from electrum_dash.dash_tx import PSTxTypes, SPEC_TX_NAMES
 
-from .dialogs.question import Question
 from .dialogs.confirm_tx_dialog import ConfirmTxDialog
 from .context_menu import ContextMenu
 
@@ -176,7 +161,7 @@ class HistoryScreen(CScreen):
     def __init__(self, **kwargs):
         self.ra_dialog = None
         super(HistoryScreen, self).__init__(**kwargs)
-        atlas_path = f'atlas://{KIVY_GUI_PATH}/theming/light/'
+        atlas_path = f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/'
         self.atlas_path = atlas_path
         self.group_icn_empty = atlas_path + 'kv_tx_group_empty'
         self.group_icn_head = atlas_path + 'kv_tx_group_head'
@@ -487,18 +472,21 @@ class SendScreen(CScreen, Logger):
                 self.app.show_error(_('Invalid amount') + ':\n' + self.amount)
                 return
         message = self.message
-        if self.payment_request:
-            outputs = self.payment_request.get_outputs()
-        else:
-            if not bitcoin.is_address(address):
-                self.app.show_error(_('Invalid Dash Address') + ':\n' + address)
-                return
-            outputs = [PartialTxOutput.from_address_and_value(address, amount)]
-        return self.app.wallet.create_invoice(
-            outputs=outputs,
-            message=message,
-            pr=self.payment_request,
-            URI=self.parsed_URI)
+        try:
+            if self.payment_request:
+                outputs = self.payment_request.get_outputs()
+            else:
+                if not bitcoin.is_address(address):
+                    self.app.show_error(_('Invalid Dash Address') + ':\n' + address)
+                    return
+                outputs = [PartialTxOutput.from_address_and_value(address, amount)]
+            return self.app.wallet.create_invoice(
+                outputs=outputs,
+                message=message,
+                pr=self.payment_request,
+                URI=self.parsed_URI)
+        except InvoiceError as e:
+            self.app.show_error(_('Error creating payment') + ':\n' + str(e))
 
     def read_invoice_ext(self, key):
         w = self.app.wallet
@@ -641,17 +629,21 @@ class ReceiveScreen(CScreen):
         amount = self.amount
         amount = self.app.get_amount(amount) if amount else 0
         message = self.message
-        addr = self.address or self.app.wallet.get_unused_address()
-        if not addr:
-            if not self.app.wallet.is_deterministic():
-                addr = self.app.wallet.get_receiving_address()
-            else:
-                self.app.show_info(_('No address available. Please remove some of your pending requests.'))
-                return
-        self.address = addr
-        req = self.app.wallet.make_payment_request(addr, amount, message, self.expiry())
-        self.app.wallet.add_payment_request(req)
-        key = addr
+        try:
+            addr = self.address or self.app.wallet.get_unused_address()
+            if not addr:
+                if not self.app.wallet.is_deterministic():
+                    addr = self.app.wallet.get_receiving_address()
+                else:
+                    self.app.show_info(_('No address available. Please remove some of your pending requests.'))
+                    return
+            self.address = addr
+            req = self.app.wallet.make_payment_request(addr, amount, message, self.expiry())
+            self.app.wallet.add_payment_request(req)
+            key = addr
+        except InvoiceError as e:
+            self.app.show_error(_('Error creating payment request') + ':\n' + str(e))
+            return
         self.clear()
         self.update()
         self.app.show_request(key)

@@ -370,8 +370,7 @@ class UTXOList(MyTreeView):
 
     def __init__(self, parent, model):
         super().__init__(parent, self.create_menu,
-                         stretch_column=self.stretch_column,
-                         editable_columns=[])
+                         stretch_column=self.stretch_column)
         self._spend_set = None
         self._utxo_dict = {}
         self.cm = model

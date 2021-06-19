@@ -27,7 +27,7 @@ Builder.load_string('''
             orientation: 'horizontal'
             Image:
                 id: warn_img
-                source: 'atlas://electrum_dash/gui/kivy/theming/light/error'
+                source: 'atlas://electrum_dash/gui/kivy/theming/atlas/light/error'
                 size_hint: None, None
                 width: 64
                 height: 64
@@ -139,7 +139,7 @@ class TorWarnDialog(Factory.Popup):
             self.title = _('Information')
             self.ids.warn_lbl.text = _('Tor proxy detected')
             w_img = self.ids.warn_img
-            w_img.source = 'atlas://electrum_dash/gui/kivy/theming/light/info'
+            w_img.source = 'atlas://electrum_dash/gui/kivy/theming/atlas/light/info'
             vbox = self.ids.vbox
             vbox.remove_widget(self.ids.tor_auto_on_hbox)
             vbox.remove_widget(self.ids.btns_vbox)

@@ -6,10 +6,12 @@ from electrum_dash.util import create_and_start_event_loop
 from electrum_dash.commands import Commands, eval_bool
 from electrum_dash import storage, wallet
 from electrum_dash.wallet import restore_wallet_from_text
+from electrum_dash.address_synchronizer import TX_HEIGHT_UNCONFIRMED
 from electrum_dash.simple_config import SimpleConfig
-from electrum_dash.transaction import tx_from_any
+from electrum_dash.transaction import Transaction, TxOutput, tx_from_any
 
 from . import TestCaseForTestnet, ElectrumTestCase
+from .test_wallet_vertical import WalletIntegrityHelper
 
 
 class TestCommands(ElectrumTestCase):
@@ -212,15 +214,63 @@ class TestCommandsTestnet(TestCaseForTestnet):
                          cmds._run('getprivatekeyforpath', ("m/5h/100000/88h/7",), wallet=wallet))
 
     @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_payto(self, mock_save_db):
+        wallet = restore_wallet_from_text('ignore hospital shallow unit river glue battle chat pet option position icon',
+                                          gap_limit=2,
+                                          path='if_this_exists_mocking_failed_648151893',
+                                          config=self.config)['wallet']
+        # bootstrap wallet
+        funding_tx = Transaction('0200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800')
+        funding_txid = funding_tx.txid()
+        self.assertEqual('2304741a3b690d5c52bac443792e9ec6af535b527c562899b36e72e8c4e3bf4f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+
+        cmds = Commands(config=self.config)
+        tx_str = cmds._run(
+            'payto', (),
+            destination="yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3",
+            amount="0.00123456",
+            feerate=1000,
+            locktime=1972344,
+            wallet=wallet)
+
+        tx = tx_from_any(tx_str)
+        self.assertEqual(2, len(tx.outputs()))
+        txout = TxOutput.from_address_and_value("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3", 123456)
+        self.assertTrue(txout in tx.outputs())
+        self.assertEqual("02000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a740423000000006a4730440220234aa5fe38e0d99013fb1427a0998560f513b26c37a1e53540da5b9b7859c0540220316735a04e115941b3f62e54f7f30473bf44c483eef335e702d542b8d6e81f3e0121025837acda77e6b2295e03c50c356057e3f2ec8d6c498ba9351618ee913510daa3feffffff0240e20100000000001976a91433ed429c95e392a27f1194b400b07cff5167284588ac8a320500000000001976a9144ee5b85791f50a4270ad7277ff307fd66f7254e188ac78181e00",
+                         tx_str)
+        assert  tx_from_any(tx_str).is_complete()
+
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
     def test_signtransaction_without_wallet(self, mock_save_db):
-        dummy_wallet = restore_wallet_from_text(
-            'yXyZrWX2AAmsVvmtGsgxtxmhuV4kPQKKLC',  # random testnet address
-            gap_limit=2, path='if_this_exists_mocking_failed_648151893', config=self.config)['wallet']
         cmds = Commands(config=self.config)
         unsigned_tx = "cHNidP8BAFUCAAAAAfYPG8xEZIPSCFUQvT9hKSebChcHfRf44VBKdvCv+BvUAQAAAAD+////AVtGSgAAAAAAGXapFHbdRv3NIGILeiru0ElFh/yu1oXmiKxePwcAAAEA/SUBAgAAAAF895Ja488aAx4I7yq55Jxlr50rK3fkjjIx3Uxsgh7Z8wAAAABqRzBEAiBAE2MpeZYzp5QC2J7V9/KfvF7uQk/XcUs8YI9K+12zBAIgex7/mvNPvdj91u7WFnCMSJZAHxMW1XGvPD815CbeJ3wBIQK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuf7///8EQJwAAAAAAAAZdqkU+InI3CUUVo7OLrKa7Q7hZ6qArceIrHtHSgAAAAAAGXapFMXi0i9hMWlau5GQFeiPwlJxs4dQiKzklpgAAAAAABl2qRQjqj1H4J1g4HSr2IvCdVOedvNkQIis5JaYAAAAAAAZdqkU+gvqRTG5zwueDUbg7AZ1AQmAF9aIrJ01BwAiBgK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuQzZ3FryAAAAAAAAAAAAIgIDJgOS9iOn/pO/96NpC3pK5xamEiGEQs3wIF/8r9G1G+MM2dxa8gAAAAAIAAAAAA=="
         assert not tx_from_any(unsigned_tx).is_complete()
         privkey = "cVigSP6aKjWJVX9Gp1fGMLJyCbuxYWaMBVQyjUt5mL17WhMH53e6"
-        tx_str = cmds._run('signtransaction', (), tx=unsigned_tx, privkey=privkey, wallet=dummy_wallet)
+        tx_str = cmds._run('signtransaction_with_privkey', (), tx=unsigned_tx, privkey=privkey)
         self.assertEqual(tx_str,
                          "0200000001f60f1bcc446483d2085510bd3f6129279b0a17077d17f8e1504a76f0aff81bd4010000006a473044022040ea78e690d2a323daadc19831b3d1294e2a28d96c48481677c9786d9a1be3ac0220672ce6745e5de73f61cefb0f2f3fac5ce5aa9b9728fd28efb55e0660f92cc3d9012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff015b464a00000000001976a91476dd46fdcd20620b7a2aeed0494587fcaed685e688ac5e3f0700")
+        assert  tx_from_any(tx_str).is_complete()
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_signtransaction_with_wallet(self, mock_save_db):
+        wallet = restore_wallet_from_text('nest trophy glide lemon humor rose faint able keep squirrel major inform',
+                                          gap_limit=2, path='if_this_exists_mocking_failed_648151893',
+                                          config=self.config)['wallet']
+        # bootstrap wallet1
+        funding_tx = Transaction('0200000003912b2b205a528c5e875f9a64c1105217061135a9539e64c1953e40f9a7f9ec80000000006a473044022077d3ad93dc64e86cb7a3d754fc4fa7c5ffd8d86419f64b223939619e63dc0e0702202b6023914d57ea73c03a49af2512db6c2bf6f5280551f73c8da033128012a30f012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff0e6c1fb9ced6f9595a6598b730d07a322461ec8e8556629be050129d5f95768b000000006a47304402204390383ecc05cd44d40c416c8bd748c7605636138d79c511f63563a989845ecd0220634d55c886988220bd57fe524c4ec152db9ee8f545350be6c74402c8151fa733012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2000000006a47304402206d9f25099d8a74ada78ce88b80ae5b6bdbfd563805d2cf7509ebdabaed8414ba02200ddff1fff3cf3d23684554097a7c85683f7bf93113833c5c78f6538141b3f4360121028bc7e29feff7fd705f2eec7820702ed9d62ef4f8edd32ac2d4094eee099fbb42feffffff022bd00200000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888ac40420f00000000001976a914ebba561d2da1ed2a43b2cbbd45607a9d9c8e47de88ace80e0800')
+        funding_txid = funding_tx.txid()
+        funding_output_value = 1000000
+        self.assertEqual('ebf85f1ef2573600e0038cfbb57b17b80965bccc95ece63e5cad81352493fd2f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+
+        cmds = Commands(config=self.config)
+
+        unsigned_tx = "cHNidP8BAFUCAAAAAW257E6UZwYN8f8oSrXTHHQhrK00vYMrFSVIFaLNuBzvAQAAAAD+////AYBBDwAAAAAAGXapFIEDYGhr7BAsosv+fSX+OJesHBTliKzoDggAAAEA/QcCAgAAAAORKysgWlKMXodfmmTBEFIXBhE1qVOeZMGVPkD5p/nsgAAAAABqRzBEAiA/YGaD9myM7jsgAKGPTkZkhAR83JfJ8AgnPhogmwI5AwIgZjnryK4gKljX0J6zkaQ1Isz1MA/GbPWbefza/pN3wFEBIQK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuf7///8ObB+5ztb5WVplmLcw0HoyJGHsjoVWYpvgUBKdX5V2iwAAAABqRzBEAiBbdcP7jckAeGXZXHp46ZBH4U1bDq8Zp+RQpVitjDaKBgIgRQ4D0fNZSOhB4BH2PN9WyXUKoFoCks5w5iIeBsxNXYUBIQK8Z9v+zCc0HugaBAKfsufI4SgHicvnhb2rbgZz8ceFuf7///9oi022a6quHd5KWarMwSgnV9tbGSAzqNQXGM2eOUn30gMAAABqRzBEAiAyuysUoJnTDUDGk4/fmHYx0aKYU2bNrSYwXzDwNAZPKgIgBnE5zJCd/euIA+veCqKLyS5GhMcsFurnvYM172pmWjsBIQI1+Z+RoF3aiVvdC4tijoYUrgvwX+/3/opJHVizOvOetv7///8CK9ACAAAAAAAZdqkUqSYjdd5feiyB4NKPPGq0LllGJ+iIrEBCDwAAAAAAGXapFOu6Vh0toe0qQ7LLvUVgep2cjkfeiKzoDggAIgYCtmt/3e46deXJByeDz2ClAftD16M6V+F+707JwW33iI8MUH3lsAAAAAAAAAAAACICAgtxqKxniaqjNXAhaSoUrgiutogL+DmPN+ilU/46YWm6DFB95bAAAAAAAQAAAAA="
+
+        tx_str = cmds._run('signtransaction', (), tx=unsigned_tx, wallet=wallet)
+        self.assertEqual("02000000016db9ec4e9467060df1ff284ab5d31c7421acad34bd832b15254815a2cdb81cef010000006a47304402204be923230cfe88dc76a140f68c99f1df62b3567619279f5ba042123a0ce53a0b02204c5fe44e2395896b15db968c07937c7b7c1bfc7243540a4079a675eea0085579012102b66b7fddee3a75e5c9072783cf60a501fb43d7a33a57e17eef4ec9c16df7888ffeffffff0180410f00000000001976a914810360686bec102ca2cbfe7d25fe3897ac1c14e588ace80e0800",
+                         tx_str)
         assert  tx_from_any(tx_str).is_complete()

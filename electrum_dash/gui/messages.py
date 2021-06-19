@@ -1,4 +1,5 @@
 # note: qt and kivy use different i18n methods
+# FIXME all these messages *cannot* be localized currently!
 
 def to_rtf(msg):
     return '\n'.join(['<p>' + x + '</p>' for x in msg.split('\n\n')])

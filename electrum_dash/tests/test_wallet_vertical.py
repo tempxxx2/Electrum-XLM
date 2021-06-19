@@ -11,7 +11,7 @@ from electrum_dash import Transaction
 from electrum_dash import SimpleConfig
 from electrum_dash.address_synchronizer import TX_HEIGHT_UNCONFIRMED, TX_HEIGHT_UNCONF_PARENT
 from electrum_dash.wallet import sweep, Multisig_Wallet, Standard_Wallet, Imported_Wallet, restore_wallet_from_text, Abstract_Wallet
-from electrum_dash.util import bfh, bh2u
+from electrum_dash.util import bfh, bh2u, create_and_start_event_loop, NotEnoughFunds
 from electrum_dash.transaction import TxOutput, Transaction, PartialTransaction, PartialTxOutput, PartialTxInput, tx_from_any
 from electrum_dash.mnemonic import seed_type
 
@@ -273,6 +273,12 @@ class TestWalletSending(TestCaseForTestnet):
     def setUp(self):
         super().setUp()
         self.config = SimpleConfig({'electrum_path': self.electrum_path})
+        self.asyncio_loop, self._stop_loop, self._loop_thread = create_and_start_event_loop()
+
+    def tearDown(self):
+        super().tearDown()
+        self.asyncio_loop.call_soon_threadsafe(self._stop_loop.set_result, 1)
+        self._loop_thread.join(timeout=1)
 
     def create_standard_wallet_from_seed(self, seed_words, *, config=None, gap_limit=2):
         if config is None:
@@ -481,6 +487,142 @@ class TestWalletSending(TestCaseForTestnet):
         self.assertEqual(1, len(coins))
         self.assertEqual("bf08206effded4126a95fbed375cedc0452b5e16a5d2025ac645dfae81addbe4:0",
                          coins[0].prevout.to_str())
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_wallet_does_not_create_zero_input_tx(self, mock_save_db):
+        wallet = self.create_standard_wallet_from_seed('ignore hospital shallow unit river glue battle chat pet option position icon',
+                                                       config=self.config, gap_limit=3)
+
+        with self.subTest(msg="no coins to use as inputs, max output value, zero fee"):
+            outputs = [PartialTxOutput.from_address_and_value('yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3', '!')]
+            coins = wallet.get_spendable_coins(domain=None)
+            with self.assertRaises(NotEnoughFunds):
+                tx = wallet.make_unsigned_transaction(coins=coins, outputs=outputs, fee=0)
+
+        # bootstrap wallet
+        funding_tx = Transaction('0200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800')
+        funding_txid = funding_tx.txid()
+        self.assertEqual('2304741a3b690d5c52bac443792e9ec6af535b527c562899b36e72e8c4e3bf4f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+
+        with self.subTest(msg="funded wallet, zero output value, zero fee"):
+            outputs = [PartialTxOutput.from_address_and_value('yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3', 0)]
+            coins = wallet.get_spendable_coins(domain=None)
+            tx = wallet.make_unsigned_transaction(coins=coins, outputs=outputs, fee=0)
+            self.assertEqual(1, len(tx.inputs()))
+            self.assertEqual(2, len(tx.outputs()))
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_imported_wallet_usechange_off(self, mock_save_db):
+        wallet = restore_wallet_from_text(
+            "p2pkh:cRC8xq8gkhsdRwLkh54UEHg8Nk4BwSJ76XmroDsBL5Z8pRoMEpRn p2pkh:cR9Vadrs2CqwSjHxee53yVtHDobXrni6f4rShp6Q9vyYTSa2JHVs",
+            path='if_this_exists_mocking_failed_648151893',
+            config=self.config)['wallet']  # type: Abstract_Wallet
+
+        # bootstrap wallet
+        funding_tx = Transaction('0200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800')
+        funding_txid = funding_tx.txid()
+        self.assertEqual('2304741a3b690d5c52bac443792e9ec6af535b527c562899b36e72e8c4e3bf4f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+
+        # imported wallets do not send change to change addresses by default
+        # (they send it back to the "from address")
+        self.assertFalse(wallet.use_change)
+
+        outputs = [PartialTxOutput.from_address_and_value('yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3', 49646)]
+        coins = wallet.get_spendable_coins(domain=None)
+        tx = wallet.make_unsigned_transaction(coins=coins, outputs=outputs, fee=1000)
+        tx.locktime = 2004420
+        tx.version = 2
+
+        # check that change is sent back to the "from address"
+        self.assertEqual(2, len(tx.outputs()))
+        self.assertTrue(tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3") > 0)
+        self.assertEqual(49646, tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3"))
+
+        self.assertEqual("70736274ff01007702000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a7404230000000000feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acc4951e00000100e10200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800000000",
+                         tx.serialize_as_bytes().hex())
+        wallet.sign_transaction(tx, password=None)
+        tx_copy = tx_from_any(tx.serialize())
+        self.assertEqual('02000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a740423000000006a47304402204bc9ff56b62c9587fdff71d64153e578249ac560617cfd3529c0107cc5ab2b0b02204deaa4852f6950fc5c05d45840d8d4d6fc602601947a40f91f00339aef05a1590121025837acda77e6b2295e03c50c356057e3f2ec8d6c498ba9351618ee913510daa3feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acc4951e00',
+                         str(tx_copy))
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_imported_wallet_usechange_on(self, mock_save_db):
+        wallet = restore_wallet_from_text(
+            "p2pkh:cRC8xq8gkhsdRwLkh54UEHg8Nk4BwSJ76XmroDsBL5Z8pRoMEpRn p2pkh:cR9Vadrs2CqwSjHxee53yVtHDobXrni6f4rShp6Q9vyYTSa2JHVs",
+            path='if_this_exists_mocking_failed_648151893',
+            config=self.config)['wallet']  # type: Abstract_Wallet
+
+        # bootstrap wallet
+        funding_tx = Transaction('0200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800')
+        funding_txid = funding_tx.txid()
+        self.assertEqual('2304741a3b690d5c52bac443792e9ec6af535b527c562899b36e72e8c4e3bf4f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+
+        # instead of sending the change back to the "from address", we want it sent to another unused address
+        wallet.use_change = True
+
+        outputs = [PartialTxOutput.from_address_and_value('yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3', 49646)]
+        coins = wallet.get_spendable_coins(domain=None)
+        tx = wallet.make_unsigned_transaction(coins=coins, outputs=outputs, fee=1000)
+        tx.locktime = 2004420
+        tx.version = 2
+
+        # check that change is sent to another unused imported address
+        self.assertEqual(2, len(tx.outputs()))
+        self.assertTrue(tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3") > 0)
+        self.assertEqual(49646, tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3"))
+
+        self.assertEqual("70736274ff01007702000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a7404230000000000feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acc4951e00000100e10200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800000000",
+                         tx.serialize_as_bytes().hex())
+        wallet.sign_transaction(tx, password=None)
+        tx_copy = tx_from_any(tx.serialize())
+        self.assertEqual('02000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a740423000000006a473044022041563dd07b14ef8fa49d4ec4c01338fe0a1d48474b15205d545b0359e1df84490220347949e212a7ff9b2562867f0c14df2e65119302d3fd43bf26f99bcfa2174dd50121025837acda77e6b2295e03c50c356057e3f2ec8d6c498ba9351618ee913510daa3feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acc4951e00',
+                         str(tx_copy))
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_imported_wallet_usechange_on__no_more_unused_addresses(self, mock_save_db):
+        wallet = restore_wallet_from_text(
+            "p2pkh:cRC8xq8gkhsdRwLkh54UEHg8Nk4BwSJ76XmroDsBL5Z8pRoMEpRn p2pkh:cR9Vadrs2CqwSjHxee53yVtHDobXrni6f4rShp6Q9vyYTSa2JHVs",
+            path='if_this_exists_mocking_failed_648151893',
+            config=self.config)['wallet']  # type: Abstract_Wallet
+
+        # bootstrap wallet
+        funding_tx = Transaction('0200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800')
+        funding_txid = funding_tx.txid()
+        self.assertEqual('2304741a3b690d5c52bac443792e9ec6af535b527c562899b36e72e8c4e3bf4f', funding_txid)
+        wallet.receive_tx_callback(funding_txid, funding_tx, TX_HEIGHT_UNCONFIRMED)
+        # add more txs so that all addresses become used
+        _txs = [
+            ("463cae5453d682f106d15701fd88d65e4af5228ec0f020f5e5bfc3efb8c04c5a", "0200000002912b2b205a528c5e875f9a64c1105217061135a9539e64c1953e40f9a7f9ec80000000006a4730440220621f57c5ca5e2f8ef999848f2faeab7727c843ad1140cd7062fc1370ec26b92002206119c3b2d8eb00483ceeb4653ad982544868ebfddd1d11173fbdaf7bca2e4ef9012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff0e6c1fb9ced6f9595a6598b730d07a322461ec8e8556629be050129d5f95768b000000006a473044022011867d382d023a3a3b8592337639e0a574dc23e2bf7178b0e8f533b59f8157b4022013a380047f4c2806a88c70adc32895811109b820b0121643e7cf6c191eb76183012102bc67dbfecc27341ee81a04029fb2e7c8e1280789cbe785bdab6e0673f1c785b9feffffff0210270000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588aca5a90200000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888ac060f0800"),
+        ]
+        for txid, rawtx in _txs:
+            tx = Transaction(rawtx)
+            self.assertEqual(txid, tx.txid())
+            wallet.receive_tx_callback(txid, tx, TX_HEIGHT_UNCONFIRMED)
+
+        # instead of sending the change back to the "from address", we want it sent to another unused address.
+        # (except all our addresses are used! so we expect change sent back to "from address")
+        wallet.use_change = True
+
+        outputs = [PartialTxOutput.from_address_and_value('yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3', 49646)]
+        coins = wallet.get_spendable_coins(domain=None)
+        tx = wallet.make_unsigned_transaction(coins=coins, outputs=outputs, fee=1000)
+        tx.locktime = 2004420
+        tx.version = 2
+
+        # check that change is sent back to the "from address"
+        self.assertEqual(2, len(tx.outputs()))
+        self.assertTrue(tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3") > 0)
+        self.assertEqual(49646, tx.output_value_for_address("yR41Y7aXsoYCSugFhXJ2DU5asRtW1rpzV3"))
+
+        self.assertEqual("70736274ff01007702000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a7404230000000000feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acc4951e00000100e10200000001688b4db66baaae1dde4a59aaccc1282757db5b192033a8d41718cd9e3949f7d2050000006a47304402203f8fca0aa5ef38d20e275d3c7cf191ce56e5f12e351ffa12f0a667440374ef7a0220206ef46cf234a35b7f4e3f062c99a118966403f9e788ec870d93114dd20081fa01210211db4efc20880c5b57cfa947550a7f337c99adf5c11999de380e2e4e196eebcefeffffff02ac150700000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acbc2b0800000000001976a914a9262375de5f7a2c81e0d28f3c6ab42e594627e888acea0e0800000000",
+                         tx.serialize_as_bytes().hex())
+        wallet.sign_transaction(tx, password=None)
+        tx_copy = tx_from_any(tx.serialize())
+        self.assertEqual('02000000014fbfe3c4e8726eb39928567c525b53afc69e2e7943c4ba525c0d693b1a740423000000006a47304402204bc9ff56b62c9587fdff71d64153e578249ac560617cfd3529c0107cc5ab2b0b02204deaa4852f6950fc5c05d45840d8d4d6fc602601947a40f91f00339aef05a1590121025837acda77e6b2295e03c50c356057e3f2ec8d6c498ba9351618ee913510daa3feffffff02eec10000000000001976a91433ed429c95e392a27f1194b400b07cff5167284588acd64f0600000000001976a914eb9fad52a0664d10798fdcc0c4776ef07d910d7788acc4951e00',
+                         str(tx_copy))
 
 
 class TestWalletOfflineSigning(TestCaseForTestnet):

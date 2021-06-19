@@ -98,7 +98,7 @@ if TYPE_CHECKING:
     from electrum_dash.paymentrequest import PaymentRequest
 
 
-ATLAS_ICON = f'atlas://{KIVY_GUI_PATH}/theming/light/%s'
+ATLAS_ICON = f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/%s'
 
 
 class ElectrumWindow(App, Logger):
@@ -778,7 +778,8 @@ class ElectrumWindow(App, Logger):
         from .uix.dialogs.settings import SettingsDialog
         if self._settings_dialog is None:
             self._settings_dialog = SettingsDialog(self)
-        self._settings_dialog.update()
+        else:
+            self._settings_dialog.update()
         self._settings_dialog.open()
 
     def is_wallet_creation_disabled(self):
@@ -1226,7 +1227,7 @@ class ElectrumWindow(App, Logger):
         self.qr_dialog(label.name, label.data, show_text_with_qr)
 
     def show_error(self, error, width='200dp', pos=None, arrow_pos=None,
-                   exit=False, icon=f'atlas://{KIVY_GUI_PATH}/theming/light/error', duration=0,
+                   exit=False, icon=f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/error', duration=0,
                    modal=False):
         ''' Show an error Message Bubble.
         '''
@@ -1238,7 +1239,7 @@ class ElectrumWindow(App, Logger):
                   exit=False, duration=0, modal=False):
         ''' Show an Info Message Bubble.
         '''
-        self.show_error(error, icon=f'atlas://{KIVY_GUI_PATH}/theming/light/important',
+        self.show_error(error, icon=f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/important',
             duration=duration, modal=modal, exit=exit, pos=pos,
             arrow_pos=arrow_pos)
 
@@ -1279,7 +1280,7 @@ class ElectrumWindow(App, Logger):
             info_bubble.show_arrow = False
             img.allow_stretch = True
             info_bubble.dim_background = True
-            info_bubble.background_image = f'atlas://{KIVY_GUI_PATH}/theming/light/card'
+            info_bubble.background_image = f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/card'
         else:
             info_bubble.fs = False
             info_bubble.icon = icon
@@ -1405,7 +1406,8 @@ class ElectrumWindow(App, Logger):
         from .uix.dialogs.addresses import AddressesDialog
         if self._addresses_dialog is None:
             self._addresses_dialog = AddressesDialog(self)
-        self._addresses_dialog.update()
+        else:
+            self._addresses_dialog.update()
         self._addresses_dialog.open()
 
     def coins_dialog(self, filter_val=0):
@@ -1569,7 +1571,6 @@ class ElectrumWindow(App, Logger):
                 self.show_error(_("Backup NOT saved. Backup directory not configured."))
             return
 
-        backup_dir = util.android_backup_dir()
         from android.permissions import request_permissions, Permission
         def cb(permissions, grant_results: Sequence[bool]):
             if not grant_results or not grant_results[0]:
@@ -1577,6 +1578,7 @@ class ElectrumWindow(App, Logger):
                 return
             # note: Clock.schedule_once is a hack so that we get called on a non-daemon thread
             #       (needed for WalletDB.write)
+            backup_dir = util.android_backup_dir()
             Clock.schedule_once(lambda dt: self._save_backup(backup_dir))
         request_permissions([Permission.WRITE_EXTERNAL_STORAGE], cb)
 

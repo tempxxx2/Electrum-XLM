@@ -39,7 +39,7 @@ import asyncio
 from typing import Optional, TYPE_CHECKING, Sequence, List, Union
 
 from PyQt5.QtGui import QPixmap, QKeySequence, QIcon, QCursor, QFont
-from PyQt5.QtCore import Qt, QRect, QStringListModel, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QRect, QStringListModel, QSize, pyqtSignal, QPoint
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (QMessageBox, QComboBox, QSystemTrayIcon, QTabWidget,
                              QMenuBar, QFileDialog, QCheckBox, QLabel,
@@ -65,7 +65,8 @@ from electrum_dash.util import (format_time,
                                 get_new_wallet_name, send_exception_to_crash_reporter,
                                 InvalidBitcoinURI, NotEnoughFunds, FILE_OWNER_MODE,
                                 NoDynamicFeeEstimates, MultipleSpendMaxTxOutputs,
-                                DASH_BIP21_URI_SCHEME, PAY_BIP21_URI_SCHEME)
+                                DASH_BIP21_URI_SCHEME, PAY_BIP21_URI_SCHEME,
+                                InvoiceError)
 from electrum_dash.invoices import (PR_TYPE_ONCHAIN,
                                     PR_DEFAULT_EXPIRATION_WHEN_CREATING,
                                     Invoice, InvoiceExt)
@@ -1375,10 +1376,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         amount = self.receive_amount_e.get_amount()
         message = self.receive_message_e.text()
         expiry = self.config.get('request_expiry', PR_DEFAULT_EXPIRATION_WHEN_CREATING)
-        key = self.create_bitcoin_request(amount, message, expiry)
-        if not key:
+        try:
+            key = self.create_bitcoin_request(amount, message, expiry)
+            if not key:
+                return
+            self.address_list.update()
+        except InvoiceError as e:
+            self.show_error(_('Error creating payment request') + ':\n' + str(e))
             return
-        self.address_list.update()
+
         assert key is not None
         self.request_list.update()
         self.request_list.select_key(key)
@@ -1391,7 +1397,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         title = _('Address')
         self.do_copy(content, title=title)
 
-    def create_bitcoin_request(self, amount, message, expiration) -> Optional[str]:
+    def create_bitcoin_request(self, amount: int, message: str, expiration: int) -> Optional[str]:
         addr = self.wallet.get_unused_address()
         if addr is None:
             if not self.wallet.is_deterministic():  # imported wallet
@@ -1644,6 +1650,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         __, x_fee_amount = run_hook('get_tx_extra_fee', self.wallet, tx) or (None, 0)
         amount_after_all_fees = amount - x_fee_amount
         self.amount_e.setAmount(amount_after_all_fees)
+        # show tooltip explaining max amount
+        mining_fee = tx.get_fee()
+        mining_fee_str = self.format_amount_and_units(mining_fee)
+        msg = _("Mining fee: {} (can be adjusted on next screen)").format(mining_fee_str)
+        if x_fee_amount:
+            twofactor_fee_str = self.format_amount_and_units(x_fee_amount)
+            msg += "\n" + _("2fa fee: {} (for the next batch of transactions)").format(twofactor_fee_str)
+        frozen_bal = self.get_frozen_balance_str()
+        if frozen_bal:
+            msg += "\n" + _("Some coins are frozen: {} (can be unfrozen in the Addresses or in the Coins tab)").format(frozen_bal)
+        QToolTip.showText(self.max_button.mapToGlobal(QPoint(0, 0)), msg)
 
     def get_contact_payto(self, key):
         _type, label = self.contacts.get(key)
@@ -1752,15 +1769,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def read_invoice(self):
         if self.check_send_tab_payto_line_and_show_errors():
             return
-        outputs = self.read_outputs()
-        if self.check_send_tab_onchain_outputs_and_show_errors(outputs):
-            return
-        message = self.message_e.text()
-        return self.wallet.create_invoice(
-            outputs=outputs,
-            message=message,
-            pr=self.payment_request,
-            URI=self.payto_URI)
+        try:
+            outputs = self.read_outputs()
+            if self.check_send_tab_onchain_outputs_and_show_errors(outputs):
+                return
+            message = self.message_e.text()
+            return self.wallet.create_invoice(
+                outputs=outputs,
+                message=message,
+                pr=self.payment_request,
+                URI=self.payto_URI)
+        except InvoiceError as e:
+            self.show_error(_('Error creating payment') + ':\n' + str(e))
 
     def read_invoice_ext(self):
         if not self.pending_invoice:
@@ -1958,12 +1978,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def get_text_not_enough_funds_mentioning_frozen(self) -> str:
         text = _("Not enough funds")
-        frozen_bal = sum(self.wallet.get_frozen_balance())
-        if frozen_bal:
-            text += " ({} {} {})".format(
-                self.format_amount(frozen_bal).strip(), self.base_unit(), _("are frozen")
+        frozen_str = self.get_frozen_balance_str()
+        if frozen_str:
+            text += " ({} {})".format(
+                frozen_str, _("are frozen")
             )
         return text
+
+    def get_frozen_balance_str(self) -> Optional[str]:
+        frozen_bal = sum(self.wallet.get_frozen_balance())
+        if not frozen_bal:
+            return None
+        return self.format_amount_and_units(frozen_bal)
 
     def pay_onchain_dialog(self, inputs: Sequence[PartialTxInput],
                            outputs: List[PartialTxOutput], *,
