@@ -39,6 +39,8 @@ from .logging import get_logger
 from .ecc_fast import _libsecp256k1, SECP256K1_EC_UNCOMPRESSED
 
 _logger = get_logger(__name__)
+
+
 def string_to_number(b: bytes) -> int:
     return int.from_bytes(b, byteorder='big', signed=False)
 
