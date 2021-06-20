@@ -341,8 +341,6 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         self.banner = ''
         self.donation_address = ''
         self.relay_fee = None  # type: Optional[int]
-        # List of all proposals on the network.
-        self.all_proposals = []
 
         dir_path = os.path.join(self.config.path, 'certs')
         util.make_dir(dir_path)
