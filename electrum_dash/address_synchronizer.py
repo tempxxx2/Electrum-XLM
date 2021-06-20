@@ -386,7 +386,7 @@ class AddressSynchronizer(Logger):
             self.db.add_num_inputs_to_tx(tx_hash, len(tx.inputs()))
             if is_new_tx and self.psman.enabled:
                 self.psman._add_tx_ps_data(tx_hash, tx)
-            if is_new_tx and not self.is_local_tx(tx_hash) and self.network:
+            if is_new_tx and not self.is_local_tx(tx_hash):
                 util.trigger_callback('new_transaction', self, tx)
             return True
 
