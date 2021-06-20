@@ -490,12 +490,11 @@ class AddressSynchronizer(Logger):
         if self.psman.enabled:
             self.psman.unsubscribe_spent_addr(addr, hist)
         # trigger new_transaction cb when local tx hash appears in history
-        if self.network:
-            for tx_hash in local_tx_hist_hashes:
-                self.find_islock_pair(tx_hash)
-                tx = self.db.get_transaction(tx_hash)
-                if tx:
-                    util.trigger_callback('new_transaction', self, tx)
+        for tx_hash in local_tx_hist_hashes:
+            self.find_islock_pair(tx_hash)
+            tx = self.db.get_transaction(tx_hash)
+            if tx:
+                util.trigger_callback('new_transaction', self, tx)
 
     @profiler
     def load_local_history(self):
