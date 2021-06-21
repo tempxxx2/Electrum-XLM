@@ -214,7 +214,7 @@ class PSMixSession:
 
     def on_dsq(self, dsq):
         '''Process dsq messages broadcasted from masternodes,
-        and informing about existing queue states'''
+        and inform about existing queue states'''
         denom = dsq.nDenom
         if denom != self.denom:
             raise Exception(f'Wrong denom in dsq msg: {denom},'
