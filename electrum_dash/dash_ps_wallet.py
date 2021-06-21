@@ -98,14 +98,14 @@ class KeyPairsMixin:
         self.postpone_notification('ps-keypairs-changes', self.wallet)
 
     def on_wallet_password_set(self):
-        '''After password set: need stop mixing as need password to sign txs.
+        '''After password set: got to stop mixing as password is needed to sign txs.
         After restarting mixing keypairs will be cached'''
         if self.state == PSStates.Mixing:
             self.stop_mixing(self.WALLET_PASSWORD_SET_MSG)
 
     async def clean_keypairs_on_timeout(self):
-        '''Async task which clean keypairs after mixing is stopped
-        and kp_timeout period passed'''
+        '''Async task which cleans keypairs after mixing is stopped
+        and kp_timeout period is passed'''
         def _clean_kp_on_timeout():
             with self.keypairs_state_lock:
                 if self.keypairs_state == KPStates.Unused:
@@ -125,7 +125,7 @@ class KeyPairsMixin:
                 break
 
     async def _make_keypairs_cache(self, password):
-        '''Make keypairs cache after mixing started'''
+        '''Make keypairs cache after mixing is started'''
         _make_cache = self._cache_keypairs
         if password is None:
             return
@@ -141,8 +141,8 @@ class KeyPairsMixin:
             await asyncio.sleep(1)
 
     def calc_need_sign_cnt(self, new_denoms_cnt):
-        '''Calculate need signature/keypairs count based
-        on new_denoms_count and pay collateral charges probability'''
+        '''Calculate the nmber of signature/keypairs needed according
+        to new_denoms_count and pay collateral charges probability'''
         w = self.wallet
         # calc already presented ps_denoms
         old_denoms_cnt = len(w.db.get_ps_denoms(min_rounds=0))
@@ -179,7 +179,7 @@ class KeyPairsMixin:
         return need_sign_cnt, need_sign_change_cnt, new_collateral_cnt
 
     def calc_need_new_keypairs_cnt(self):
-        '''Calculate need keypairs count on mixing start/keypairs caching'''
+        '''Calculate the number of keypairs needed on mixing start/keypairs caching'''
         new_denoms_amounts_real = self.calc_need_denoms_amounts()
         new_denoms_cnt_real = sum([len(a) for a in new_denoms_amounts_real])
         new_denoms_val_real = sum([sum(a) for a in new_denoms_amounts_real])
@@ -205,8 +205,8 @@ class KeyPairsMixin:
         return need_sign_cnt, need_sign_change_cnt, small_mix_funds
 
     def check_need_new_keypairs(self):
-        '''Check if need to cache new keypairs in addition
-        to possibly already cached'''
+        '''Check if there is a need to cache new keypairs in addition
+        to possibly already cached ones'''
         w = self.wallet
         if not self.need_password():
             return False, None
@@ -549,7 +549,7 @@ class KeyPairsMixin:
 
     def _cache_kp_tmp_reserved(self, password):
         '''Cache keypairs for PS Keystore addresses funded from HW keystore.
-        Addresses must not be reserved for PS use, instead tmp reserved'''
+        Addresses must not be reserved for PS use but tmp reserved instead'''
         w = self.wallet
         addr = self.get_tmp_reserved_address()
         if not addr:
