@@ -236,7 +236,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     @property
     def is_waiting(self):
-        '''Mixing is run but no active workflows found'''
+        '''Mixing is running but no active workflows are found'''
         if self.state not in self.mixing_running_states:
             return False
         if self.keypairs_state in [KPStates.NeedCache, KPStates.Caching]:
@@ -268,7 +268,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         asyncio.ensure_future(self.trigger_postponed_notifications())
 
     def on_stop_threads(self):
-        '''Run when wallet unloaded/stopped'''
+        '''Run when the wallet is unloaded/stopped'''
         if self.state == PSStates.Mixing:
             self.stop_mixing()
         util.unregister_callback(self.on_wallet_updated)
@@ -288,7 +288,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     self.stop_mixing(self.NO_NETWORK_STOP_MSG)
 
     async def on_wallet_updated(self, event, *args):
-        '''Run when wallet/synchronizer is_up_to_date state changed'''
+        '''Run when wallet/synchronizer's is_up_to_date state changed'''
         if not self.enabled:
             return
         w = args[0]
@@ -492,7 +492,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _maintain_collateral_amount(self):
-        '''Async task to maintain collateral coins available'''
+        '''Async task to maintain available collateral coins'''
         w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
@@ -528,7 +528,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _maintain_denoms(self):
-        '''Async task which make new denoms available for mixing'''
+        '''Async task which makes new denoms available for mixing'''
         w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
@@ -563,7 +563,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _mix_denoms(self):
-        '''Async task which maintain mixing process'''
+        '''Async task which maintains mixing process'''
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         def _cleanup():
@@ -1386,7 +1386,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 break
 
     def _start_new_denoms_wfl(self, coins, use_all_coins=False):
-        '''Calc outputs_amounts, start new_denoms_wfl
+        '''Calculate outputs_amounts, start new_denoms_wfl
         with appropriate locking '''
         outputs_amounts = \
             self.calc_need_denoms_amounts(coins=coins,
