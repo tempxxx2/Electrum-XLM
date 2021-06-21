@@ -8,6 +8,8 @@ import logging
 from decimal import Decimal
 from enum import IntEnum
 
+import attr
+
 from . import constants, util
 from .bitcoin import is_address, COIN
 from .dash_ps_net import PSDenoms
@@ -453,6 +455,110 @@ class PSGUILogHandler(logging.Handler):
             self.psman.postpone_notification('ps-log-changes', self.psman)
 
 
+@attr.s
+class DSMsgStat():
+    '''Outgoing ds message statistics'''
+    msg_sent = attr.ib(type=float, default=0.0)
+    sent_cnt = attr.ib(type=int, default=0)
+    dssu_cnt = attr.ib(type=int, default=0)
+    success_cnt = attr.ib(type=int, default=0)
+    timeout_cnt = attr.ib(type=int, default=0)
+    peer_closed_cnt = attr.ib(type=int, default=0)
+    error_cnt = attr.ib(type=int, default=0)
+    total_wait_sec = attr.ib(type=float, default=0)
+    min_wait_sec = attr.ib(type=float, default=1e9)
+    max_wait_sec = attr.ib(type=float, default=0.0)
+
+    def __str__(self):
+        min_wait_sec = 0.0 if self.min_wait_sec == 1e9 else self.min_wait_sec
+        success_cnt = self.success_cnt
+        avg_wait_sec = self.total_wait_sec / success_cnt if success_cnt else .0
+        min_wait = round(min_wait_sec, 1)
+        avg_wait = round(avg_wait_sec, 1)
+        max_wait = round(self.max_wait_sec, 1)
+        return (f'all={self.sent_cnt},'
+                f' ok={self.success_cnt},'
+                f' err={self.error_cnt},'
+                f' timeout={self.timeout_cnt},'
+                f' closed={self.peer_closed_cnt},'
+                f' dssu={self.dssu_cnt},'
+                f' min/avg/max={min_wait}/{avg_wait}/{max_wait}sec')
+
+    def send_msg(self):
+        '''Called before sending outgoing ds messages'''
+        self.sent_cnt += 1
+        self.msg_sent = time.time()
+
+    def on_dssu(self):
+        '''Called on dssu arrival before next mixing worflow message'''
+        self.dssu_cnt += 1
+
+    def on_read_msg(self):
+        '''Called on arrival of next mixing worflow message'''
+        wait_sec = time.time() - self.msg_sent
+        self.min_wait_sec = min(self.min_wait_sec, wait_sec)
+        self.total_wait_sec += wait_sec
+        self.max_wait_sec = max(self.max_wait_sec, wait_sec)
+        self.success_cnt += 1
+
+    def on_timeout(self):
+        '''Called if MixSessionTimeout encountered'''
+        self.timeout_cnt += 1
+
+    def on_peer_closed(self):
+        '''Called if MixSessionPeerClosed encountered'''
+        self.peer_closed_cnt += 1
+
+    def on_error(self):
+        '''Called if Exception encountered'''
+        self.error_cnt += 1
+
+
+@attr.s
+class MixingStats():
+    '''Outgoing ds messages statistics grouped together'''
+    dsa = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
+    dsi = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
+    dss = attr.ib(type=DSMsgStat, default=attr.Factory(DSMsgStat))
+
+    def __str__(self):
+        return (f'Mixing sessions statistics:'
+                f'\ndsa: {str(self.dsa)}'
+                f'\ndsi: {str(self.dsi)}'
+                f'\ndss: {str(self.dss)}')
+
+    def __repr__(self):
+        return (f'MixingStats(dsa={self.dsa}, dsi={self.dsi}, dss={self.dss}')
+
+    def get_last_sent_msg_stat(self):
+        '''Get last one sent message from dsa/dsi/dss set'''
+        last_sent = 0
+        last_sent_msg = None
+        for msg in [self.dsa, self.dsi, self.dss]:
+            if msg.msg_sent > last_sent:
+                last_sent = msg.msg_sent
+                last_sent_msg = msg
+        return last_sent_msg
+
+    def on_timeout(self):
+        '''Called if MixSessionTimeout encountered'''
+        last_sent_msg = self.get_last_sent_msg_stat()
+        if last_sent_msg:
+            last_sent_msg.on_timeout()
+
+    def on_peer_closed(self):
+        '''Called if MixSessionPeerClosed encountered'''
+        last_sent_msg = self.get_last_sent_msg_stat()
+        if last_sent_msg:
+            last_sent_msg.on_peer_closed()
+
+    def on_error(self):
+        '''Called if Exception encountered'''
+        last_sent_msg = self.get_last_sent_msg_stat()
+        if last_sent_msg:
+            last_sent_msg.on_error()
+
+
 class PSOptsMixin:
     '''PrivateSend user options functionality'''
 
@@ -500,6 +606,7 @@ class PSOptsMixin:
 
     def __init__(self, wallet):
         self._allow_others = self.DEFAULT_ALLOW_OTHERS
+        self.mix_stat = MixingStats()
 
     @property
     def keep_amount(self):
@@ -821,6 +928,36 @@ class PSOptsMixin:
             return _('In new mix transactions group origin coins by address')
         else:
             return _('Group origin coins by address')
+
+    @property
+    def gather_mix_stat(self):
+        '''Check if mixing sessions statistics should be gathered'''
+        if self.unsupported:
+            return False
+        return self.wallet.db.get_ps_data('gather_mix_stat', False)
+
+    @gather_mix_stat.setter
+    def gather_mix_stat(self, gather_mix_stat):
+        '''Change gathering mixing statistics option'''
+        if self.state in self.mixing_running_states:
+            return
+        if self.gather_mix_stat == gather_mix_stat:
+            return
+        self.clear_mix_stat()
+        self.wallet.db.set_ps_data('gather_mix_stat', bool(gather_mix_stat))
+
+    def clear_mix_stat(self):
+        '''Clear psman.mix_stat dict'''
+        if self.state in self.mixing_running_states:
+            return
+        self.mix_stat = MixingStats()
+
+    def gather_mix_stat_data(self, full_txt=False):
+        '''Str data for UI gather_mix_stat preference'''
+        if full_txt:
+            return _('Gather mixing sessions statistics (Reset on toggle)')
+        else:
+            return _('Gather mixing statistics')
 
     def mixing_control_data(self, full_txt=False):
         '''Str data for UI mixing control'''

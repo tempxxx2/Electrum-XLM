@@ -22,7 +22,8 @@ from electrum_dash.dash_ps_util import (COLLATERAL_VAL, CREATE_COLLATERAL_VAL,
                                         PSDenominateWorkflow, filter_log_line,
                                         FILTERED_TXID, FILTERED_ADDR,
                                         PSCoinRounds, ps_coin_rounds_str,
-                                        calc_tx_size, calc_tx_fee, to_duffs)
+                                        calc_tx_size, calc_tx_fee, to_duffs,
+                                        MixingStats)
 from electrum_dash.dash_ps_wallet import (KPStates, KP_ALL_TYPES, KP_SPENDABLE,
                                           KP_PS_COINS, KP_PS_CHANGE,
                                           PSKsInternalAddressCorruption)
@@ -262,6 +263,53 @@ class PSWalletTestCase(TestCaseForTestnet):
         assert id(data_tuple[3]) != id(workflow2.outputs)
         assert data_tuple[4] == workflow2.completed
         assert workflow == workflow2
+
+    def test_MixingStats_DSMsgStat(self):
+        ms = MixingStats()
+        assert ms.dsa.msg_sent == ms.dsi.msg_sent == ms.dss.msg_sent == 0
+        assert ms.dsa.sent_cnt == ms.dsi.sent_cnt == ms.dss.sent_cnt == 0
+        assert ms.dsa.dssu_cnt == ms.dsi.dssu_cnt == ms.dss.dssu_cnt == 0
+        assert (ms.dsa.success_cnt == ms.dsi.success_cnt
+                    == ms.dss.success_cnt == 0)
+        assert (ms.dsa.timeout_cnt == ms.dsi.timeout_cnt
+                    == ms.dss.timeout_cnt == 0)
+        assert (ms.dsa.peer_closed_cnt == ms.dsi.peer_closed_cnt
+                    == ms.dss.peer_closed_cnt == 0)
+        assert ms.dsa.error_cnt == ms.dsi.error_cnt == ms.dss.error_cnt == 0
+        assert (ms.dsa.min_wait_sec == ms.dsi.min_wait_sec
+                    == ms.dss.min_wait_sec == 1e9)
+        assert (ms.dsa.total_wait_sec == ms.dsi.total_wait_sec
+                    == ms.dss.total_wait_sec == 0)
+        assert (ms.dsa.max_wait_sec == ms.dsi.max_wait_sec
+                    == ms.dss.max_wait_sec == 0)
+
+        t0 = time.time()
+        ms.dsa.send_msg()
+        t1 = time.time()
+        assert t0 <= ms.dsa.msg_sent <= t1
+        ms.dsa.on_dssu()
+        assert ms.dsa.dssu_cnt == 1
+        time.sleep(0.0001)
+        ms.dsa.on_read_msg()
+        assert ms.dsa.success_cnt == 1
+        assert ms.dsa.min_wait_sec > 0
+        assert ms.dsa.total_wait_sec > 0
+        assert ms.dsa.max_wait_sec > 0
+
+        ms.dsi.send_msg()
+        ms.on_timeout()
+        assert ms.dsi.success_cnt == 0
+        assert ms.dsi.timeout_cnt == 1
+
+        ms.dss.send_msg()
+        ms.on_peer_closed()
+        assert ms.dss.success_cnt == 0
+        assert ms.dss.peer_closed_cnt == 1
+
+        ms.dsa.send_msg()
+        ms.on_error()
+        assert ms.dsa.success_cnt == 1
+        assert ms.dsa.error_cnt == 1
 
     def test_find_untracked_ps_txs(self):
         w = self.wallet
@@ -818,6 +866,16 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.group_origin_coins_by_addr = 0
         assert not psman.group_origin_coins_by_addr
         assert psman.group_origin_coins_by_addr is False
+
+    def test_gather_mix_stat(self):
+        psman = self.wallet.psman
+        assert not psman.gather_mix_stat
+        psman.gather_mix_stat = 1
+        assert psman.gather_mix_stat
+        assert psman.gather_mix_stat is True
+        psman.gather_mix_stat = 0
+        assert not psman.gather_mix_stat
+        assert psman.gather_mix_stat is False
 
     def test_check_min_rounds(self):
         C_RNDS = PSCoinRounds.COLLATERAL

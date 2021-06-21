@@ -25,6 +25,14 @@ class PSDenoms(IntEnum):
     D0_001 = 16
 
 
+class MixSessionTimeout(Exception):
+    """Thrown when waiting for next message from MN is timed out"""
+
+
+class MixSessionPeerClosed(Exception):
+    """Thrown when waiting for next message from MN, and MN closes session"""
+
+
 class PSMixSession:
     '''P2P session with mixing masternode'''
 
@@ -157,9 +165,9 @@ class PSMixSession:
                 timeout = PRIVATESEND_SESSION_MSG_TIMEOUT
             res = await asyncio.wait_for(self.msg_queue.get(), timeout)
         except asyncio.TimeoutError:
-            raise Exception('Session Timeout, Reset')
+            raise MixSessionTimeout('Session Timeout, Reset')
         if not res:  # dash_peer is closed
-            raise Exception('peer connection closed')
+            raise MixSessionPeerClosed('peer connection closed')
         elif type(res) == Exception:
             raise res
         cmd = res.cmd

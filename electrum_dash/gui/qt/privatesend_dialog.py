@@ -613,6 +613,17 @@ class PSDialog(QDialog, MessageBoxMixin):
         grid.setColumnStretch(2, 1)
         self.tabs.addTab(self.mixing_tab, _('Mixing'))
 
+        # gather_mix_stat (shown on info tab but need to be created early)
+        psman = self.psman
+        gater_mix_stat_str = psman.gather_mix_stat_data(full_txt=True)
+        self.gather_mix_stat_cb = QCheckBox(gater_mix_stat_str)
+        self.gather_mix_stat_cb.setChecked(psman.gather_mix_stat)
+
+        def on_gather_mix_stat_change(x):
+            psman.gather_mix_stat = (x == Qt.Checked)
+            self.info_update()
+        self.gather_mix_stat_cb.stateChanged.connect(on_gather_mix_stat_change)
+
     def start_mixing(self, prev_kp_state):
         password = None
         psman = self.psman
@@ -783,6 +794,8 @@ class PSDialog(QDialog, MessageBoxMixin):
 
         ps_info_vbox = QVBoxLayout()
         ps_info_vbox.addWidget(self.ps_info_view)
+
+        ps_info_vbox.addWidget(self.gather_mix_stat_cb)
         ps_info_vbox.addWidget(btns)
         self.ps_info_tab.setLayout(ps_info_vbox)
         self.tabs.addTab(self.ps_info_tab, _('Info'))
@@ -910,9 +923,11 @@ class PSDialog(QDialog, MessageBoxMixin):
         if psman.state in psman.mixing_running_states:
             self.mix_rounds_sb.setEnabled(False)
             self.create_sm_denoms_bnt.setEnabled(False)
+            self.gather_mix_stat_cb.setEnabled(False)
         else:
             self.mix_rounds_sb.setEnabled(True)
             self.create_sm_denoms_bnt.setEnabled(True)
+            self.gather_mix_stat_cb.setEnabled(True)
         self.mixing_ctl_btn.setText(psman.mixing_control_data())
         self.update_keep_amount()
 

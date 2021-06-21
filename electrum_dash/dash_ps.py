@@ -10,7 +10,8 @@ from uuid import uuid4
 
 from . import util
 from .dash_msg import PRIVATESEND_ENTRY_MAX_SIZE
-from .dash_ps_net import PSMixSession, PRIVATESEND_SESSION_MSG_TIMEOUT
+from .dash_ps_net import (PSMixSession, PRIVATESEND_SESSION_MSG_TIMEOUT,
+                          MixSessionTimeout, MixSessionPeerClosed)
 from .dash_ps_wallet import (PSDataMixin, PSKeystoreMixin, KeyPairsMixin,
                              KPStates, NotFoundInKeypairs, AddPSDataError,
                              SignWithKeypairsFailed)
@@ -1663,39 +1664,57 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             pay_collateral_tx = self.get_pay_collateral_tx()
             if not pay_collateral_tx:
                 raise Exception('Absent suitable pay collateral tx')
+            if self.gather_mix_stat:
+                self.mix_stat.dsa.send_msg()
             await session.send_dsa(pay_collateral_tx)
             while True:
                 cmd, res = await session.read_next_msg(wfl)
                 if cmd == 'dssu':
+                    if self.gather_mix_stat:
+                        self.mix_stat.dsa.on_dssu()
                     continue
                 elif cmd == 'dsq' and session.fReady:
+                    if self.gather_mix_stat:
+                        self.mix_stat.dsa.on_read_msg()
                     break
                 else:
-                    raise Exception(f'Unsolisited cmd: {cmd} after dsa sent')
+                    raise Exception(f'Unsolicited cmd: {cmd} after dsa sent')
 
             pay_collateral_tx = self.get_pay_collateral_tx()
             if not pay_collateral_tx:
                 raise Exception('Absent suitable pay collateral tx')
 
             final_tx = None
+            if self.gather_mix_stat:
+                self.mix_stat.dsi.send_msg()
             await session.send_dsi(wfl.inputs, pay_collateral_tx, wfl.outputs)
             while True:
                 cmd, res = await session.read_next_msg(wfl)
                 if cmd == 'dssu':
+                    if self.gather_mix_stat:
+                        self.mix_stat.dsi.on_dssu()
                     continue
                 elif cmd == 'dsf':
+                    if self.gather_mix_stat:
+                        self.mix_stat.dsi.on_read_msg()
                     final_tx = PartialTransaction.from_tx(res)
                     break
                 else:
-                    raise Exception(f'Unsolisited cmd: {cmd} after dsi sent')
+                    raise Exception(f'Unsolicited cmd: {cmd} after dsi sent')
 
             signed_inputs = self._sign_inputs(final_tx, wfl.inputs)
+            if self.gather_mix_stat:
+                self.mix_stat.dss.send_msg()
             await session.send_dss(signed_inputs)
             while True:
                 cmd, res = await session.read_next_msg(wfl)
                 if cmd == 'dssu':
+                    if self.gather_mix_stat:
+                        self.mix_stat.dss.on_dssu()
                     continue
                 elif cmd == 'dsc':
+                    if self.gather_mix_stat:
+                        self.mix_stat.dss.on_read_msg()
                     def _on_dsc():
                         with self.denominate_wfl_lock:
                             saved = self.get_denominate_wfl(wfl.uuid)
@@ -1716,6 +1735,13 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             self.logger.wfl_ok(f'Completed denominate workflow: {wfl.lid}')
         except Exception as e:
             type_e = type(e)
+            if self.gather_mix_stat:
+                if type_e == MixSessionTimeout:
+                    self.mix_stat.on_timeout()
+                elif type_e == MixSessionPeerClosed:
+                    self.mix_stat.on_peer_closed()
+                else:
+                    self.mix_stat.on_error()
             if type_e != asyncio.CancelledError:
                 if wfl:
                     self.logger.wfl_err(f'Error in denominate worfklow:'
