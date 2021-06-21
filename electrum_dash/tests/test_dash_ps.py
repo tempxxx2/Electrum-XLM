@@ -1803,7 +1803,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.set_new_collateral_wfl(wfl)
         coro = psman.broadcast_new_collateral_wfl()
         asyncio.get_event_loop().run_until_complete(coro)
-        assert psman.new_collateral_wfl is None
+        assert psman.new_collateral_wfl
 
     def test_process_by_new_collateral_wfl(self):
         w = self.wallet
@@ -2716,7 +2716,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         asyncio.get_event_loop().run_until_complete(coro)
         coro = psman.broadcast_new_denoms_wfl()
         asyncio.get_event_loop().run_until_complete(coro)
-        assert psman.new_denoms_wfl is None
+        assert psman.new_denoms_wfl
         assert time.time() - psman.last_denoms_tx_time < 100
 
     def test_process_by_new_denoms_wfl(self):

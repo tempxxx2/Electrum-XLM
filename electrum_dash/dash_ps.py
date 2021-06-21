@@ -167,17 +167,22 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     @property
     def unsupported(self):
+        '''Wallet and keystore types is not supported'''
         return self.state == PSStates.Unsupported
 
     @property
     def enabled(self):
+        '''PS was enabled on this wallet'''
         return self.state not in [PSStates.Unsupported, PSStates.Disabled]
 
     @property
     def is_hw_ks(self):
+        '''Wallet has hardware keystore type'''
         return self.w_ks_type == 'hardware'
 
     def enable_ps(self):
+        '''Enables PS on this wallet, store changes in db.
+        For hardware wallets PS Keystore must be created first'''
         if (self.w_type == 'standard' and self.is_hw_ks
                 and 'ps_keystore' not in self.wallet.db.data):
             self.logger.info('ps_keystore for hw wallets must be created')
@@ -188,6 +193,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
     async def _enable_ps(self):
+        '''Start initialization, enable PS Keystore, find untracked txs'''
         if self.enabled:
             return
         self.state = PSStates.Initializing
@@ -198,6 +204,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.wallet.save_db()
 
     def can_find_untracked(self):
+        '''find untracked txs should run on synchronized wallet'''
         w = self.wallet
         network = self.network
         if network is None:
@@ -224,10 +231,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     @property
     def state(self):
+        '''Current state of PSManager (dash_ps_util.PSStates enum)'''
         return self._state
 
     @property
     def is_waiting(self):
+        '''Mixing is running but no active workflows are found'''
         if self.state not in self.mixing_running_states:
             return False
         if self.keypairs_state in [KPStates.NeedCache, KPStates.Caching]:
@@ -243,9 +252,11 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     @state.setter
     def state(self, state):
+        '''Set current state of PSManager'''
         self._state = state
 
     def on_network_start(self, network):
+        '''Run when network is connected to the wallet'''
         self.network = network
         util.register_callback(self.on_wallet_updated, ['wallet_updated'])
         util.register_callback(self.on_network_status, ['status'])
@@ -255,15 +266,16 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         asyncio.ensure_future(self.clean_keypairs_on_timeout())
         asyncio.ensure_future(self.cleanup_staled_denominate_wfls())
         asyncio.ensure_future(self.trigger_postponed_notifications())
-        asyncio.ensure_future(self.broadcast_new_denoms_new_collateral_wfls())
 
     def on_stop_threads(self):
+        '''Run when the wallet is unloaded/stopped'''
         if self.state == PSStates.Mixing:
             self.stop_mixing()
         util.unregister_callback(self.on_wallet_updated)
         util.unregister_callback(self.on_network_status)
 
     def on_network_status(self, event, *args):
+        '''Monitor if electrum network is disconnected and then stop mixing.'''
         connected = self.network.is_connected()
         if connected:
             self.disconnect_time = 0
@@ -276,6 +288,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     self.stop_mixing(self.NO_NETWORK_STOP_MSG)
 
     async def on_wallet_updated(self, event, *args):
+        '''Run when wallet/synchronizer's is_up_to_date state changed'''
         if not self.enabled:
             return
         w = args[0]
@@ -288,6 +301,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     # Methods related to mixing process
     def start_mixing(self, password, nowait=True):
+        '''Start mixing from GUI'''
         w = self.wallet
         msg = None
         if w.is_watching_only():
@@ -372,9 +386,11 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         util.trigger_callback('ps-state-changes', w, None, None)
 
     async def stop_mixing_from_async_thread(self, msg, msg_type=None):
+        '''Stop mixing programmatically'''
         await self.loop.run_in_executor(None, self.stop_mixing, msg, msg_type)
 
     def stop_mixing(self, msg=None, msg_type=None, nowait=True):
+        '''Stop mixing from GUI'''
         w = self.wallet
         with self.state_lock:
             if self.state == PSStates.Mixing:
@@ -407,6 +423,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     @log_exceptions
     async def _stop_mixing(self):
+        '''Async part of stop_mixing'''
         if self.keypairs_state == KPStates.Caching:
             self.logger.info('Waiting for keypairs caching to finish')
             while self.keypairs_state == KPStates.Caching:
@@ -438,6 +455,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         util.trigger_callback('ps-state-changes', w, None, None)
 
     async def _check_all_mixed(self):
+        '''Async task to check all_mixed and stop if done'''
         while not self.main_taskgroup.closed():
             await asyncio.sleep(10)
             if self.all_mixed:
@@ -445,6 +463,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                                                          'inf')
 
     async def _check_not_enough_funds(self):
+        '''Async task to reset _not_enough_funds condition after 30 secs'''
         while not self.main_taskgroup.closed():
             if self._not_enough_funds:
                 await asyncio.sleep(30)
@@ -452,6 +471,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(5)
 
     async def _maintain_pay_collateral_tx(self):
+        '''Async task to maintain actual pay collateral tx'''
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         while not self.main_taskgroup.closed():
@@ -471,22 +491,9 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.prepare_pay_collateral_wfl()
             await asyncio.sleep(0.25)
 
-    async def broadcast_new_denoms_new_collateral_wfls(self):
-        w = self.wallet
-        while True:
-            if self.enabled:
-                wfl = self.new_denoms_wfl
-                if wfl and wfl.completed and wfl.next_to_send(w):
-                    await self.broadcast_new_denoms_wfl()
-                await asyncio.sleep(0.25)
-                wfl = self.new_collateral_wfl
-                if wfl and wfl.completed and wfl.next_to_send(w):
-                    await self.broadcast_new_collateral_wfl()
-                await asyncio.sleep(0.25)
-            else:
-                await asyncio.sleep(1)
-
     async def _maintain_collateral_amount(self):
+        '''Async task to maintain available collateral coins'''
+        w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         while not self.main_taskgroup.closed():
@@ -494,6 +501,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             if wfl:
                 if not wfl.completed or not wfl.tx_order:
                     await self.cleanup_new_collateral_wfl()
+                elif wfl.next_to_send(w):
+                    await self.broadcast_new_collateral_wfl()
+                else:
+                    for txid in wfl.tx_order:
+                        tx = Transaction(wfl.tx_data[txid].raw_tx)
+                        self._process_by_new_collateral_wfl(txid, tx)
             elif (not self._not_enough_funds
                     and not self.ps_collateral_cnt
                     and not self.calc_need_denoms_amounts(use_cache=True)):
@@ -515,6 +528,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _maintain_denoms(self):
+        '''Async task which makes new denoms available for mixing'''
+        w = self.wallet
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         while not self.main_taskgroup.closed():
@@ -522,6 +537,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             if wfl:
                 if not wfl.completed or not wfl.tx_order:
                     await self.cleanup_new_denoms_wfl()
+                elif wfl.next_to_send(w):
+                    await self.broadcast_new_denoms_wfl()
+                else:
+                    for txid in wfl.tx_order:
+                        tx = Transaction(wfl.tx_data[txid].raw_tx)
+                        self._process_by_new_denoms_wfl(txid, tx)
             elif (not self._not_enough_funds
                     and self.calc_need_denoms_amounts(use_cache=True)):
                 coins = await self.get_next_coins_for_mixing()
@@ -542,6 +563,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def _mix_denoms(self):
+        '''Async task which maintains mixing process'''
         kp_wait_state = KPStates.Ready if self.need_password() else None
 
         def _cleanup():
@@ -576,6 +598,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(0.25)
 
     async def start_mix_session(self, denom_value, dsq, wfl_lid):
+        '''Start mixing session on MN from dsq in wfl identified by wfl_lid'''
         n_denom = PS_DENOMS_DICT[denom_value]
         sess = PSMixSession(self, denom_value, n_denom, dsq, wfl_lid)
         peer_str = sess.peer_str
@@ -587,6 +610,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return sess
 
     async def stop_mix_session(self, peer_str):
+        '''Stop mixing session identified by "ip:port" peer string'''
         async with self.mix_sessions_lock:
             sess = self.mix_sessions.pop(peer_str)
             if not sess:
@@ -597,6 +621,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     # Workflow methods for pay collateral transaction
     def get_confirmed_ps_collateral_data(self):
+        '''Return one of many possible confirmed collateral utxo'''
         w = self.wallet
         for outpoint, ps_collateral in w.db.get_ps_collaterals().items():
             addr, value = ps_collateral
@@ -617,6 +642,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                                     f' is not confirmed')
 
     async def prepare_pay_collateral_wfl(self):
+        '''Async prepare signed pay collateral tx in pay_collateral_wfl'''
         try:
             _prepare = self._prepare_pay_collateral_tx
             res = await self.loop.run_in_executor(None, _prepare)
@@ -646,6 +672,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.stop_mixing_from_async_thread(msg)
 
     def _prepare_pay_collateral_tx(self):
+        '''Prepare pay collateral tx and save it to pay_collateral_wfl'''
         with self.pay_collateral_wfl_lock:
             if self.pay_collateral_wfl:
                 return
@@ -704,12 +731,14 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return txid, wfl
 
     async def cleanup_pay_collateral_wfl(self, force=False):
+        '''Async cleanup of pay_collateral_wfl'''
         _cleanup = self._cleanup_pay_collateral_wfl
         changed = await self.loop.run_in_executor(None, _cleanup, force)
         if changed:
             self.wallet.save_db()
 
     def _cleanup_pay_collateral_wfl(self, force=False):
+        '''Cleanup of pay_collateral_wfl'''
         with self.pay_collateral_wfl_lock:
             wfl = self.pay_collateral_wfl
             if not wfl or wfl.completed and wfl.tx_order and not force:
@@ -726,6 +755,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return True
 
     def _cleanup_pay_collateral_wfl_tx_data(self, txid=None):
+        '''Cleanup of pay_collateral_wfl tx and its db supplementary data'''
         with self.pay_collateral_wfl_lock:
             wfl = self.pay_collateral_wfl
             if not wfl:
@@ -753,6 +783,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.logger.info(f'Cleaned up pay collateral workflow: {wfl.lid}')
 
     def _search_pay_collateral_wfl(self, txid, tx):
+        '''Search available pay_collateral_wfl corresponding to txid/tx data'''
         err = self._check_pay_collateral_tx_err(txid, tx, full_check=False)
         if not err:
             wfl = self.pay_collateral_wfl
@@ -760,6 +791,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 return wfl
 
     def _check_on_pay_collateral_wfl(self, txid, tx):
+        '''Check it's pay collateral tx, corresponding to pay_collateral_wfl'''
         wfl = self._search_pay_collateral_wfl(txid, tx)
         err = self._check_pay_collateral_tx_err(txid, tx)
         if not err:
@@ -770,6 +802,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return False
 
     def _process_by_pay_collateral_wfl(self, txid, tx):
+        '''Process tx by pay_collateral_wfl, cleanup wfl/supplementary data'''
         wfl = self._search_pay_collateral_wfl(txid, tx)
         if not wfl:
             return
@@ -801,6 +834,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                              f' workflow: {wfl.lid}')
 
     def get_pay_collateral_tx(self):
+        '''Get pay collateral tx prepared in pay_collateral_wfl'''
         wfl = self.pay_collateral_wfl
         if not wfl or not wfl.tx_order:
             return
@@ -812,6 +846,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     # Workflow methods for new collateral transaction
     def new_collateral_from_coins_info(self, coins):
+        '''Get info on new collateral wfl prepared from GUI'''
         if not coins or len(coins) > 1:
             return
         coins_val = sum([c.value_sats() for c in coins])
@@ -835,6 +870,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 return info
 
     def create_new_collateral_wfl_from_gui(self, coins, password):
+        '''Create new collateral tx/wfl from PS coins from GUI'''
         if self.state in self.mixing_running_states:
             return None, ('Can not create new collateral as mixing'
                           ' process is currently run.')
@@ -875,6 +911,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return None, err
 
     async def create_new_collateral_wfl(self):
+        '''Create new collateral tx/wfl from async mixing task'''
         coins_data = await self.get_next_coins_for_mixing(for_denoms=False)
         coins = coins_data['coins']
         _start = self._start_new_collateral_wfl
@@ -928,6 +965,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.stop_mixing_from_async_thread(msg)
 
     def _start_new_collateral_wfl(self):
+        '''Start new_collateral_wfl with appropriate locking'''
         with self.new_collateral_wfl_lock:
             if self.new_collateral_wfl:
                 return
@@ -939,6 +977,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return self.new_collateral_wfl
 
     def _make_new_collateral_tx(self, wfl, coins=None, password=None):
+        '''Make signed new collateral tx and save it to new_collateral_wfl'''
         with self.new_collateral_wfl_lock:
             saved = self.new_collateral_wfl
             if not saved:
@@ -1025,12 +1064,14 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return txid, tx
 
     async def cleanup_new_collateral_wfl(self, force=False):
+        '''Async cleanup of new_collateral_wfl'''
         _cleanup = self._cleanup_new_collateral_wfl
         changed = await self.loop.run_in_executor(None, _cleanup, force)
         if changed:
             self.wallet.save_db()
 
     def _cleanup_new_collateral_wfl(self, force=False):
+        '''Cleanup of new_collateral_wfl'''
         with self.new_collateral_wfl_lock:
             wfl = self.new_collateral_wfl
             if not wfl or wfl.completed and wfl.tx_order and not force:
@@ -1047,6 +1088,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return True
 
     def _cleanup_new_collateral_wfl_tx_data(self, txid=None):
+        '''Cleanup of new_collateral_wfl tx and its db supplementary data'''
         with self.new_collateral_wfl_lock:
             wfl = self.new_collateral_wfl
             if not wfl:
@@ -1071,6 +1113,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.logger.info(f'Cleaned up new collateral workflow: {wfl.lid}')
 
     async def broadcast_new_collateral_wfl(self):
+        '''Broadcast new collateral tx from new_collateral_wfl'''
         def _check_wfl():
             with self.new_collateral_wfl_lock:
                 wfl = self.new_collateral_wfl
@@ -1113,14 +1156,13 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     self.set_new_collateral_wfl(wfl)
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' collateral workflow: {wfl.lid}')
-                tx = Transaction(wfl.tx_data[txid].raw_tx)
-                self._process_by_new_collateral_wfl(txid, tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new'
                                          f' collateral workflow: {wfl.lid}')
             await self.loop.run_in_executor(None, _on_success)
 
     def _search_new_collateral_wfl(self, txid, tx):
+        '''Search available new_collateral_wfl corresponding to txid/tx data'''
         err = self._check_new_collateral_tx_err(txid, tx, full_check=False)
         if not err:
             wfl = self.new_collateral_wfl
@@ -1128,6 +1170,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 return wfl
 
     def _check_on_new_collateral_wfl(self, txid, tx):
+        '''Check it's new collateral tx, corresponding to new_collateral_wfl'''
         wfl = self._search_new_collateral_wfl(txid, tx)
         err = self._check_new_collateral_tx_err(txid, tx)
         if not err:
@@ -1138,6 +1181,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return False
 
     def _process_by_new_collateral_wfl(self, txid, tx):
+        '''Process tx by new_collateral_wfl, cleanup wfl/supplementary data'''
         wfl = self._search_new_collateral_wfl(txid, tx)
         if not wfl:
             return
@@ -1167,6 +1211,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     # Workflow methods for new denoms transaction
     def new_denoms_from_coins_info(self, coins):
+        '''Get info on new new denoms wfl prepared from GUI'''
         if not coins or len(coins) > 1:
             return
         coins_val = sum([c.value_sats() for c in coins])
@@ -1191,6 +1236,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return info
 
     def create_new_denoms_wfl_from_gui(self, coins, password):
+        '''Create new denoms txs/wfl from PS coins from GUI'''
         if self.state in self.mixing_running_states:
             return None, ('Can not create new denoms as mixing process'
                           ' is currently run.')
@@ -1258,6 +1304,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 return None, err
 
     async def create_new_denoms_wfl(self):
+        '''Create new denoms txs/wfl from async mixing task'''
         coins_data = await self.get_next_coins_for_mixing()
         coins = coins_data['coins']
         if not coins:
@@ -1339,6 +1386,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 break
 
     def _start_new_denoms_wfl(self, coins, use_all_coins=False):
+        '''Calculate outputs_amounts, start new_denoms_wfl
+        with appropriate locking '''
         outputs_amounts = \
             self.calc_need_denoms_amounts(coins=coins,
                                           use_all_coins=use_all_coins)
@@ -1358,6 +1407,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     def _make_new_denoms_tx(self, wfl, tx_amounts, last_tx_idx, i,
                             coins, password=None, use_all_coins=False):
+        '''Make signed new denoms tx, based on tx_amounts, with coins supplied
+        and i idx of multi tx workflow. Save tx to new_denoms_wfl'''
         w = self.wallet
         # try to create new denoms tx with change outupt at first
         addrs_cnt = len(tx_amounts)
@@ -1409,12 +1460,14 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return txid, tx
 
     async def cleanup_new_denoms_wfl(self, force=False):
+        '''Async cleanup of new_denoms_wfl'''
         _cleanup = self._cleanup_new_denoms_wfl
         changed = await self.loop.run_in_executor(None, _cleanup, force)
         if changed:
             self.wallet.save_db()
 
     def _cleanup_new_denoms_wfl(self, force=False):
+        '''Cleanup of new_denoms_wfl'''
         with self.new_denoms_wfl_lock:
             wfl = self.new_denoms_wfl
             if not wfl or wfl.completed and wfl.tx_order and not force:
@@ -1431,6 +1484,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return True
 
     def _cleanup_new_denoms_wfl_tx_data(self, txid=None):
+        '''Cleanup of new_denoms_wfl tx and its db supplementary data'''
         with self.new_denoms_wfl_lock:
             wfl = self.new_denoms_wfl
             if not wfl:
@@ -1455,6 +1509,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.logger.info(f'Cleaned up new denoms workflow: {wfl.lid}')
 
     async def broadcast_new_denoms_wfl(self):
+        '''Broadcast new denoms tx from new_denoms_wfl'''
         def _check_wfl():
             with self.new_denoms_wfl_lock:
                 wfl = self.new_denoms_wfl
@@ -1496,14 +1551,13 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 self.logger.wfl_done(f'Broadcasted transaction {txid} from new'
                                      f' denoms workflow: {wfl.lid}')
                 self.last_denoms_tx_time = time.time()
-                tx = Transaction(wfl.tx_data[txid].raw_tx)
-                self._process_by_new_denoms_wfl(txid, tx)
                 if not wfl.next_to_send(w):
                     self.logger.wfl_done(f'Broadcast completed for new denoms'
                                          f' workflow: {wfl.lid}')
             await self.loop.run_in_executor(None, _on_success)
 
     def _search_new_denoms_wfl(self, txid, tx):
+        '''Search available new_denoms_wfl corresponding to txid/tx data'''
         err = self._check_new_denoms_tx_err(txid, tx, full_check=False)
         if not err:
             wfl = self.new_denoms_wfl
@@ -1511,6 +1565,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 return wfl
 
     def _check_on_new_denoms_wfl(self, txid, tx):
+        '''Check it's new denoms tx, corresponding to new_denoms_wfl'''
         wfl = self._search_new_denoms_wfl(txid, tx)
         err = self._check_new_denoms_tx_err(txid, tx)
         if not err:
@@ -1521,6 +1576,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return False
 
     def _process_by_new_denoms_wfl(self, txid, tx):
+        '''Process tx by new_denoms_wfl, cleanup wfl/supplementary data'''
         wfl = self._search_new_denoms_wfl(txid, tx)
         if not wfl:
             return
@@ -1550,6 +1606,8 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
 
     # Workflow methods for denominate transaction
     async def cleanup_staled_denominate_wfls(self):
+        '''Async task to cleanup already completed and stalled
+        denominate workflows (no corresponding tx from MNs is arrived)'''
         def _cleanup_staled():
             changed = False
             for uuid in self.denominate_wfl_list:
@@ -1571,6 +1629,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             await asyncio.sleep(self.wait_for_mn_txs_time/12)
 
     async def start_denominate_wfl(self):
+        '''Select suitable masternode and start single denominate workflow '''
         wfl = None
         try:
             _start = self._start_denominate_wfl
@@ -1680,6 +1739,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.cleanup_denominate_wfl(wfl)
 
     def _select_denoms_to_mix(self, denom_value=None):
+        '''Select denoms to mix based on denom value'''
         if not self._denoms_to_mix_cache:
             self.logger.debug('No suitable denoms to mix,'
                               ' _denoms_to_mix_cache is empty')
@@ -1739,6 +1799,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return inputs, denom_value
 
     def _start_denominate_wfl(self, denom_value=None):
+        '''Start and save denominate wfl based on selected denom_value'''
         if self.active_denominate_wfl_cnt >= self.max_sessions:
             return
         selected_inputs, denom_value = self._select_denoms_to_mix(denom_value)
@@ -1816,6 +1877,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return wfl
 
     def _sign_inputs(self, tx, inputs):
+        '''Sign denominate tx inputs from dsf message'''
         signed_inputs = []
         tx = self._sign_denominate_tx(tx)
         for i in tx.inputs():
@@ -1826,6 +1888,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return signed_inputs
 
     def _sign_denominate_tx(self, tx):
+        '''Sign denominate tx to prepare signed inputs for dss message'''
         w = self.wallet
         mine_txins_cnt = 0
         for txin in tx.inputs():
@@ -1837,12 +1900,14 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return tx
 
     async def cleanup_denominate_wfl(self, wfl):
+        '''Async cleanup of denominate_wfl'''
         _cleanup = self._cleanup_denominate_wfl
         changed = await self.loop.run_in_executor(None, _cleanup, wfl)
         if changed:
             self.wallet.save_db()
 
     def _cleanup_denominate_wfl(self, wfl):
+        '''Cleanup of denominate_wfl and its db supplementary data'''
         with self.denominate_wfl_lock:
             saved = self.get_denominate_wfl(wfl.uuid)
             if not saved:  # already processed from _add_ps_data
@@ -1869,6 +1934,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         return True
 
     def _search_denominate_wfl(self, txid, tx):
+        '''Search available denominate_wfl corresponding to txid/tx data'''
         err = self._check_denominate_tx_err(txid, tx, full_check=False)
         if not err:
             for uuid in self.denominate_wfl_list:
@@ -1879,6 +1945,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     return wfl
 
     def _check_on_denominate_wfl(self, txid, tx):
+        '''Check it's new denoms tx, corresponding to denominate_wfl'''
         wfl = self._search_denominate_wfl(txid, tx)
         err = self._check_denominate_tx_err(txid, tx)
         if not err:
@@ -1889,6 +1956,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             return False
 
     def _process_by_denominate_wfl(self, txid, tx):
+        '''Process tx by denominate_wfl, cleanup wfl/supplementary data'''
         wfl = self._search_denominate_wfl(txid, tx)
         if not wfl:
             return
@@ -1904,16 +1972,3 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             self.clear_denominate_wfl(wfl.uuid)
         self.logger.wfl_done(f'Finished processing of denominate'
                              f' workflow: {wfl.lid} with tx: {txid}')
-
-    def get_workflow_tx_info(self, wfl):
-        w = self.wallet
-        tx_cnt = len(wfl.tx_order)
-        tx_type = None if not tx_cnt else wfl.tx_data[wfl.tx_order[0]].tx_type
-        total = 0
-        total_fee = 0
-        for txid in wfl.tx_order:
-            tx = Transaction(wfl.tx_data[txid].raw_tx)
-            tx_info = w.get_tx_info(tx)
-            total += tx_info.amount
-            total_fee += tx_info.fee
-        return tx_type, tx_cnt, total, total_fee
