@@ -1079,7 +1079,7 @@ class PSDataMixin:
 
     @property
     def all_mixed(self):
-        '''Check all denominations have need rounds
+        '''Check all denominations have needed rounds
         and keep amount is reached'''
         w = self.wallet
         dn_balance = sum(w.get_balance(include_ps=False, min_rounds=0))
@@ -1222,7 +1222,7 @@ class PSDataMixin:
         calc_method = self.calc_denoms_method
         if calc_method != self.CalcDenomsMethod.ABS:
             need_val += CREATE_COLLATERAL_VAL
-        if need_val < old_denoms_val:  # already have need value of denoms
+        if need_val < old_denoms_val:  # already have needed value of denoms
             return []
 
         if not coins:
@@ -1257,10 +1257,10 @@ class PSDataMixin:
                 approx_val -= MIN_DENOM_VAL
 
     def _calc_total_need_val(self, txin_cnt, outputs_amounts, fee_per_kb):
-        '''Calc total need value of inputs for new denoms transaction,
+        '''Calculate total needed value of inputs for new denoms transaction,
         including fee, based on inputs count, outputs amounts and fee_per_kb.
-        Also added amount need to create supposed future new collateral
-        transactions, need to mix all denoms to required number of rounds'''
+        Also added amount needed to create supposed future new collateral
+        transactions, needed to mix all denoms to required number of rounds'''
         res_outputs_amounts = copy.deepcopy(outputs_amounts)
         new_denoms_val = sum([sum(a) for a in res_outputs_amounts])
         new_denoms_cnt = sum([len(a) for a in res_outputs_amounts])
@@ -1293,7 +1293,7 @@ class PSDataMixin:
         return total_need_val, res_outputs_amounts
 
     def _calc_denoms_amounts_fee(self, coins_cnt, denoms_amounts, fee_per_kb):
-        '''Calc new denoms transactions minimal need fee, based on input coins
+        '''Calculate new denoms transactions minimal needed fee, based on input coins
         count, denoms amounts list and fee_per_kb'''
         txs_fee = 0
         tx_cnt = len(denoms_amounts)
@@ -1401,7 +1401,7 @@ class PSDataMixin:
 
     def _find_denoms_approx_abs(self, need_amount):
         '''Absolute method of calculating denoms amounts.
-        Produce all yet need denoms amounts in one transactions'''
+        Produce all yet needed denoms amounts in one transaction'''
         if need_amount < MIN_DENOM_VAL:
             return []
         denoms_amounts = []
@@ -1420,8 +1420,8 @@ class PSDataMixin:
         return [denoms_amounts]
 
     def denoms_to_mix(self, mix_rounds=None, denom_value=None):
-        '''Return dict: outpoint => denom for denoms which
-        need mixing to reach mix_rounds'''
+        '''Return dict: outpoint => denom for denoms needed for 
+        mixing to reach mix_rounds'''
         res = {}
         w = self.wallet
         if mix_rounds is not None:
@@ -1438,7 +1438,7 @@ class PSDataMixin:
 
     @property
     def min_new_denoms_from_coins_val(self):
-        '''Get minimal funds value need to create minimal new denoms tx'''
+        '''Get minimal funds value needed to create minimal new denoms tx'''
         fee_per_kb = self.config.fee_per_kb()
         # no change, one coin input, one 100001 out and 10000 collateral out
         new_denoms_fee = calc_tx_fee(1, 2, fee_per_kb, max_size=True)
@@ -1446,7 +1446,7 @@ class PSDataMixin:
 
     @property
     def min_new_collateral_from_coins_val(self):
-        '''Get minimal funds value need to create minimal new collateral tx'''
+        '''Get minimal funds value needed to create minimal new collateral tx'''
         fee_per_kb = self.config.fee_per_kb()
         # no change, one coin input, one 10000 output
         new_collateral_fee = calc_tx_fee(1, 1, fee_per_kb, max_size=True)
@@ -2030,7 +2030,7 @@ class PSDataMixin:
 
     def _calc_rounds_for_denominate_tx(self, new_outpoints, input_rounds):
         '''Calculate output rounds for PS denoms data for denominate tx.
-        If wallet have HW keystore then need check output addresses from
+        If wallet have HW keystore then need to check output addresses from
         that keystore and if presented put max rounds to that denoms,
         as mixed round denom is placed on hw keystore'''
         output_rounds = list(map(lambda x: x+1, input_rounds[:]))
@@ -2184,7 +2184,7 @@ class PSDataMixin:
     def _check_spend_ps_coins_tx_err(self, txid, tx, io_values, full_check):
         '''Check tx with txid and unpacked io_values is comply
         with Spend ps coins transactions pattern (mixed PS and regular coins
-        or need count of round is not reached in PS coins'''
+        or needed number of rounds is not reached in PS coins'''
         (inputs, outputs,
          icnt, mine_icnt, others_icnt, ocnt, op_return_ocnt) = io_values
         if others_icnt > 0:
@@ -2494,8 +2494,8 @@ class PSKeystoreMixin:
                 return True
 
     def need_password(self):
-        '''Check if password is need to sign wallet transactions.
-        For HW wallets check PS Keystore need password to sign txs.'''
+        '''Check if password is needed to sign wallet transactions.
+        For HW wallets check PS Keystore needed password to sign txs.'''
         return (self.wallet.has_keystore_encryption()
                 or self.is_hw_ks and self.is_ps_ks_encrypted())
 
@@ -2651,7 +2651,7 @@ class PSKeystoreMixin:
 
     # Methods related to mixing on hw wallets
     def prepare_funds_from_hw_wallet(self):
-        '''Calculate funds need to transfer to PS keystore to mix,
+        '''Calculate funds needed to transfer to PS keystore to mix,
         based on keep_amount/mix_rounds. Prepare and return signed
         transaction to send funds.'''
         try:
