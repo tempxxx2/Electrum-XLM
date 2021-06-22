@@ -442,8 +442,9 @@ class ProTxManager(Logger):
             if addr == mn.owner_addr:
                 return alias
 
-    def find_service_use(self, service, skip_alias=None, ignore_used=False):
-        if not service.ip:
+    def find_service_use(self, service, skip_alias=None,
+                         ignore_wallet=False, ignore_mn_list=False):
+        if not service.ip or ignore_wallet and ignore_mn_list:
             return
         skipped_mn = None
         for mn in self.mns.values():
@@ -451,8 +452,10 @@ class ProTxManager(Logger):
             if skip_alias and skip_alias == alias:
                 skipped_mn = mn
                 continue
-            if str(service) == str(mn.service) and not ignore_used:
+            if str(service) == str(mn.service) and not ignore_wallet:
                 return alias
+        if ignore_mn_list:
+            return
         for sml_entry in self.network.mn_list.protx_mns.values():
             if (service.ip == str_ip(sml_entry.ipAddress)
                     and service.port == sml_entry.port):
@@ -461,8 +464,9 @@ class ProTxManager(Logger):
                     continue
                 return True
 
-    def find_bls_pub_use(self, bls_pub, skip_alias=None, ignore_used=False):
-        if not bls_pub:
+    def find_bls_pub_use(self, bls_pub, skip_alias=None,
+                         ignore_wallet=False, ignore_mn_list=False):
+        if not bls_pub or ignore_wallet and ignore_mn_list:
             return
         skipped_mn = None
         for mn in self.mns.values():
@@ -470,8 +474,10 @@ class ProTxManager(Logger):
             if skip_alias and skip_alias == alias:
                 skipped_mn = mn
                 continue
-            if bls_pub == mn.pubkey_operator and not ignore_used:
+            if bls_pub == mn.pubkey_operator and not ignore_wallet:
                 return alias
+        if ignore_mn_list:
+            return
         for sml_entry in self.network.mn_list.protx_mns.values():
             if bls_pub == bh2u(sml_entry.pubKeyOperator):
                 protx_hash = bh2u(sml_entry.proRegTxHash[::-1])
