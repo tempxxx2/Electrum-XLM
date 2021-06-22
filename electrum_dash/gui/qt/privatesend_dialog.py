@@ -600,7 +600,7 @@ class PSDialog(QDialog, MessageBoxMixin):
                     allow_others_cb.setCheckState(Qt.Unchecked)
             else:
                 psman.allow_others = False
-            self.mwin.update_avalaible_amount()
+            self.mwin.update_available_amount()
         allow_others_cb.stateChanged.connect(on_allow_others_changed)
 
         i = grid.rowCount()

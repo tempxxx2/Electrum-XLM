@@ -242,19 +242,6 @@ class TxDialog(Factory.Popup):
         action_button = self.ids.action_button
         self._action_button_fn(action_button)
 
-    def _add_info_to_tx_from_wallet_and_network(self, tx: PartialTransaction) -> bool:
-        """Returns whether successful."""
-        # note side-effect: tx is being mutated
-        assert isinstance(tx, PartialTransaction)
-        try:
-            # note: this might download input utxos over network
-            # FIXME network code in gui thread...
-            tx.add_info_from_wallet(self.wallet, ignore_network_issues=False)
-        except NetworkException as e:
-            self.app.show_error(repr(e))
-            return False
-        return True
-
     def do_sign(self):
         if self.dropdown:
             self.dropdown.dismiss()

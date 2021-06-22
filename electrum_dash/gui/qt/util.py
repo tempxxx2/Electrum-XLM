@@ -323,31 +323,6 @@ class WaitingDialog(WindowModalDialog):
         self.message_label.setText(msg)
 
 
-class BlockingWaitingDialog(WindowModalDialog):
-    """Shows a waiting dialog whilst running a task.
-    Should be called from the GUI thread. The GUI thread will be blocked while
-    the task is running; the point of the dialog is to provide feedback
-    to the user regarding what is going on.
-    """
-    def __init__(self, parent: QWidget, message: str, task: Callable[[], Any]):
-        assert parent
-        if isinstance(parent, MessageBoxMixin):
-            parent = parent.top_level_window()
-        WindowModalDialog.__init__(self, parent, _("Please wait"))
-        self.message_label = QLabel(message)
-        vbox = QVBoxLayout(self)
-        vbox.addWidget(self.message_label)
-        # show popup
-        self.show()
-        # refresh GUI; needed for popup to appear and for message_label to get drawn
-        QCoreApplication.processEvents()
-        QCoreApplication.processEvents()
-        # block and run given task
-        task()
-        # close popup
-        self.accept()
-
-
 def line_dialog(parent, title, label, ok_label, default=None):
     dialog = WindowModalDialog(parent, title)
     dialog.setMinimumWidth(500)

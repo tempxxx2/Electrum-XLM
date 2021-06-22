@@ -36,7 +36,7 @@ from electrum_dash.simple_config import FEERATE_WARNING_HIGH_FEE, FEE_RATIO_HIGH
 from electrum_dash.wallet import InternalAddressCorruption
 
 from .util import (WindowModalDialog, ColorScheme, HelpLabel, Buttons, CancelButton,
-                   BlockingWaitingDialog, PasswordLineEdit)
+                   WaitingDialog, PasswordLineEdit)
 
 from .fee_slider import FeeSlider, FeeComboBox
 
@@ -113,13 +113,19 @@ class TxEditor:
             self.main_window.show_error(str(e))
             raise
 
-    def have_enough_funds_assuming_zero_fees(self) -> bool:
-        try:
-            tx = self.make_tx(0)
-        except NotEnoughFunds:
-            return False
-        else:
-            return True
+    def bg_check_have_enough_funds_assuming_zero_fees(self, on_success):
+        parent = self.main_window
+
+        def _bg_have_enough_funds_assuming_zero_fees():
+            try:
+                tx = self.make_tx(0)
+            except NotEnoughFunds:
+                return False
+            else:
+                return True
+        WaitingDialog(parent, _("Preparing transaction..."),
+                      _bg_have_enough_funds_assuming_zero_fees,
+                      on_success, parent.on_error)
 
 
 
@@ -174,11 +180,12 @@ class ConfirmTxDialog(TxEditor, WindowModalDialog):
         self.send_button.clicked.connect(self.on_send)
         self.send_button.setDefault(True)
         vbox.addLayout(Buttons(CancelButton(self), self.send_button))
-        BlockingWaitingDialog(window, _("Preparing transaction..."), self.update_tx)
-        self.update()
-        self.pw_label.setVisible(self.password_required)
-        self.pw.setVisible(self.password_required)
         self.is_send = False
+
+    def bg_update(self, on_success):
+        parent = self.main_window
+        WaitingDialog(parent, _("Preparing transaction..."), self.update_tx,
+                      on_success, parent.on_error)
 
     def default_message(self):
         return _('Enter your password to proceed') if self.password_required else _('Click Send to proceed')
@@ -249,6 +256,9 @@ class ConfirmTxDialog(TxEditor, WindowModalDialog):
                 and psman.is_ps_ks_inputs_in_tx(tx)
                 and psman.is_ps_ks_encrypted()):
             self.password_required = True
+
+        self.pw_label.setVisible(self.password_required)
+        self.pw.setVisible(self.password_required)
 
         fee = tx.get_fee()
         assert fee is not None

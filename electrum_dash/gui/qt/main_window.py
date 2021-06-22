@@ -95,7 +95,7 @@ from .util import (read_QIcon, ColorScheme, text_dialog, icon_path, WaitingDialo
                    import_meta_gui, export_meta_gui,
                    filename_field, address_field, char_width_in_lineedit, webopen,
                    TRANSACTION_FILE_EXTENSION_FILTER_ANY, MONOSPACE_FONT,
-                   getOpenFileName, getSaveFileName, BlockingWaitingDialog)
+                   getOpenFileName, getSaveFileName)
 from .util import ButtonsTextEdit, ButtonsLineEdit
 from .installwizard import WIF_HELP_TEXT
 from .history_list import HistoryList, HistoryModel
@@ -259,6 +259,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         coincontrol_sb = self.create_coincontrol_statusbar()
 
         self.tabs = tabs = QTabWidget(self)
+        self.tabs.currentChanged.connect(self.on_tabs_switch)
         self.send_tab = self.create_send_tab()
         self.receive_tab = self.create_receive_tab()
         self.addresses_tab = self.create_addresses_tab()
@@ -270,7 +271,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         tabs.addTab(self.create_history_tab(), read_QIcon("tab_history.png"), _('History'))
         tabs.addTab(self.send_tab, read_QIcon("tab_send.png"), _('Send'))
         tabs.addTab(self.receive_tab, read_QIcon("tab_receive.png"), _('Receive'))
-        self.update_avalaible_amount()
+        self.update_available_amount()
 
         def add_optional_tab(tabs, tab, icon, description, name):
             tab.tab_icon = icon
@@ -381,6 +382,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self._update_check_thread = UpdateCheckThread()
             self._update_check_thread.checked.connect(on_version_received)
             self._update_check_thread.start()
+
+    def on_tabs_switch(self, x):
+        if self.tabs.currentIndex() == self.tabs.indexOf(self.send_tab):
+            self.update_available_amount()
 
     def show_backup_msg(self):
         if getattr(self.wallet.storage, 'backup_message', None):
@@ -1178,7 +1183,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if wallet != self.wallet:
             return
         self.history_model.refresh('update_tabs')
-        self.update_avalaible_amount()
+        self.update_available_amount()
         self.update_receive_address_styling()
         self.request_list.update()
         self.address_list.update()
@@ -1840,7 +1845,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def on_ps_cb(self, is_ps):
         if self.max_button.isChecked():
             self.spend_max()
-        self.update_avalaible_amount()
+        self.update_available_amount()
         if is_ps:
             w = self.wallet
             psman = w.psman
@@ -1861,11 +1866,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.set_ps_cb_from_coins(coins)
         else:
             self.ps_cb.setChecked(False)
-        self.update_avalaible_amount()
+        self.update_available_amount()
 
-    def update_avalaible_amount(self, nonlocal_only=False):
-        if run_hook('abort_send', self):  # This and extra fee hooks added for
-            return                        # code consistency (trustedcoin only)
+    def update_available_amount(self, nonlocal_only=False):
+        if self.tabs.currentIndex() != self.tabs.indexOf(self.send_tab):
+            return
         wallet = self.wallet
         psman = wallet.psman
         is_ps = self.ps_cb.isChecked()
@@ -1903,7 +1908,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if not coins:
             if is_ps:
                 self.ps_cb.setChecked(False)
-            self.update_avalaible_amount()
+            self.update_available_amount()
             if self.max_button.isChecked():
                 self.spend_max()
             return
@@ -1923,7 +1928,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         else:
             if is_ps:
                 self.ps_cb.setChecked(False)
-        self.update_avalaible_amount()
+        self.update_available_amount()
         if self.max_button.isChecked():
             self.spend_max()
 
@@ -1973,7 +1978,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         no_ps_data = psman.is_hw_ks and not psman.enabled
         def make_tx(fee_est):
             tx = self.wallet.make_unsigned_transaction(
-                coins=self.get_coins(min_rounds=min_rounds),
+                coins=inputs,
                 outputs=outputs,
                 fee=fee_est,
                 is_sweep=False,
@@ -1995,34 +2000,50 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         conf_dlg = ConfirmTxDialog(window=self, make_tx=make_tx,
                                    output_value=output_value,
                                    is_sweep=is_sweep, is_ps_tx=is_ps)
+        conf_dlg.bg_update(
+            lambda x: self._conf_dlg_after_bg_update(conf_dlg,
+                                                     external_keypairs))
+
+    def _conf_dlg_after_bg_update(self, conf_dlg, external_keypairs):
+        conf_dlg.update()
         if conf_dlg.not_enough_funds:
+            self._on_conf_dlg_not_enough_funds(conf_dlg, external_keypairs)
+        else:
+            self._conf_dlg_or_preview_dlg(conf_dlg, external_keypairs)
+
+    def _on_conf_dlg_not_enough_funds(self, conf_dlg, external_keypairs):
+
+        def enough_funds_cb(can_continue):
             # Check if we had enough funds excluding fees,
             # if so, still provide opportunity to set lower fees.
-            if not conf_dlg.have_enough_funds_assuming_zero_fees():
+            if can_continue:
+                self._conf_dlg_or_preview_dlg(conf_dlg, external_keypairs)
+            else:
                 text = self.get_text_not_enough_funds_mentioning_frozen()
                 self.show_message(text)
-                return
+        conf_dlg.bg_check_have_enough_funds_assuming_zero_fees(enough_funds_cb)
 
+    def _conf_dlg_or_preview_dlg(self, conf_dlg, external_keypairs):
         # shortcut to advanced preview (after "enough funds" check!)
         if self.config.get('advanced_preview'):
             preview_dlg = PreviewTxDialog(
                 window=self,
-                make_tx=make_tx,
+                make_tx=conf_dlg.make_tx,
                 external_keypairs=external_keypairs,
-                output_value=output_value,
-                is_ps_tx=is_ps)
-            preview_dlg.show()
+                output_value=conf_dlg.output_value,
+                is_ps_tx=conf_dlg.is_ps_tx)
+            preview_dlg.bg_update(lambda x: preview_dlg.update_and_show())
             return
 
         cancelled, is_send, password, tx = conf_dlg.run()
+        if cancelled:
+            return
         if tx.tx_type:
             try:
                 tx.extra_payload.check_after_tx_prepared(tx)
             except DashTxError as e:
                 self.show_message(str(e))
                 return
-        if cancelled:
-            return
         if is_send:
             pr = self.payment_request
             self.save_pending_invoice()
@@ -2034,11 +2055,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         else:
             preview_dlg = PreviewTxDialog(
                 window=self,
-                make_tx=make_tx,
+                make_tx=conf_dlg.make_tx,
                 external_keypairs=external_keypairs,
-                output_value=output_value,
-                is_ps_tx=is_ps)
-            preview_dlg.show()
+                output_value=conf_dlg.output_value,
+                is_ps_tx=conf_dlg.is_ps_tx)
+            preview_dlg.bg_update(lambda x: preview_dlg.update_and_show())
 
     def broadcast_or_show(self, tx: Transaction,
                           pr: Optional[paymentrequest.PaymentRequest]):
@@ -3522,22 +3543,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         grid.setRowStretch(len(plugins.descriptions.values()), 1)
         vbox.addLayout(Buttons(CloseButton(d)))
         d.exec_()
-
-    def _add_info_to_tx_from_wallet_and_network(self, tx: PartialTransaction) -> bool:
-        """Returns whether successful."""
-        # note side-effect: tx is being mutated
-        assert isinstance(tx, PartialTransaction)
-        try:
-            # note: this might download input utxos over network
-            BlockingWaitingDialog(
-                self,
-                _("Adding info to tx, from wallet and network..."),
-                lambda: tx.add_info_from_wallet(self.wallet, ignore_network_issues=False),
-            )
-        except NetworkException as e:
-            self.show_error(repr(e))
-            return False
-        return True
 
     def save_transaction_into_wallet(self, tx: Transaction):
         win = self.top_level_window()
