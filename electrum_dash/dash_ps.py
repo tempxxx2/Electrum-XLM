@@ -660,7 +660,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.cleanup_pay_collateral_wfl(force=True)
             else:
                 self.logger.wfl_err(f'Error during creation of pay collateral'
-                                    f' worfklow: {str(e)}')
+                                    f' workflow: {str(e)}')
             type_e = type(e)
             msg = None
             if type_e == NoDynamicFeeEstimates:
@@ -1748,16 +1748,16 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
             if (type_e == MixSessionTimeout
                     and session and session.state == DSPoolState.QUEUE):
                 denom_amount = util.format_satoshis(session.denom_value)
-                self.logger.info(f'Denominate worfklow {wfl.lid}:'
+                self.logger.info(f'Denominate workflow {wfl.lid}:'
                                  f' timed out in pool state QUEUE,'
                                  f' no peers to mix {denom_amount} DASH')
             elif type_e != asyncio.CancelledError:
                 if wfl:
-                    self.logger.wfl_err(f'Error in denominate worfklow:'
+                    self.logger.wfl_err(f'Error in denominate workflow:'
                                         f' {str(e)}, workflow: {wfl.lid}')
                 else:
                     self.logger.wfl_err(f'Error during creation of denominate'
-                                        f' worfklow: {str(e)}')
+                                        f' workflow: {str(e)}')
                 msg = None
                 if type_e == NoDynamicFeeEstimates:
                     msg = self.NO_DYNAMIC_FEE_MSG.format(str(e))
