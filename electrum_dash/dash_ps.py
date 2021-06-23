@@ -9,7 +9,7 @@ from collections import deque
 from uuid import uuid4
 
 from . import util
-from .dash_msg import PRIVATESEND_ENTRY_MAX_SIZE
+from .dash_msg import PRIVATESEND_ENTRY_MAX_SIZE, DSPoolState
 from .dash_ps_net import (PSMixSession, PRIVATESEND_SESSION_MSG_TIMEOUT,
                           MixSessionTimeout, MixSessionPeerClosed)
 from .dash_ps_wallet import (PSDataMixin, PSKeystoreMixin, KeyPairsMixin,
@@ -660,7 +660,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 await self.cleanup_pay_collateral_wfl(force=True)
             else:
                 self.logger.wfl_err(f'Error during creation of pay collateral'
-                                    f' worfklow: {str(e)}')
+                                    f' workflow: {str(e)}')
             type_e = type(e)
             msg = None
             if type_e == NoDynamicFeeEstimates:
@@ -1673,10 +1673,13 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     if self.gather_mix_stat:
                         self.mix_stat.dsa.on_dssu()
                     continue
-                elif cmd == 'dsq' and session.fReady:
+                elif cmd == 'dsq':
                     if self.gather_mix_stat:
                         self.mix_stat.dsa.on_read_msg()
-                    break
+                    if session.fReady:
+                        break
+                    self.logger.debug(f'denominate workflow {wfl.lid}:'
+                                      f' dsq not fReady')
                 else:
                     raise Exception(f'Unsolicited cmd: {cmd} after dsa sent')
 
@@ -1742,13 +1745,19 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                     self.mix_stat.on_peer_closed()
                 else:
                     self.mix_stat.on_error()
-            if type_e != asyncio.CancelledError:
+            if (type_e == MixSessionTimeout
+                    and session and session.state == DSPoolState.QUEUE):
+                denom_amount = util.format_satoshis(session.denom_value)
+                self.logger.info(f'Denominate workflow {wfl.lid}:'
+                                 f' timed out in pool state QUEUE,'
+                                 f' no peers to mix {denom_amount} DASH')
+            elif type_e != asyncio.CancelledError:
                 if wfl:
-                    self.logger.wfl_err(f'Error in denominate worfklow:'
+                    self.logger.wfl_err(f'Error in denominate workflow:'
                                         f' {str(e)}, workflow: {wfl.lid}')
                 else:
                     self.logger.wfl_err(f'Error during creation of denominate'
-                                        f' worfklow: {str(e)}')
+                                        f' workflow: {str(e)}')
                 msg = None
                 if type_e == NoDynamicFeeEstimates:
                     msg = self.NO_DYNAMIC_FEE_MSG.format(str(e))

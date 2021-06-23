@@ -106,13 +106,6 @@ def base_unit_name_to_decimal_point(unit_name: str) -> int:
         raise UnknownBaseUnit(unit_name) from None
 
 
-# Raised when importing a key that's already in the wallet.
-class AlreadyHaveAddress(Exception):
-    def __init__(self, msg, addr):
-        super(AlreadyHaveAddress, self).__init__(msg)
-        self.addr = addr
-
-
 class NotEnoughFunds(Exception):
     def __str__(self):
         return _("Insufficient funds")
@@ -997,20 +990,6 @@ def parse_json(message):
     except:
         j = None
     return j, message[n+1:]
-
-
-def utfify(arg):
-    """Convert unicode argument to UTF-8.
-
-    Used when loading things that must be serialized.
-    """
-    if isinstance(arg, dict):
-        return {utfify(k): utfify(v) for k, v in arg.items()}
-    elif isinstance(arg, list):
-        return map(utfify, arg)
-    elif isinstance(arg, str):
-        return arg.encode('utf-8')
-    return arg
 
 
 def setup_thread_excepthook():
