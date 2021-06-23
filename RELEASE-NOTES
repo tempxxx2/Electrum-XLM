@@ -1,3 +1,17 @@
+# Release 4.1.2.2
+
+ * wallet/kivy: fix feerate calc (float Decimal conversion) #258
+ * PS: fix processing of new_denoms/collateral wfls #261
+ * PS: do not check enough small denoms for ABS calc method #262
+ * network: do not stop dash_net/mn_list if not full_shutdown #263
+ * PS: add gathering mixing statistics #266
+ * Qt fix: remove BlockingWaitingDialog use, other qt fixes #268
+ * protx/qt: allow add MN with IP/BLS pubk found in registered MNs #269
+ * protx_list: MNList.reset: notify gui, clear protx_info data #270
+ * dash_net: rm staled [test.]dnsseed.masternode.io #271
+ * Enhance PS gui logging about session timeouts #272
+
+
 # Release 4.1.2.1
 
  * base_wizard.py, keystore.py: add purpose48 multisig #244

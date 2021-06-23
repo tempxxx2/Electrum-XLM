@@ -12,7 +12,9 @@ ENV WKEY_SHA2 78b185fabdb323971d13bd329fefc8038e08559aa51c4996de18db0639a51df6
 RUN dpkg --add-architecture i386 \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        wget \
+        wget git binutils-mingw-w64 gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 \
+        win-iconv-mingw-w64-dev \
+        build-essential libtool autoconf automake \
         gnupg2 \
         dirmngr \
         python3-software-properties \
