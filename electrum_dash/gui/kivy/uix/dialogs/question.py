@@ -33,15 +33,13 @@ Builder.load_string('''
                 size_hint: 0.5, None
                 height: '48dp'
                 on_release:
-                    root.callback(False)
                     popup.dismiss()
             Button:
                 text: root.yes_str
                 size_hint: 0.5, None
                 height: '48dp'
                 on_release:
-                    root.callback(True)
-                    popup.dismiss()
+                    popup.on_yes()
 ''')
 
 
@@ -57,3 +55,11 @@ class Question(Factory.Popup):
         self.title = title or _('Question')
         self.message = msg
         self.callback = callback
+        self.b = False
+
+    def on_yes(self, *args, **kwargs):
+        self.b = True
+        self.dismiss()
+
+    def on_dismiss(self, *args, **kwargs):
+        self.callback(self.b)
