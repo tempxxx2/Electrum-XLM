@@ -845,15 +845,13 @@ class PSMixingTab(BoxLayout):
             psman.enable_ps()
 
     def start_mixing(self, prev_kp_state):
-        def on_success_pwd(password):
+        def on_success(password):
             self.psman.start_mixing(password)
 
-        def on_fail_pwd():
+        def on_failure():
             self.psman.keypairs_state = prev_kp_state
 
-        w = self.app.wallet
-        self.app.password_dialog(w, _('Enter your PIN code to start mixing'),
-                                 on_success_pwd, on_fail_pwd)
+        self.app.protected(_('Start mixing'), on_success, (), on_failure)
 
     def toggle_fiat_dn_balance(self, *args):
         if not self.app.fx.is_enabled():
