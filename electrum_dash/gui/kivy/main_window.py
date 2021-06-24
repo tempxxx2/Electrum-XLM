@@ -1435,7 +1435,7 @@ class ElectrumWindow(App, Logger):
                 message = msg,
                 check_password=self.check_pin_code,
                 on_success=on_success,
-                on_failure=lambda: on_failure() if on_failure else None)
+                on_failure=lambda: on_failure(*args) if on_failure else None)
             d.open()
         else:
 
@@ -1443,7 +1443,7 @@ class ElectrumWindow(App, Logger):
                 if b:
                     f(*args, self.password)
                 elif on_failure:
-                    on_failure()
+                    on_failure(*args)
             d = Question(
                 msg,
                 q_callback,
