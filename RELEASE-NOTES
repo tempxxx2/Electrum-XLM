@@ -10,6 +10,7 @@
  * protx_list: MNList.reset: notify gui, clear protx_info data #270
  * dash_net: rm staled [test.]dnsseed.masternode.io #271
  * Enhance PS gui logging about session timeouts #272
+ * Kivy: fix start mixing with protected method #275
 
 
 # Release 4.1.2.1
