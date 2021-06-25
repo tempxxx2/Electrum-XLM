@@ -1426,7 +1426,7 @@ class ElectrumWindow(App, Logger):
     def on_fee(self, event, *arg):
         self.set_fee_status()
 
-    def protected(self, msg, f, args):
+    def protected(self, msg, f, args, on_failure=None):
         if self.electrum_config.get('pin_code'):
             msg += "\n" + _("Enter your PIN code to proceed")
             on_success = lambda pw: f(*args, self.password)
@@ -1435,12 +1435,18 @@ class ElectrumWindow(App, Logger):
                 message = msg,
                 check_password=self.check_pin_code,
                 on_success=on_success,
-                on_failure=lambda: None)
+                on_failure=lambda: on_failure(*args) if on_failure else None)
             d.open()
         else:
+
+            def q_callback(b):
+                if b:
+                    f(*args, self.password)
+                elif on_failure:
+                    on_failure(*args)
             d = Question(
                 msg,
-                lambda b: f(*args, self.password) if b else None,
+                q_callback,
                 yes_str=_("OK"),
                 no_str=_("Cancel"),
                 title=_("Confirm action"))
