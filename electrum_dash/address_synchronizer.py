@@ -208,6 +208,8 @@ class AddressSynchronizer(Logger):
     def on_dash_islock(self, event, txid):
         if txid in self.db.islocks:
             return
+        elif not self.network:
+            return
         elif txid in self.unverified_tx or txid in self.db.verified_tx:
             self.logger.info(f'found tx for islock: {txid}')
             dash_net = self.network.dash_net
@@ -219,6 +221,8 @@ class AddressSynchronizer(Logger):
 
     def find_islock_pair(self, txid):
         if txid in self.db.islocks:
+            return
+        elif not self.network:
             return
         else:
             dash_net = self.network.dash_net
