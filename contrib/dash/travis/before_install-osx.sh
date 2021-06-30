@@ -26,3 +26,5 @@ shasum -a256 -s -c $LSECP256K1_FILE.sha256
 tar -xzf ${LSECP256K1_FILE} && rm ${LSECP256K1_FILE}
 rm -f libsecp256k1.0.dylib
 cp libsecp256k1/libsecp256k1.0.dylib .
+
+brew install gettext

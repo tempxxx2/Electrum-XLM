@@ -13,30 +13,20 @@ if [[ -n $GITHUB_ACTION ]]; then
     rm $PYPKG_NAME $PYPKG_NAME.sha256
 fi
 
-LIBUSB_VERSION=1.0.23
-LIBUSB_URI=https://dl.bintray.com/homebrew/bottles/
-LIBUSB_FILE=libusb-${LIBUSB_VERSION}.sierra.bottle.tar.gz
-LIBUSB_SHA256=600db569dd82dda3e492e53c8023093d003836329b614cea8064ab68d20aca0d
-echo "$LIBUSB_SHA256  $LIBUSB_FILE" > $LIBUSB_FILE.sha256
-curl -O ${LIBUSB_URI}${LIBUSB_FILE}
-shasum -a256 -s -c $LIBUSB_FILE.sha256
-tar -xzf ${LIBUSB_FILE}
-rm -f libusb-1.*.dylib
-cp libusb/${LIBUSB_VERSION}/lib/libusb-1.*.dylib .
-rm -rf libusb/ ${LIBUSB_FILE} ${LIBUSB_FILE}.sha256
-
-LIBGMP_VERSION=6.1.2_2
-LIBGMP_BOTTLE_VER=.1
-LIBGMP_URI=https://dl.bintray.com/homebrew/bottles/
-LIBGMP_FILE=gmp-${LIBGMP_VERSION}.sierra.bottle${LIBGMP_BOTTLE_VER}.tar.gz
-LIBGMP_SHA256=ada22a8bbfe8532d71f2b565e00b1643beaf72bff6b36064cbad0cd7436e4948
-echo "$LIBGMP_SHA256  $LIBGMP_FILE" > $LIBGMP_FILE.sha256
-wget -O ${LIBGMP_FILE} ${LIBGMP_URI}${LIBGMP_FILE}
-shasum -a256 -s -c $LIBGMP_FILE.sha256
-tar -xzf ${LIBGMP_FILE}
-rm -f libgmp.10.dylib
-cp gmp/${LIBGMP_VERSION}/lib/libgmp.10.dylib .
-rm -rf gmp/ ${LIBGMP_FILE} ${LIBGMP_FILE}.sha256
+LIBUSB_VER=1.0.24
+LIBUSB_URI=https://github.com/libusb/libusb/releases/download
+LIBUSB_SHA=7efd2685f7b327326dcfb85cee426d9b871fd70e22caa15bb68d595ce2a2b12a
+LIBUSB_FILE=libusb-${LIBUSB_VER}.tar.bz2
+echo "${LIBUSB_SHA}  ${LIBUSB_FILE}" > ${LIBUSB_FILE}.sha256
+curl -O -L ${LIBUSB_URI}/v${LIBUSB_VER}/${LIBUSB_FILE}
+tar -xzvf ${LIBUSB_FILE}
+shasum -a256 -s -c ${LIBUSB_FILE}.sha256
+pushd libusb-${LIBUSB_VER}
+./configure --disable-dependency-tracking --prefix=/opt/libusb
+sudo env MACOSX_DEPLOYMENT_TARGET=10.13 make install
+popd
+sudo rm -rf libusb-${LIBUSB_VER}*
+cp /opt/libusb/lib/libusb-1.*.dylib .
 
 LSECP256K1_PATH=https://github.com/zebra-lucky/secp256k1/
 LSECP256K1_PATH=${LSECP256K1_PATH}releases/download/210521
@@ -49,3 +39,5 @@ tar -xzf ${LSECP256K1_FILE}
 rm -f libsecp256k1.0.dylib
 cp libsecp256k1/libsecp256k1.0.dylib .
 rm -rf libsecp256k1/ ${LSECP256K1_FILE} ${LSECP256K1_FILE}.sha256
+
+brew install gettext

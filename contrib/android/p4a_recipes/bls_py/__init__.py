@@ -5,11 +5,11 @@ from os.path import join
 
 class BlsPyRecipe(CythonRecipe):
 
-    url = ('https://files.pythonhosted.org/packages/82/74/'
-           'e9ae900370181d162db5c77ba1e636045358bbae152aef10ba3eace41c15/'
-           'python-bls-0.1.8.tar.gz')
-    md5sum = 'e264187b7b1768cd620827debddfffda'
-    version = '0.1.8'
+    url = ('https://files.pythonhosted.org/packages/45/b8/'
+           '5f98b3c9bc8450ad5b1b10ded618f6a82a9e0288c688d0f4344922bcf423/'
+           'python-bls-0.1.9.tar.gz')
+    sha256sum = 'f1dddf9f2208591588a167907ef4c13b22f9d8d91d980ca5977eb70961f04154'
+    version = '0.1.9'
     depends = ['python3', 'setuptools', 'libgmp']
 
     def build_arch(self, arch):

@@ -25,7 +25,9 @@ source.exclude_dirs = bin, build, dist, contrib,
     electrum_dash/gui/kivy/theming/light,
     packages/qtpy
 # (list) List of exclusions using pattern matching
-source.exclude_patterns = Makefile,setup*
+source.exclude_patterns = Makefile,setup*,
+    # not reproducible:
+    packages/aiohttp-*.dist-info/*
 
 # (str) Application versioning (method 1)
 version.regex = APK_VERSION = '(.*)'
@@ -35,16 +37,16 @@ version.filename = %(source.dir)s/electrum_dash/version.py
 #version = 1.9.8
 
 # (list) Application requirements
+# note: versions and hashes are pinned in ./p4a_recipes/*
 requirements =
     six,
     setuptools,
-    hostpython3==3.8.8,
-    python3==3.8.8,
+    hostpython3,
+    python3,
     android,
     openssl,
     plyer,
-    # kivy master 2020-12-10 (2.0.0 plus a few bugfixes)
-    kivy==2debbc3b1484b14824112986cb03b1072a60fbfc,
+    kivy,
     libffi,
     libsecp256k1,
     cryptography,
@@ -81,7 +83,7 @@ android.api = 29
 android.minapi = 21
 
 # (str) Android NDK version to use
-android.ndk = 21d
+android.ndk = 22b
 
 # (int) Android NDK API to use (optional). This is the minimum API your app will support.
 android.ndk_api = 21
@@ -98,7 +100,17 @@ android.sdk_path = /opt/android-sdk
 # (str) ANT directory (if empty, it will be automatically downloaded.)
 android.ant_path = /opt/apache-ant
 
+# (bool) If True, then skip trying to update the Android sdk
+# This can be useful to avoid excess Internet downloads or save time
+# when an update is due and you just want to test/build your package
+# note(ghost43): probably needed for reproducibility. versions pinned in Dockerfile.
 android.skip_update = True
+
+# (bool) If True, then automatically accept SDK license
+# agreements. This is intended for automation only. If set to False,
+# the default, you will be shown the license when first running
+# buildozer.
+android.accept_sdk_license = True
 
 # (str) Android entry point, default is ok for Kivy-based app
 #android.entrypoint = org.renpy.android.PythonActivity
@@ -144,7 +156,7 @@ android.manifest.launch_mode = singleTask
 
 # (str) The Android arch to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 # note: can be overwritten by APP_ANDROID_ARCH env var
-android.arch = armeabi-v7a
+#android.arch = armeabi-v7a
 
 # (list) Android application meta-data to set (key=value format)
 #android.meta_data =
@@ -155,6 +167,8 @@ android.arch = armeabi-v7a
 
 android.whitelist = lib-dynload/_csv.so
 
+# (bool) enables Android auto backup feature (Android API >=23)
+android.allow_backup = False
 
 #
 # Python for android (p4a) specific
@@ -164,7 +178,7 @@ android.whitelist = lib-dynload/_csv.so
 p4a.source_dir = /opt/python-for-android
 
 # (str) The directory in which python-for-android should look for your own build recipes (if any)
-p4a.local_recipes = %(source.dir)s/contrib/dash/p4a
+p4a.local_recipes = %(source.dir)s/contrib/android/p4a_recipes
 
 # (str) Filename to the hook for p4a
 #p4a.hook =
@@ -193,6 +207,9 @@ p4a.local_recipes = %(source.dir)s/contrib/dash/p4a
 
 # (int) Log level (0 = error only, 1 = info, 2 = debug (with command output))
 log_level = 2
+
+# (str) Path to build output (i.e. .apk, .ipa) storage
+bin_dir = ./dist
 
 
 # -----------------------------------------------------------------------------

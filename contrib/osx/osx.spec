@@ -82,7 +82,6 @@ if TRAVIS_TAG:
 binaries = []
 binaries += [('../libusb-1.0.dylib', '.')]
 binaries += [('../libsecp256k1.0.dylib', '.')]
-binaries += [('/usr/local/lib/libgmp.10.dylib', '.')]
 
 # Workaround for "Retro Look":
 binaries += [b for b in collect_dynamic_libs('PyQt5') if 'macstyle' in b[0]]

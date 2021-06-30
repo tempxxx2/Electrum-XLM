@@ -24,4 +24,7 @@ electrum_data/
 electrum_dash/gui/kivy/theming/light-0.png
 electrum_dash/gui/kivy/theming/light-1.png
 electrum_dash/gui/kivy/theming/light.atlas
+electrum_dash/gui/kivy/theming/atlas/light-0.png
+electrum_dash/gui/kivy/theming/atlas/light-1.png
+electrum_dash/gui/kivy/theming/atlas/light.atlas
 *.egg-info/

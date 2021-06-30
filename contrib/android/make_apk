@@ -19,8 +19,6 @@ fi
 
 pushd ./contrib/android
 
-make theming
-
 if [[ -n $1 ]]; then
     echo make $1
     make $1
