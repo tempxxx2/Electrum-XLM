@@ -211,6 +211,38 @@ class CoinGecko(ExchangeBase):
                      for h in history['prices']])
 
 
+class Kraken(ExchangeBase):
+
+    PAIRS = {'BTC': 'DASHXBT', 'USD': 'DASHUSD', 'EUR': 'DASHEUR'}
+    async def get_rates(self, ccy):
+        json = await self.get_json('api.kraken.com',
+                                   '/0/public/Ticker?pair=%s' %
+                                    self.PAIRS[ccy])
+        res = dict((k[-3:], Decimal(float(v['c'][0])))
+                   for k, v in json['result'].items())
+        if 'XBT' in res:
+            res['BTC'] = res.pop('XBT')
+        return res
+
+    def history_ccys(self):
+        return CURRENCIES[self.name()]
+
+    async def request_history(self, ccy):
+        history = await self.get_json('api.kraken.com',
+                                      '/0/public/OHLC?'
+                                      'pair=%s&interval=1440' %
+                                      self.PAIRS[ccy])
+        res = {}
+        history = history.get('result', {})
+        history = history.get(self.PAIRS[ccy], [])
+        # h[0] is epoch time, h[4] is close price of interval
+        history = [(datetime.utcfromtimestamp(h[0]).strftime('%Y-%m-%d'), h[4])
+                   for h in history]
+        for t, v in history:
+            res[t] = float(v)
+        return res
+
+
 def dictinvert(d):
     inv = {}
     for k, vlist in d.items():

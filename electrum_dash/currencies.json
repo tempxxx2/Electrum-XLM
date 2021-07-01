@@ -11,5 +11,10 @@
         "USD",
         "PLN",
         "CHF"
+    ],
+    "Kraken": [
+        "BTC",
+        "USD",
+        "EUR"
     ]
 }
