@@ -9,6 +9,7 @@
         "BTC",
         "EUR",
         "USD",
-        "PLN"
+        "PLN",
+        "CHF"
     ]
 }
