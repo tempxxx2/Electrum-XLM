@@ -163,50 +163,12 @@ class ExchangeBase(Logger):
         return sorted([str(a) for (a, b) in rates.items() if b is not None and len(a)==3])
 
 
-class BitcoinAverage(ExchangeBase):
-    # note: historical rates used to be freely available
-    # but this is no longer the case. see #5188
-
-    async def get_rates(self, ccy):
-        json = await self.get_json('apiv2.bitcoinaverage.com',
-                                   '/indices/local/ticker/DASH%s' % ccy)
-        return {ccy: Decimal(json['last'])}
-
-
-class Bittrex(ExchangeBase):
-    async def get_rates(self, ccy):
-        json = await self.get_json('bittrex.com',
-                                   '/api/v1.1/public/'
-                                   'getticker?market=%s-DASH' % ccy)
-        quote_currencies = {}
-        if not json.get('success', False):
-            return quote_currencies
-        last = Decimal(json['result']['Last'])
-        quote_currencies[ccy] = last
-        return quote_currencies
-
-
 class Poloniex(ExchangeBase):
     async def get_rates(self, ccy):
         json = await self.get_json('poloniex.com', '/public?command=returnTicker')
         quote_currencies = {}
         dash_ticker = json.get('BTC_DASH')
         quote_currencies['BTC'] = Decimal(dash_ticker['last'])
-        return quote_currencies
-
-
-class CoinMarketCap(ExchangeBase):
-    async def get_rates(self, ccy):
-        json = await self.get_json('api.coinmarketcap.com', '/v1/ticker/dash/')
-        quote_currencies = {}
-        if not isinstance(json, list):
-            return quote_currencies
-        json = json[0]
-        for ccy, key in [
-            ('USD', 'price_usd'),
-            ('BTC', 'price_btc'),
-        ]:
-            quote_currencies[ccy] = Decimal(json[key])
         return quote_currencies
 
 
