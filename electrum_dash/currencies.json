@@ -1,19 +1,6 @@
 {
-    "BitcoinAverage": [
-        "USD",
-        "EUR",
-        "PLN"
-    ],
-    "Bittrex": [
-        "BTC",
-        "ETH"
-    ],
     "Poloniex": [
         "BTC"
-    ],
-    "CoinMarketCap": [
-        "BTC",
-        "USD"
     ],
     "CoinCap": [
         "USD"
@@ -22,6 +9,12 @@
         "BTC",
         "EUR",
         "USD",
-        "PLN"
+        "PLN",
+        "CHF"
+    ],
+    "Kraken": [
+        "BTC",
+        "USD",
+        "EUR"
     ]
 }
