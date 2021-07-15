@@ -271,26 +271,32 @@ class AddressModel(QAbstractItemModel, Logger):
 
         if show_ps_ks in [KeystoreFilter.ALL, KeystoreFilter.MAIN]:
             if show_change == AddressTypeFilter.RECEIVING:
-                all_addrs = w.get_receiving_addresses()
+                main_ks_addrs = w.get_receiving_addresses()
             elif show_change == AddressTypeFilter.CHANGE:
-                all_addrs = w.get_change_addresses()
+                main_ks_addrs = w.get_change_addresses()
             else:
-                all_addrs = w.get_addresses()
+                main_ks_addrs = w.get_addresses()
         else:
-            all_addrs = []
-        all_addrs += ps_ks_addrs
+            main_ks_addrs = []
 
         if show_ps == PSStateFilter.ALL:
-            addr_list = all_addrs
+            main_ks_addrs = [(addr, False) for addr in main_ks_addrs]
+            ps_ks_addrs = [(addr, True) for addr in ps_ks_addrs]
         elif show_ps == PSStateFilter.PS:
-            addr_list = [addr for addr in all_addrs if addr in ps_addrs]
+            main_ks_addrs = [(addr, False) for addr in main_ks_addrs
+                             if addr in ps_addrs]
+            ps_ks_addrs = [(addr, True) for addr in ps_ks_addrs
+                           if addr in ps_addrs]
         else:
-            addr_list = [addr for addr in all_addrs if addr not in ps_addrs]
+            main_ks_addrs = [(addr, False) for addr in main_ks_addrs
+                             if addr not in ps_addrs]
+            ps_ks_addrs = [(addr, True) for addr in ps_ks_addrs
+                           if addr not in ps_addrs]
 
         addrs_beyond_gap_limit = w.get_all_known_addresses_beyond_gap_limit()
         ps_ks_beyond_gap = w.psman.get_all_known_addresses_beyond_gap_limit()
         fx = self.parent.fx
-        for i, addr in enumerate(addr_list):
+        for i, (addr, is_ps_ks) in enumerate(main_ks_addrs + ps_ks_addrs):
             balance = sum(w.get_addr_balance(addr))
             is_used_and_empty = w.is_used(addr) and balance == 0
             if (show_used == AddressUsageStateFilter.UNUSED
@@ -309,7 +315,6 @@ class AddressModel(QAbstractItemModel, Logger):
             else:
                 fiat_balance = ''
 
-            is_ps_ks = True if addr in ps_ks_addrs else False
             if is_ps_ks:
                 is_beyond_limit = addr in ps_ks_beyond_gap
             else:
