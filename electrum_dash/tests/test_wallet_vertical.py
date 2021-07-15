@@ -1114,3 +1114,72 @@ class TestWalletHistory_DoubleSpend(TestCaseForTestnet):
         txC = Transaction(self.transactions["a04328fbc9f28268378a8b9cf103db21ca7d673bf1cc7fa4d61b6a7265f07a6b"])
         w.add_transaction(txC)
         self.assertEqual(83500163, sum(w.get_balance()))
+
+
+class TestWalletCaches(TestCaseForTestnet):
+    transactions = [
+        # tx A is an external incoming tx funding the wallet
+        ("0cce62d61ec87ad3e391e8cd752df62e0c952ce45f52885d6d10988e02794060", "0200000001191601a44a81e061502b7bfbc6eaa1cef6d1e6af5308ef96c9342f71dbf4b9b5000000006b483045022100a6d44d0a651790a477e75334adfb8aae94d6612d01187b2c02526e340a7fd6c8022028bdf7a64a54906b13b145cd5dab21a26bd4b85d6044e9b97bceab5be44c2a9201210253e8e0254b0c95776786e40984c1aa32a7d03efa6bdacdea5f421b774917d346feffffff026b20fa04000000001976a914dc3a05eb562fb6f3ef8076946514d4730cff299988aca0860100000000001976a91421919b94ae5cefcdf0271191459157cdb41c4cbf88aca6240700"),
+        # tx B is an outgoing payment to an external address
+        ("e7f4e47f41421e37a8600b6350befd586f30db60a88d0992d54df280498f0968", "0200000001604079028e98106d5d88525fe42c950c2ef62d75cde891e3d37ac81ed662ce0c000000006b483045022100a6d44d0a651790a477e75334adfb8aae94d6612d01187b2c02526e340a7fd6c8022028bdf7a64a54906b13b145cd5dab21a26bd4b85d6044e9b97bceab5be44c2a9201210253e8e0254b0c95776786e40984c1aa32a7d03efa6bdacdea5f421b774917d346feffffff01831cfa04000000001976a914024db2e87dd7cfd0e5f266c5f212e21a31d805a588aca6240700"),
+    ]
+
+    def setUp(self):
+        super().setUp()
+        self.config = SimpleConfig({'electrum_path': self.electrum_path})
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_addrs_with_coins_cache(self, mock_save_db):
+        w = restore_wallet_from_text("hint shock chair puzzle shock traffic drastic note dinosaur mention suggest sweet",
+                                     path='if_this_exists_mocking_failed_648151893',
+                                     gap_limit=5,
+                                     config=self.config)['wallet']  # type: Abstract_Wallet
+        w.db.put('stored_height', 100000)  # set local height
+        txidA, rawA = self.transactions[0]
+        txidB, rawB = self.transactions[1]
+
+        assert sum(w.get_balance()) == 0
+        assert w._addrs_with_coins_cache == set()
+
+        w.add_transaction(Transaction(rawA))
+        assert sum(w.get_balance()) == 83501163
+        assert w._addrs_with_coins_cache == {'ygPu1vV5ZxAgGevfWTKnRPPexsJ9JkfNJ4'}
+
+        w.add_transaction(Transaction(rawB))  # local tx
+        assert sum(w.get_balance()) == 0
+        assert w._addrs_with_coins_cache == {'ygPu1vV5ZxAgGevfWTKnRPPexsJ9JkfNJ4'}
+
+        w.add_unverified_tx(txidB, 100000)    # unverified tx with local height
+        w.add_transaction(Transaction(rawB))
+        assert w._addrs_with_coins_cache == set()
+
+        w.remove_transaction(txidB)
+        assert w._addrs_with_coins_cache == {'ygPu1vV5ZxAgGevfWTKnRPPexsJ9JkfNJ4'}
+        w.remove_transaction(txidA)
+        assert w._addrs_with_coins_cache == set()
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_tx_deltas_cache(self, mock_save_db):
+        w = restore_wallet_from_text("hint shock chair puzzle shock traffic drastic note dinosaur mention suggest sweet",
+                                     path='if_this_exists_mocking_failed_648151893',
+                                     gap_limit=5,
+                                     config=self.config)['wallet']  # type: Abstract_Wallet
+        txidA, rawA = self.transactions[0]
+        txidB, rawB = self.transactions[1]
+
+        assert sum(w.get_balance()) == 0
+        assert w._tx_deltas_cache == {}
+
+        w.add_transaction(Transaction(rawA))
+        assert sum(w.get_balance()) == 83501163
+        assert w._tx_deltas_cache == {txidA: 83501163}
+
+        w.add_transaction(Transaction(rawB))
+        assert sum(w.get_balance()) == 0
+        assert w._tx_deltas_cache == {txidA: 83501163, txidB: -83501163}
+
+        w.remove_transaction(txidB)
+        assert w._tx_deltas_cache == {txidA: 83501163}
+
+        w.remove_transaction(txidA)
+        assert w._tx_deltas_cache == {}
