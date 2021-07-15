@@ -85,9 +85,9 @@ class PSStateFilter(IntEnum):
 
 
 class KeystoreFilter(IntEnum):
-    ALL = 0
+    MAIN = 0
     PS_KS = 1
-    MAIN = 2
+    ALL = 2
 
     def ui_text(self) -> str:
         return {
