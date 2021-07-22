@@ -7,7 +7,7 @@ import attr
 from .dash_tx import STANDARD_TX
 from .json_db import StoredObject
 from .i18n import _
-from .util import age
+from .util import age, InvoiceError
 from . import constants
 from .bitcoin import COIN, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC
 from .transaction import PartialTxOutput
@@ -124,12 +124,12 @@ class OnchainInvoice(Invoice):
     def _validate_amount(self, attribute, value):
         if isinstance(value, int):
             if not (0 <= value <= TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN):
-                raise ValueError(f"amount is out-of-bounds: {value!r} sat")
+                raise InvoiceError(f"amount is out-of-bounds: {value!r} sat")
         elif isinstance(value, str):
             if value != "!":
-                raise ValueError(f"unexpected amount: {value!r}")
+                raise InvoiceError(f"unexpected amount: {value!r}")
         else:
-            raise ValueError(f"unexpected amount: {value!r}")
+            raise InvoiceError(f"unexpected amount: {value!r}")
 
     @classmethod
     def from_bip70_payreq(cls, pr: 'PaymentRequest', height:int) -> 'OnchainInvoice':

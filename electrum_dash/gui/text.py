@@ -18,7 +18,6 @@ from electrum_dash.wallet_db import WalletDB
 from electrum_dash.storage import WalletStorage
 from electrum_dash.network import NetworkParameters, TxBroadcastError, BestEffortRequestFailed
 from electrum_dash.interface import ServerAddr
-from electrum_dash.logging import console_stderr_handler
 from electrum_dash.dash_tx import SPEC_TX_NAMES
 
 if TYPE_CHECKING:
@@ -88,7 +87,6 @@ class ElectrumGui:
         self.set_cursor(0)
         self.w = curses.newwin(10, 50, 5, 5)
 
-        console_stderr_handler.setLevel(logging.CRITICAL)
         self.tab = 0
         self.pos = 0
         self.popup_pos = 0

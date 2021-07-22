@@ -425,6 +425,7 @@ class HistoryModel(QAbstractItemModel, Logger):
     def update_label(self, idx, tx_item):
         tx_item['label'] = self.parent.wallet.get_label_for_txid(get_item_key(tx_item))
         self.dataChanged.emit(idx, idx, [Qt.DisplayRole])
+        self.parent.utxo_list.update()
 
     def get_domain(self):
         '''Overridden in address_dialog.py'''
@@ -711,7 +712,8 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                       HistoryColumns.TXID]
 
     def __init__(self, parent, model: HistoryModel):
-        super().__init__(parent, self.create_menu, stretch_column=HistoryColumns.DESCRIPTION)
+        super().__init__(parent, self.create_menu, stretch_column=HistoryColumns.DESCRIPTION,
+                         editable_columns=[HistoryColumns.DESCRIPTION, HistoryColumns.FIAT_VALUE])
         self.config = parent.config
         self.hm = model
         self.setModel(model)
@@ -723,7 +725,6 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         self.create_toolbar_buttons()
         self.wallet = self.parent.wallet  # type: Abstract_Wallet
         self.sortByColumn(HistoryColumns.STATUS, Qt.AscendingOrder)
-        self.editable_columns |= {HistoryColumns.FIAT_VALUE}
 
         self.header().setStretchLastSection(False)
         self.header().setMinimumSectionSize(32)
@@ -896,7 +897,7 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
         except NothingToPlotException as e:
             self.parent.show_message(str(e))
 
-    def on_edited(self, index, user_role, text):
+    def on_edited(self, index, edit_key, *, text):
         if not index.isValid():
             return
 
@@ -1182,8 +1183,10 @@ class HistoryList(MyTreeView, AcceptFileDragDrop):
                     return True
             return False
 
-    def get_text_and_userrole_from_coordinate(self, row, col, idx):
-        if not idx.isValid():
-            return None, None
-        tx_item = idx.internalPointer()
-        return self.hm.data(idx, Qt.DisplayRole).value(), get_item_key(tx_item)
+    def get_edit_key_from_coordinate(self, row, col):
+        if col in [HistoryColumns.DESCRIPTION, HistoryColumns.FIAT_VALUE]:
+            idx = self.hm.index(row, col, QModelIndex())
+            if idx.isValid():
+                key_idx = idx.sibling(idx.row(), HistoryColumns.TXID)
+                if key_idx.isValid():
+                    return self.hm.data(key_idx, Qt.DisplayRole).value()

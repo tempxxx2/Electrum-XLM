@@ -45,13 +45,10 @@ $PIP_CMD install --no-dependencies --no-warn-script-location -I x11_hash>=1.4
 $PIP_CMD install --no-dependencies --no-warn-script-location -I \
     -r contrib/deterministic-build/requirements-build-mac.txt
 
-pushd electrum_dash
-git clone https://github.com/zebra-lucky/electrum-dash-locale/ locale-repo
-mv locale-repo/locale .
-rm -rf locale-repo
-find locale -name '*.po' -delete
-find locale -name '*.pot' -delete
-popd
+export PATH="/usr/local/opt/gettext/bin:$PATH"
+./contrib/make_locale
+find . -name '*.po' -delete
+find . -name '*.pot' -delete
 
 cp contrib/osx/osx.spec .
 cp contrib/dash/pyi_runtimehook.py .

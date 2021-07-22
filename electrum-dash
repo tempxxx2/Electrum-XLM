@@ -78,7 +78,9 @@ if not is_android:
     check_imports()
 
 
-from electrum_dash.logging import get_logger, configure_logging
+sys._ELECTRUM_RUNNING_VIA_RUNELECTRUM = True  # used by logging.py
+
+from electrum_dash.logging import get_logger, configure_logging  # import logging submodule first
 from electrum_dash import util
 from electrum_dash import constants
 from electrum_dash import SimpleConfig
@@ -139,10 +141,6 @@ def run_stacktraces(config, log=False):
 def init_cmdline(config_options, wallet_path, server, *, config: 'SimpleConfig'):
     cmdname = config.get('cmd')
     cmd = known_commands[cmdname]
-
-    if cmdname == 'signtransaction' and config.get('privkey'):
-        cmd.requires_wallet = False
-        cmd.requires_password = False
 
     if cmdname in ['payto', 'paytomany'] and config.get('unsigned'):
         cmd.requires_password = False

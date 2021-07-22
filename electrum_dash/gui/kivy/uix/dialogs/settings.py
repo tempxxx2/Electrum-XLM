@@ -120,6 +120,8 @@ class SettingsDialog(Factory.Popup):
         def_dip2 = not self.app.wallet.psman.unsupported
         self.show_tx_type = self.config.get('show_dip2_tx_type', def_dip2)
 
+        self.update()
+
     def update(self):
         self.wallet = self.app.wallet
         self.use_encryption = self.wallet.has_password() if self.wallet else False

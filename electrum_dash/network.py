@@ -341,8 +341,6 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         self.banner = ''
         self.donation_address = ''
         self.relay_fee = None  # type: Optional[int]
-        # List of all proposals on the network.
-        self.all_proposals = []
 
         dir_path = os.path.join(self.config.path, 'certs')
         util.make_dir(dir_path)
@@ -536,7 +534,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
                 return {}
             return self.interface.fee_estimates_eta
 
-    def update_fee_estimates(self, *, fee_est: Dict = None):
+    def update_fee_estimates(self, *, fee_est: Dict[int, int] = None):
         if fee_est is None:
             fee_est = self.get_fee_estimates()
         for nblock_target, fee in fee_est.items():

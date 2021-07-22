@@ -12,15 +12,16 @@ from kivy.uix.label import Label
 from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
 
-from .question import Question
-from electrum_dash.gui.kivy.i18n import _
-
 from electrum_dash.dash_tx import SPEC_TX_NAMES
 from electrum_dash.util import InvalidPassword, bfh
 from electrum_dash.address_synchronizer import TX_HEIGHT_LOCAL
 from electrum_dash.transaction import Transaction, PartialTransaction
 from electrum_dash.network import NetworkException
-from ...util import address_colors
+
+from electrum_dash.gui.kivy.i18n import _
+from electrum_dash.gui.kivy.util import address_colors
+from ..actiondropdown import ActionDropdown, ActionButtonOption
+from .question import Question
 
 if TYPE_CHECKING:
     from ...main_window import ElectrumWindow
@@ -93,18 +94,14 @@ Builder.load_string('''
         BoxLayout:
             size_hint: 1, None
             height: '48dp'
-            Button:
-                id: action_button
+            ActionDropdown:
+                id: action_dropdown
                 size_hint: 0.5, None
                 height: '48dp'
-                text: ''
-                disabled: True
-                opacity: 0
-                on_release: root.on_action_button_clicked()
             IconButton:
                 size_hint: 0.5, None
                 height: '48dp'
-                icon: f'atlas://{KIVY_GUI_PATH}/theming/light/qrcode'
+                icon: f'atlas://{KIVY_GUI_PATH}/theming/atlas/light/qrcode'
                 on_release: root.show_qr()
             Button:
                 size_hint: 0.5, None
@@ -119,12 +116,6 @@ Builder.load_string('''
 ''')
 
 
-class ActionButtonOption(NamedTuple):
-    text: str
-    func: Callable
-    enabled: bool
-
-
 class TxDialog(Factory.Popup):
 
     def __init__(self, app, tx, pr=None):
@@ -133,8 +124,6 @@ class TxDialog(Factory.Popup):
         self.wallet = self.app.wallet
         self.tx = tx  # type: Transaction
         self.pr = pr
-        self._action_button_fn = lambda btn: None
-        self.dropdown = None
 
         # If the wallet can populate the inputs with more info, do it now.
         # As a result, e.g. we might learn an imported address tx is segwit,
@@ -203,48 +192,19 @@ class TxDialog(Factory.Popup):
             dict_entry['color'], dict_entry['background_color'] = address_colors(self.wallet, dict_entry['address'])
 
         self.can_remove_tx = tx_details.can_remove
-        self.update_action_button()
+        self.update_action_dropdown()
 
-    def update_action_button(self):
-        action_button = self.ids.action_button
+    def update_action_dropdown(self):
+        action_dropdown = self.ids.action_dropdown  # type: ActionDropdown
+        # note: button texts need to be short; there is only horizontal space for ~13 chars
         options = (
             ActionButtonOption(text=_('Sign'), func=lambda btn: self.do_sign(), enabled=self.can_sign),
             ActionButtonOption(text=_('Broadcast'), func=lambda btn: self.do_broadcast(), enabled=self.can_broadcast),
             ActionButtonOption(text=_('Remove'), func=lambda btn: self.remove_local_tx(), enabled=self.can_remove_tx),
         )
-        num_options = sum(map(lambda o: bool(o.enabled), options))
-        # if no options available, hide button
-        if num_options == 0:
-            action_button.disabled = True
-            action_button.opacity = 0
-            return
-        action_button.disabled = False
-        action_button.opacity = 1
-
-        if num_options == 1:
-            # only one option, button will correspond to that
-            for option in options:
-                if option.enabled:
-                    action_button.text = option.text
-                    self._action_button_fn = option.func
-        else:
-            # multiple options. button opens dropdown which has one sub-button for each
-            self.dropdown = DropDown()
-            action_button.text = _('Options')
-            self._action_button_fn = self.dropdown.open
-            for option in options:
-                if option.enabled:
-                    btn = Button(text=option.text, size_hint_y=None, height='48dp')
-                    btn.bind(on_release=option.func)
-                    self.dropdown.add_widget(btn)
-
-    def on_action_button_clicked(self):
-        action_button = self.ids.action_button
-        self._action_button_fn(action_button)
+        action_dropdown.update(options=options)
 
     def do_sign(self):
-        if self.dropdown:
-            self.dropdown.dismiss()
         self.app.protected(_("Sign this transaction?"), self._do_sign, ())
 
     def _do_sign(self, password):
@@ -259,8 +219,6 @@ class TxDialog(Factory.Popup):
         self.update()
 
     def do_broadcast(self):
-        if self.dropdown:
-            self.dropdown.dismiss()
         self.app.broadcast(self.tx, self.pr)
 
     def show_qr(self):
@@ -269,8 +227,6 @@ class TxDialog(Factory.Popup):
         self.app.qr_dialog(_("Raw Transaction"), qr_data, text_for_clipboard=original_raw_tx)
 
     def remove_local_tx(self):
-        if self.dropdown:
-            self.dropdown.dismiss()
         txid = self.tx.txid()
         num_child_txs = len(self.wallet.get_depending_transactions(txid))
         question = _("Are you sure you want to remove this transaction?")

@@ -79,6 +79,10 @@ jobs:
       ELECTRUM_MAINNET: ${{ matrix.is_mainnet[0] }}
     name: create release for Android
     steps:
+      - name: Install apt packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install gettext python3-virtualenv
       - name: Checkout
         uses: actions/checkout@v1
       - name: Set outputs for pkg_ver, apk_ver, vercode, is_release
@@ -114,7 +118,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: bin/${{ matrix.is_mainnet[1] }}-${{ steps.set_vars.outputs.apk_ver }}-${{ matrix.arch }}-release-unsigned.apk
+          asset_path: dist/${{ matrix.is_mainnet[1] }}-${{ steps.set_vars.outputs.apk_ver }}-${{ matrix.arch }}-release-unsigned.apk
           asset_name: ${{ matrix.is_mainnet[1] }}-${{ steps.set_vars.outputs.apk_ver }}-${{ matrix.arch }}-release-unsigned.apk
           asset_content_type: application/vnd.android.package-archive
 

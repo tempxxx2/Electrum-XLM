@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ev
 
+export MACOSX_DEPLOYMENT_TARGET=10.12
+
 export PY37BINDIR=/Library/Frameworks/Python.framework/Versions/3.7/bin/
 export PATH=$PATH:$PY37BINDIR
 echo osx build version is $DASH_ELECTRUM_VERSION
@@ -20,7 +22,6 @@ if [[ -n $GITHUB_REF ]]; then
     git submodule update
 
     echo "Building CalinsQRReader..."
-    export MACOSX_DEPLOYMENT_TARGET=10.12
     d=contrib/CalinsQRReader
     pushd $d
     rm -fr build
@@ -40,13 +41,10 @@ $PIP_CMD install --no-dependencies --no-warn-script-location -I x11_hash>=1.4
 $PIP_CMD install --no-dependencies --no-warn-script-location -I \
     -r contrib/deterministic-build/requirements-build-mac.txt
 
-pushd electrum_dash
-git clone https://github.com/zebra-lucky/electrum-dash-locale/ locale-repo
-mv locale-repo/locale .
-rm -rf locale-repo
-find locale -name '*.po' -delete
-find locale -name '*.pot' -delete
-popd
+export PATH="/usr/local/opt/gettext/bin:$PATH"
+./contrib/make_locale
+find . -name '*.po' -delete
+find . -name '*.pot' -delete
 
 cp contrib/osx/osx_actions.spec osx.spec
 cp contrib/dash/pyi_runtimehook.py .

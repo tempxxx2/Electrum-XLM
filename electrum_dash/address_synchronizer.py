@@ -35,7 +35,7 @@ from .bitcoin import COINBASE_MATURITY
 from .dash_ps import PSManager
 from .dash_ps_util import PSCoinRounds, PS_MIXING_TX_TYPES
 from .dash_tx import tx_header_to_tx_type
-from .util import profiler, bfh, TxMinedInfo, UnrelatedTransactionException
+from .util import profiler, bfh, TxMinedInfo, UnrelatedTransactionException, with_lock
 from .protx import ProTxManager
 from .transaction import Transaction, TxOutput, TxInput, PartialTxInput, TxOutpoint, PartialTransaction
 from .synchronizer import Synchronizer
@@ -105,12 +105,6 @@ class AddressSynchronizer(Logger):
         self._get_addr_balance_cache = {}
 
         self.load_and_cleanup()
-
-    def with_lock(func):
-        def func_wrapper(self: 'AddressSynchronizer', *args, **kwargs):
-            with self.lock:
-                return func(self, *args, **kwargs)
-        return func_wrapper
 
     def with_transaction_lock(func):
         def func_wrapper(self: 'AddressSynchronizer', *args, **kwargs):
@@ -189,9 +183,6 @@ class AddressSynchronizer(Logger):
             return tx.outputs()[prevout_n].value
         return None
 
-    def get_txout_address(self, txo: TxOutput) -> Optional[str]:
-        return txo.address
-
     def load_unverified_transactions(self):
         # review transactions that are in the history
         for addr in self.db.get_history():
@@ -217,6 +208,8 @@ class AddressSynchronizer(Logger):
     def on_dash_islock(self, event, txid):
         if txid in self.db.islocks:
             return
+        elif not self.network:
+            return
         elif txid in self.unverified_tx or txid in self.db.verified_tx:
             self.logger.info(f'found tx for islock: {txid}')
             dash_net = self.network.dash_net
@@ -228,6 +221,8 @@ class AddressSynchronizer(Logger):
 
     def find_islock_pair(self, txid):
         if txid in self.db.islocks:
+            return
+        elif not self.network:
             return
         else:
             dash_net = self.network.dash_net
@@ -320,7 +315,7 @@ class AddressSynchronizer(Logger):
                 # it could happen that we think tx is unrelated but actually one of the inputs is is_mine.
                 # this is the main motivation for allow_unrelated
                 is_mine = any([self.is_mine(self.get_txin_address(txin)) for txin in tx.inputs()])
-                is_for_me = any([self.is_mine(self.get_txout_address(txo)) for txo in tx.outputs()])
+                is_for_me = any([self.is_mine(txo.address) for txo in tx.outputs()])
                 if not is_mine and not is_for_me:
                     raise UnrelatedTransactionException()
             # Find all conflicting transactions.
@@ -374,7 +369,7 @@ class AddressSynchronizer(Logger):
                 ser = tx_hash + ':%d'%n
                 scripthash = bitcoin.script_to_scripthash(txo.scriptpubkey.hex())
                 self.db.add_prevout_by_scripthash(scripthash, prevout=TxOutpoint.from_str(ser), value=v)
-                addr = self.get_txout_address(txo)
+                addr = txo.address
                 if addr and self.is_mine(addr):
                     self.db.add_txo_addr(tx_hash, addr, n, v, is_coinbase)
                     self._get_addr_balance_cache.pop(addr, None)  # invalidate cache
@@ -391,7 +386,7 @@ class AddressSynchronizer(Logger):
             self.db.add_num_inputs_to_tx(tx_hash, len(tx.inputs()))
             if is_new_tx and self.psman.enabled:
                 self.psman._add_tx_ps_data(tx_hash, tx)
-            if is_new_tx and not self.is_local_tx(tx_hash) and self.network:
+            if is_new_tx and not self.is_local_tx(tx_hash):
                 util.trigger_callback('new_transaction', self, tx)
             return True
 
@@ -495,12 +490,11 @@ class AddressSynchronizer(Logger):
         if self.psman.enabled:
             self.psman.unsubscribe_spent_addr(addr, hist)
         # trigger new_transaction cb when local tx hash appears in history
-        if self.network:
-            for tx_hash in local_tx_hist_hashes:
-                self.find_islock_pair(tx_hash)
-                tx = self.db.get_transaction(tx_hash)
-                if tx:
-                    util.trigger_callback('new_transaction', self, tx)
+        for tx_hash in local_tx_hist_hashes:
+            self.find_islock_pair(tx_hash)
+            tx = self.db.get_transaction(tx_hash)
+            if tx:
+                util.trigger_callback('new_transaction', self, tx)
 
     @profiler
     def load_local_history(self):

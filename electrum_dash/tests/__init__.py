@@ -3,6 +3,8 @@ import threading
 import tempfile
 import shutil
 
+import electrum_dash
+import electrum_dash.logging
 from electrum_dash import constants
 
 
@@ -11,6 +13,9 @@ from electrum_dash import constants
 # will only be run once, using the fastest implementation.
 # e.g. libsecp256k1 vs python-ecdsa. pycryptodomex vs pyaes.
 FAST_TESTS = False
+
+
+electrum_dash.logging._configure_stderr_logging()
 
 
 # some unit tests are modifying globals...

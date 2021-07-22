@@ -1,3 +1,16 @@
+# Release 4.1.4.0 (merge 4.1.4 upstream changes)
+
+ * CLI/RPC: fix "close_wallet" command (#7348)
+ * Android: the binaries (APKs) prepared to be reproducible
+ * AppImage: fix some startup issues by including libxcb deps (#7198)
+ * imported wallets: when enabling the "Use change addresses" option,
+   change will now be sent to a random unused imported address. (#7330)
+   As before, by default, change is sent back to the "from address".
+ * seed generation: make sure newly created electrum seeds don't have
+   correct bip39 checksum by chance (#6001)
+ * other minor fixes
+
+
 # Release 4.1.2.2
 
  * wallet/kivy: fix feerate calc (float Decimal conversion) #258

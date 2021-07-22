@@ -1,11 +1,20 @@
+SHELL := /bin/bash
 PYTHON = python3
+
+# for reproducible builds
+export LC_ALL             := C
+export TZ                 := UTC
+export SOURCE_DATE_EPOCH  := $(shell git log -1 --pretty=%ct)
+export PYTHONHASHSEED     := $(SOURCE_DATE_EPOCH)
+export BUILD_DATE         := $(shell LC_ALL=C TZ=UTC date +'%b %e %Y' -d @$(SOURCE_DATE_EPOCH))
+export BUILD_TIME         := $(shell LC_ALL=C TZ=UTC date +'%H:%M:%S' -d @$(SOURCE_DATE_EPOCH))
 
 # needs kivy installed or in PYTHONPATH
 
 .PHONY: theming prepare prepare-testnet apk apk-testnet release release-testnet clean
 
 theming:
-	$(PYTHON) -m kivy.atlas ../../electrum_dash/gui/kivy/theming/light 1024 ../../electrum_dash/gui/kivy/theming/light/*.png
+	$(PYTHON) -m kivy.atlas ../../electrum_dash/gui/kivy/theming/atlas/light 1024 ../../electrum_dash/gui/kivy/theming/light/*.png
 prepare:
 	# running pre build setup
 	@cp buildozer.spec ../../buildozer.spec
