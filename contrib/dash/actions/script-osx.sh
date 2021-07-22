@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ev
 
-export MACOSX_DEPLOYMENT_TARGET=10.12
+export MACOSX_DEPLOYMENT_TARGET=10.13
 
 export PY37BINDIR=/Library/Frameworks/Python.framework/Versions/3.7/bin/
 export PATH=$PATH:$PY37BINDIR
@@ -14,19 +14,6 @@ else
     python3 -m virtualenv env
     source env/bin/activate
     PIP_CMD="pip"
-fi
-
-
-if [[ -n $GITHUB_REF ]]; then
-    git submodule init
-    git submodule update
-
-    echo "Building CalinsQRReader..."
-    d=contrib/CalinsQRReader
-    pushd $d
-    rm -fr build
-    xcodebuild || fail "Could not build CalinsQRReader"
-    popd
 fi
 
 

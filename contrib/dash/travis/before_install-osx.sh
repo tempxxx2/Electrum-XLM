@@ -27,4 +27,12 @@ tar -xzf ${LSECP256K1_FILE} && rm ${LSECP256K1_FILE}
 rm -f libsecp256k1.0.dylib
 cp libsecp256k1/libsecp256k1.0.dylib .
 
-brew install gettext
+brew install gettext libtool automake pkg-config
+
+if [[ -n $TRAVIS_TAG ]]; then
+    echo "Building ZBar dylib..."
+    rm -f libzbar.0.dylib
+    export MACOSX_DEPLOYMENT_TARGET=10.13
+    ./contrib/make_zbar.sh
+    rm -rf contrib/zbar/
+fi

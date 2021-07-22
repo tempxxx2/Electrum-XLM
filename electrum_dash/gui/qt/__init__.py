@@ -39,13 +39,13 @@ except Exception:
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtWidgets import (QApplication, QSystemTrayIcon, QWidget, QMenu,
                              QMessageBox)
-from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+from PyQt5.QtCore import QObject, pyqtSignal, QTimer, Qt
 import PyQt5.QtCore as QtCore
 
 from electrum_dash.i18n import _, set_language
 from electrum_dash.plugin import run_hook
 from electrum_dash.base_wizard import GoBack
-from electrum_dash.util import (UserCancelled, profiler,
+from electrum_dash.util import (UserCancelled, profiler, send_exception_to_crash_reporter,
                                 WalletFileException, BitcoinException, get_new_wallet_name)
 from electrum_dash.wallet import Wallet, Abstract_Wallet
 from electrum_dash.wallet_db import WalletDB
@@ -54,10 +54,11 @@ from electrum_dash.logging import Logger
 from .installwizard import InstallWizard, WalletAlreadyOpenInMemory
 from .dash_net_dialog import DashNetDialog
 from .dash_qt import TorWarnDialog
-from .util import get_default_language, read_QIcon, ColorScheme, custom_message_box
+from .util import get_default_language, read_QIcon, ColorScheme, custom_message_box, MessageBoxMixin
 from .main_window import ElectrumWindow
 from .network_dialog import NetworkDialog
 from .stylesheet_patcher import patch_qt_stylesheet
+from .exception_window import Exception_Hook
 
 if TYPE_CHECKING:
     from electrum_dash.daemon import Daemon
@@ -293,7 +294,7 @@ class ElectrumGui(Logger):
         return wrapper
 
     @count_wizards_in_progress
-    def start_new_window(self, path, uri, *, app_is_starting=False):
+    def start_new_window(self, path, uri, *, app_is_starting=False) -> Optional[ElectrumWindow]:
         '''Raises the window for the wallet if it is open.  Otherwise
         opens the wallet and creates a new window for it'''
         wallet = None
@@ -421,6 +422,8 @@ class ElectrumGui(Logger):
         self.app.lastWindowClosed.connect(self._maybe_quit_if_no_windows_open)
         self.app.aboutToQuit.connect(self._cleanup_before_exit)
         signal.signal(signal.SIGINT, lambda *args: self.app.quit())
+        # hook for crash reporter
+        Exception_Hook.maybe_setup(config=self.config)
         # first-start network-setup
         try:
             self.init_network()
@@ -434,11 +437,18 @@ class ElectrumGui(Logger):
         # start wizard to select/create wallet
         self.timer.start()
         path = self.config.get_wallet_path(use_gui_last_wallet=True)
-        if not self.start_new_window(path, self.config.get('url'), app_is_starting=True):
-            return
+        try:
+            if not self.start_new_window(path, self.config.get('url'), app_is_starting=True):
+                return
+        except Exception as e:
+            self.logger.error("error loading wallet (or creating window for it)")
+            send_exception_to_crash_reporter(e)
+            # Let Qt event loop start properly so that crash reporter window can appear.
+            # We will shutdown when the user closes that window, via lastWindowClosed signal.
         # main loop
+        self.logger.info("starting Qt main loop")
         self.app.exec_()
-        # on some platforms the exec_ call may not return, so use clean_up()
+        # on some platforms the exec_ call may not return, so use _cleanup_before_exit
 
     def stop(self):
         self.logger.info('closing GUI')

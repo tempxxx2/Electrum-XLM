@@ -435,7 +435,7 @@ class ElectrumWindow(App, Logger):
             self.show_error("invoice error:" + pr.error)
             self.send_screen.do_clear()
 
-    def on_qr(self, data):
+    def on_qr(self, data: str):
         from electrum_dash.bitcoin import is_address
         data = data.strip()
         if is_address(data):
@@ -572,7 +572,8 @@ class ElectrumWindow(App, Logger):
         try:
             video_dev = self.electrum_config.get_video_device()
             data = qrscanner.scan_barcode(video_dev)
-            on_complete(data)
+            if data is not None:
+                on_complete(data)
         except UserFacingException as e:
             self.show_error(e)
         except BaseException as e:

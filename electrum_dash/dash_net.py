@@ -189,7 +189,6 @@ class DashNet(Logger):
         self.network = network
         self.proxy = None
         self.loop = network.asyncio_loop
-        self._loop_thread = network._loop_thread
         self.config = network.config
 
         if config.path:
@@ -481,7 +480,7 @@ class DashNet(Logger):
             util.trigger_callback('dash-net-updated', 'disabled')
 
     def run_from_another_thread(self, coro):
-        assert self._loop_thread != threading.current_thread(), NET_THREAD_MSG
+        assert util.get_running_loop() != self.asyncio_loop, NET_THREAD_MSG
         fut = asyncio.run_coroutine_threadsafe(coro, self.loop)
         return fut.result()
 

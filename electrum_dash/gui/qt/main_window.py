@@ -84,7 +84,7 @@ from electrum_dash.simple_config import SimpleConfig
 from electrum_dash.logging import Logger
 
 from .exception_window import Exception_Hook
-from .amountedit import AmountEdit, BTCAmountEdit, FreezableLineEdit, FeerateEdit
+from .amountedit import AmountEdit, BTCAmountEdit, FreezableLineEdit, FeerateEdit, SizedFreezableLineEdit
 from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
 from .transaction_dialog import show_transaction
@@ -103,6 +103,7 @@ from .history_list import HistoryList, HistoryModel
 from .update_checker import UpdateCheck, UpdateCheckThread
 from .confirm_tx_dialog import ConfirmTxDialog
 from .transaction_dialog import PreviewTxDialog
+from .qrreader import scan_qrcode
 from .dash_qt import ExtraPayloadWidget
 from .privatesend_dialog import (find_ps_dialog, show_ps_dialog,
                                  hide_ps_dialog, protected_with_parent,
@@ -230,7 +231,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         assert wallet, "no wallet"
         self.wallet = wallet
 
-        self.setup_exception_hook()
+        Exception_Hook.maybe_setup(config=self.config, wallet=self.wallet)
 
         self.network = gui_object.daemon.network  # type: Network
         self.fx = gui_object.daemon.fx  # type: FxThread
@@ -290,7 +291,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        central_widget = QWidget()
+        central_widget = QScrollArea()
+        central_widget.setObjectName("central_widget")
         vbox = QVBoxLayout(central_widget)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.addWidget(tabs)
@@ -298,6 +300,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.setCentralWidget(central_widget)
 
+        self.setMinimumWidth(640)
+        self.setMinimumHeight(400)
         if self.config.get("is_maximized"):
             self.showMaximized()
 
@@ -393,10 +397,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.show_warning(self.wallet.storage.backup_message,
                               title=_('Information'))
             self.wallet.storage.backup_message = ''
-
-    def setup_exception_hook(self):
-        Exception_Hook.maybe_setup(config=self.config,
-                                   wallet=self.wallet)
 
     def run_coroutine_from_thread(self, coro, on_result=None):
         def task():
@@ -697,7 +697,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.setGeometry(100, 100, 840, 400)
 
     def watching_only_changed(self):
-        name = "Dash Electrum Testnet" if constants.net.TESTNET else "Dash Electrum"
+        name = "Dash Electrum"
+        if constants.net.TESTNET:
+            name += " " + constants.net.NET_NAME.capitalize()
         title = '%s %s  -  %s' % (name, ELECTRUM_VERSION,
                                         self.wallet.basename())
         extra = [self.wallet.db.get('wallet_type', '?')]
@@ -1221,7 +1223,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         grid.setSpacing(8)
         grid.setColumnStretch(3, 1)
 
-        self.receive_message_e = QLineEdit()
+        self.receive_message_e = SizedFreezableLineEdit(width=700)
         grid.addWidget(QLabel(_('Description')), 0, 0)
         grid.addWidget(self.receive_message_e, 0, 1, 1, 4)
         self.receive_message_e.textChanged.connect(self.update_receive_qr)
@@ -1250,7 +1252,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             i = 0
         self.expires_combo.addItems(evl_values)
         self.expires_combo.setCurrentIndex(i)
-        self.expires_combo.setFixedWidth(self.receive_amount_e.width())
         def on_expiry(i):
             self.config.set_key('request_expiry', evl_keys[i])
         self.expires_combo.currentIndexChanged.connect(on_expiry)
@@ -1280,7 +1281,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         buttons.addStretch(1)
         buttons.addWidget(self.clear_invoice_button)
         buttons.addWidget(self.create_invoice_button)
-        grid.addLayout(buttons, 4, 3, 1, 2)
+        grid.addLayout(buttons, 4, 0, 1, -1)
 
         self.receive_payreq_e = ButtonsTextEdit()
         self.receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
@@ -1511,8 +1512,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
               + _('The description is not sent to the recipient of the funds. It is stored in your wallet file, and displayed in the \'History\' tab.')
         description_label = HelpLabel(_('Description'), msg)
         grid.addWidget(description_label, 2, 0)
-        self.message_e = FreezableLineEdit()
-        self.message_e.setMinimumWidth(700)
+        self.message_e = SizedFreezableLineEdit(width=700)
         grid.addWidget(self.message_e, 2, 1, 1, -1)
 
         # PrivateSend options
@@ -3073,29 +3073,26 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             return
 
     def read_tx_from_qrcode(self):
-        from electrum_dash import qrscanner
-        try:
-            data = qrscanner.scan_barcode(self.config.get_video_device())
-        except UserFacingException as e:
-            self.show_error(e)
-            return
-        except BaseException as e:
-            self.logger.exception('camera error')
-            self.show_error(repr(e))
-            return
-        if not data:
-            return
-        # if the user scanned a dash URI
-        data_l = data.lower()
-        if (data_l.startswith(DASH_BIP21_URI_SCHEME + ':')
-                or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
-            self.pay_to_URI(data)
-            return
-        # else if the user scanned an offline signed tx
-        tx = self.tx_from_text(data)
-        if not tx:
-            return
-        self.show_transaction(tx)
+        def cb(success: bool, error: str, data):
+            if not success:
+                if error:
+                    self.show_error(error)
+                return
+            if not data:
+                return
+            # if the user scanned a dash URI
+            data_l = data.lower()
+            if (data_l.startswith(DASH_BIP21_URI_SCHEME + ':')
+                    or data_l.startswith(PAY_BIP21_URI_SCHEME + ':')):
+                self.pay_to_URI(data)
+                return
+            # else if the user scanned an offline signed tx
+            tx = self.tx_from_text(data)
+            if not tx:
+                return
+            self.show_transaction(tx)
+
+        scan_qrcode(parent=self.top_level_window(), config=self.config, callback=cb)
 
     def read_tx_from_file(self) -> Optional[Transaction]:
         fileName = getOpenFileName(

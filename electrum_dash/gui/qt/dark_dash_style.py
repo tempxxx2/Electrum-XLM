@@ -255,7 +255,8 @@ QLabel {
 
 
 /* Wallet Container */
-#main_window_container {
+#main_window_container,
+#central_widget {
     background: #1e75b4;
     color: #fff;
 }
@@ -325,7 +326,8 @@ QLabel {
 /**********************/
 /* 4. File Menu, Toolbar */
 
-#main_window_container QMenuBar {
+#main_window_container QMenuBar,
+#central_widget QMenuBar {
     color: #aaa;
 }
 
