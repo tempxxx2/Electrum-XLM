@@ -102,6 +102,8 @@ class AddressSynchronizer(Logger):
         self.psman = PSManager(self)
         self.protx_manager = ProTxManager(self)
 
+        self._addrs_with_coins_cache = set()
+        self._tx_deltas_cache = defaultdict(int)
         self._get_addr_balance_cache = {}
 
         self.load_and_cleanup()
@@ -117,6 +119,8 @@ class AddressSynchronizer(Logger):
         self.check_history()
         self.load_unverified_transactions()
         self.remove_local_transactions_we_dont_have()
+        self.populate_tx_deltas_cache()
+        self.populate_addrs_with_coins_cache()
         self.psman.load_and_cleanup()
         self.protx_manager.load()
 
@@ -384,6 +388,8 @@ class AddressSynchronizer(Logger):
             is_new_tx = (tx_hash not in self.db.transactions)
             self.db.add_transaction(tx_hash, tx)
             self.db.add_num_inputs_to_tx(tx_hash, len(tx.inputs()))
+            self.update_tx_deltas_cache_on_tx(tx_hash, tx, is_added=True)
+            self.update_addrs_with_coins_cache_on_tx(tx)
             if is_new_tx and self.psman.enabled:
                 self.psman._add_tx_ps_data(tx_hash, tx)
             if is_new_tx and not self.is_local_tx(tx_hash):
@@ -440,6 +446,9 @@ class AddressSynchronizer(Logger):
                     scripthash = bitcoin.script_to_scripthash(txo.scriptpubkey.hex())
                     prevout = TxOutpoint(bfh(tx_hash), idx)
                     self.db.remove_prevout_by_scripthash(scripthash, prevout=prevout, value=txo.value)
+            self.update_tx_deltas_cache_on_tx(tx_hash, tx, is_added=False)
+            self.update_addrs_with_coins_cache_on_tx(tx)
+
 
     def get_depending_transactions(self, tx_hash: str) -> Set[str]:
         """Returns all (grand-)children of tx_hash in this wallet."""
@@ -524,12 +533,74 @@ class AddressSynchronizer(Logger):
             if tx_height == TX_HEIGHT_LOCAL and not self.db.get_transaction(txid):
                 self.remove_transaction(txid)
 
+    @profiler
+    def populate_tx_deltas_cache(self):
+        for addr in self.get_addresses() + self.psman.get_addresses():
+            h = self.get_address_history(addr)
+            for tx_hash, height, islock in h:
+                delta = self.get_tx_delta(tx_hash, addr)
+                self._tx_deltas_cache[tx_hash] += delta
+
+    def update_tx_deltas_cache_on_tx(self, txid, tx, *, is_added):
+        self._tx_deltas_cache.pop(txid, None)
+        if not is_added:
+            return
+        mine_addrs = set()
+        for txin in tx.inputs():
+            addr = self.get_txin_address(txin)
+            if self.is_mine(addr):
+                mine_addrs.add(addr)
+        for o in tx.outputs():
+            addr = o.address
+            if self.is_mine(addr):
+                mine_addrs.add(addr)
+        for addr in mine_addrs:
+            self._tx_deltas_cache[txid] += self.get_tx_delta(txid, addr)
+
+    def is_addr_with_coins(self, addr, local_height):
+        addr_outputs = self.get_addr_outputs(addr)
+        for k, v in list(addr_outputs.items()):
+            if v.spent_height is None:
+                continue
+            if 0 < v.spent_height <= local_height:
+                addr_outputs.pop(k)
+        if addr_outputs:
+            return True
+
+    @profiler
+    def populate_addrs_with_coins_cache(self):
+        local_height = self.get_local_height()
+        for addr in self.get_addresses() + self.psman.get_addresses():
+            if self.is_addr_with_coins(addr, local_height):
+                self._addrs_with_coins_cache.add(addr)
+
+    def update_addrs_with_coins_cache_on_tx(self, tx):
+        if not tx:
+            return
+        local_height = self.get_local_height()
+        mine_addrs = set()
+        for txin in tx.inputs():
+            addr = self.get_txin_address(txin)
+            if self.is_mine(addr):
+                mine_addrs.add(addr)
+        for o in tx.outputs():
+            addr = o.address
+            if self.is_mine(addr):
+                mine_addrs.add(addr)
+        for addr in mine_addrs:
+            if self.is_addr_with_coins(addr, local_height):
+                self._addrs_with_coins_cache.add(addr)
+            elif addr in self._addrs_with_coins_cache:
+                self._addrs_with_coins_cache.remove(addr)
+
     def clear_history(self):
         with self.lock:
             with self.transaction_lock:
                 self.db.clear_history()
                 self._history_local.clear()
                 self._get_addr_balance_cache = {}  # invalidate cache
+                self._tx_deltas_cache = defaultdict(int)
+                self._addrs_with_coins_cache = set()
 
     def get_txpos(self, tx_hash, islock):
         """Returns (height, txpos) tuple, even if the tx is unverified."""
@@ -563,6 +634,7 @@ class AddressSynchronizer(Logger):
     @with_lock
     @with_transaction_lock
     @with_local_height_cached
+    @profiler
     def get_history(self, *, domain=None, config=None, group_ps=False) -> Sequence[HistoryItem]:
         # get domain
         if domain is None:
@@ -571,20 +643,15 @@ class AddressSynchronizer(Logger):
         domain = set(domain)
         # 1. Get the history of each address in the domain, maintain the
         #    delta of a tx as the sum of its deltas on domain addresses
-        tx_deltas = defaultdict(int)  # type: Dict[str, int]
-        tx_islocks = {}
-        for addr in domain:
-            h = self.get_address_history(addr)
-            for tx_hash, height, islock in h:
-                tx_deltas[tx_hash] += self.get_tx_delta(tx_hash, addr)
-                if tx_hash not in tx_islocks:
-                    tx_islocks[tx_hash] = islock
+        if not self._tx_deltas_cache:
+            self.populate_tx_deltas_cache()
+        tx_deltas = self._tx_deltas_cache
         # 2. create sorted history
         history = []
         for tx_hash in tx_deltas:
             delta = tx_deltas[tx_hash]
             tx_mined_status = self.get_tx_height(tx_hash)
-            islock = tx_islocks[tx_hash]
+            islock = self.db.get_islock(tx_hash)
             if islock:
                 islock_sort = tx_hash if not tx_mined_status.conf else ''
             else:
@@ -1019,6 +1086,7 @@ class AddressSynchronizer(Logger):
         return result
 
     @with_local_height_cached
+    @profiler
     def get_utxos(
             self,
             domain=None,
@@ -1059,6 +1127,8 @@ class AddressSynchronizer(Logger):
             domain = set(domain) - set(excluded_addresses)
         mempool_height = block_height + 1  # height of next block
         for addr in domain:
+            if addr not in self._addrs_with_coins_cache:
+                continue
             txos = self.get_addr_outputs(addr)
             for txo in txos.values():
                 if txo.address in ps_ks_domain:
