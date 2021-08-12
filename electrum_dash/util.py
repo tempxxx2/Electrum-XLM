@@ -24,7 +24,7 @@ import binascii
 import os, sys, re, json
 from collections import defaultdict, OrderedDict
 from typing import (NamedTuple, Union, TYPE_CHECKING, Tuple, Optional, Callable, Any,
-                    Sequence, Dict, Generic, TypeVar, List, Iterable)
+                    Sequence, Dict, Generic, TypeVar, List, Iterable, Set)
 from datetime import datetime
 import decimal
 from decimal import Decimal
@@ -72,6 +72,14 @@ _logger = get_logger(__name__)
 
 def inv_dict(d):
     return {v: k for k, v in d.items()}
+
+
+def all_subclasses(cls) -> Set:
+    """Return all (transitive) subclasses of cls."""
+    res = set(cls.__subclasses__())
+    for sub in res.copy():
+        res |= all_subclasses(sub)
+    return res
 
 
 ca_path = certifi.where()
@@ -789,7 +797,9 @@ _block_explorer_default_api_loc = {'tx': 'tx/', 'addr': 'address/'}
 
 def block_explorer_info():
     from . import constants
-    return mainnet_block_explorers if not constants.net.TESTNET else testnet_block_explorers
+    if constants.net.NET_NAME == "testnet":
+        return testnet_block_explorers
+    return mainnet_block_explorers
 
 
 def block_explorer(config: 'SimpleConfig') -> Optional[str]:
@@ -1232,7 +1242,6 @@ def create_and_start_event_loop() -> Tuple[asyncio.AbstractEventLoop,
                                          args=(stopping_fut,),
                                          name='EventLoop')
     loop_thread.start()
-    loop._mythread = loop_thread
     return loop, stopping_fut, loop_thread
 
 
@@ -1579,6 +1588,15 @@ class nullcontext:
 
     async def __aexit__(self, *excinfo):
         pass
+
+def get_running_loop():
+    """Mimics _get_running_loop convenient functionality for sanity checks on all python versions"""
+    if sys.version_info < (3, 7):
+        return asyncio._get_running_loop()
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        return None
 
 
 class IntEnumWithCheck(IntEnum):

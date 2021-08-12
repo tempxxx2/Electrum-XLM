@@ -6,7 +6,7 @@ from typing import Sequence
 import asyncio
 import copy
 
-from electrum_dash import storage, bitcoin, keystore, bip32, wallet
+from electrum_dash import storage, bitcoin, keystore, bip32, slip39, wallet
 from electrum_dash import Transaction
 from electrum_dash import SimpleConfig
 from electrum_dash.address_synchronizer import TX_HEIGHT_UNCONFIRMED, TX_HEIGHT_UNCONF_PARENT
@@ -123,7 +123,8 @@ class TestWalletKeystoreAddressIntegrityForMainnet(ElectrumTestCase):
         seed_words = 'treat dwarf wealth gasp brass outside high rent blood crowd make initial'
         self.assertEqual(keystore.bip39_is_checksum_valid(seed_words), (True, True))
 
-        ks = keystore.from_bip39_seed(seed_words, '', "m/44'/0'/0'")
+        root_seed = keystore.bip39_to_seed(seed_words, '')
+        ks = keystore.from_bip43_rootseed(root_seed, "m/44'/0'/0'")
 
         self.assertTrue(isinstance(ks, keystore.BIP32_KeyStore))
 
@@ -141,7 +142,8 @@ class TestWalletKeystoreAddressIntegrityForMainnet(ElectrumTestCase):
         seed_words = 'treat dwarf wealth gasp brass outside high rent blood crowd make initial'
         self.assertEqual(keystore.bip39_is_checksum_valid(seed_words), (True, True))
 
-        ks = keystore.from_bip39_seed(seed_words, UNICODE_HORROR, "m/44'/0'/0'")
+        root_seed = keystore.bip39_to_seed(seed_words, UNICODE_HORROR)
+        ks = keystore.from_bip43_rootseed(root_seed, "m/44'/0'/0'")
 
         self.assertTrue(isinstance(ks, keystore.BIP32_KeyStore))
 
@@ -181,7 +183,8 @@ class TestWalletKeystoreAddressIntegrityForMainnet(ElectrumTestCase):
         seed_words = 'treat dwarf wealth gasp brass outside high rent blood crowd make initial'
         self.assertEqual(keystore.bip39_is_checksum_valid(seed_words), (True, True))
 
-        ks1 = keystore.from_bip39_seed(seed_words, '', "m/45'/0")
+        root_seed = keystore.bip39_to_seed(seed_words, '')
+        ks1 = keystore.from_bip43_rootseed(root_seed, "m/45'/0")
         self.assertTrue(isinstance(ks1, keystore.BIP32_KeyStore))
         self.assertEqual(ks1.xprv, 'xprv9vyEFyXf7pYVv4eDU3hhuCEAHPHNGuxX73nwtYdpbLcqwJCPwFKknAK8pHWuHHBirCzAPDZ7UJHrYdhLfn1NkGp9rk3rVz2aEqrT93qKRD9')
         self.assertEqual(ks1.xpub, 'xpub69xafV4YxC6o8Yiga5EiGLAtqR7rgNgNUGiYgw3S9g9pp6XYUne1KxdcfYtxwmA3eBrzMFuYcNQKfqsXCygCo4GxQFHfywxpUbKNfYvGJka')
@@ -228,6 +231,33 @@ class TestWalletKeystoreAddressIntegrityForMainnet(ElectrumTestCase):
         self.assertEqual(ks.xpub, 'xpub661MyMwAqRbcGH3yTb2kMQGnsLziRTJZ8vNthsVSCGbdBr8CGDWKxnGAFYgyKTzBtwvPPmfVAWJuFmxRXjSbUTg87wDkWQ5GmzpfUcN9t8Z')
         self.assertEqual(w.get_receiving_addresses()[0], '7fnRbKn5baDQxGTny63XNWPCcBs5dQEBtK')
         self.assertEqual(w.get_change_addresses()[0], '7nrNkWYwmyavE9K3SgexxwshHhS9DvyeGK')
+
+    @mock.patch.object(wallet.Abstract_Wallet, 'save_db')
+    def test_slip39_basic_3of6_bip44_standard(self, mock_save_db):
+        """
+        BIP32 Root Key for passphrase "TREZOR":
+        xprv9s21ZrQH143K2pMWi8jrTawHaj16uKk4CSbvo4Zt61tcrmuUDMx2o1Byzcr3saXNGNvHP8zZgXVdJHsXVdzYFPavxvCyaGyGr1WkAYG83ce
+        """
+        mnemonics = [
+            "extra extend academic bishop cricket bundle tofu goat apart victim enlarge program behavior permit course armed jerky faint language modern",
+            "extra extend academic acne away best indicate impact square oasis prospect painting voting guest either argue username racism enemy eclipse",
+            "extra extend academic arcade born dive legal hush gross briefing talent drug much home firefly toxic analysis idea umbrella slice",
+        ]
+
+        encrypted_seed = slip39.recover_ems(mnemonics)
+        root_seed = encrypted_seed.decrypt('TREZOR')
+        ks = keystore.from_bip43_rootseed(root_seed, "m/44'/0'/0'")
+
+        self.assertTrue(isinstance(ks, keystore.BIP32_KeyStore))
+
+        self.assertEqual(ks.xprv, 'xprv9yELEwkzJkSUHXz4hX6iv1SkhKeEhNtgoRDqm8whrymd3f3W2Abdpx6MjRmdEAERNeGauGx1u5djsExCT8qE6e4fGNeetfWtp45rSJu7kNW')
+        self.assertEqual(ks.xpub, 'xpub6CDgeTHt97zmW24XoYdjH9PVFMUj6qcYAe9SZXMKRKJbvTNeZhutNkQqajLyZrQ9DCqdnGenKhBD6UTrT1nHnoLCfFHkdeX8hDsZx1je6b2')
+
+        w = WalletIntegrityHelper.create_standard_wallet(ks, config=self.config)
+        self.assertEqual(w.txin_type, 'p2pkh')
+
+        self.assertEqual(w.get_receiving_addresses()[0], 'XxVc9R8GkJP36XzV8B5yJ2Tage1myCnjpL')
+        self.assertEqual(w.get_change_addresses()[0], 'Xkcun5Bm8gSsbcx9hGxCWUUxieQy9aAD1K')
 
 
 class TestWalletKeystoreAddressIntegrityForTestnet(TestCaseForTestnet):

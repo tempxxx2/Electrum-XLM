@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ev
 
+export MACOSX_DEPLOYMENT_TARGET=10.13
+
 export PY37BINDIR=/Library/Frameworks/Python.framework/Versions/3.7/bin/
 export PATH=$PATH:$PY37BINDIR
 source ./contrib/dash/travis/electrum_dash_version_env.sh;
@@ -19,19 +21,6 @@ else
     PIP_CMD="pip"
 fi
 cd electrum-dash
-
-
-if [[ -n $TRAVIS_TAG ]]; then
-    git submodule init
-    git submodule update
-
-    echo "Building CalinsQRReader..."
-    d=contrib/CalinsQRReader
-    pushd $d
-    rm -fr build
-    xcodebuild || fail "Could not build CalinsQRReader"
-    popd
-fi
 
 
 $PIP_CMD install --no-dependencies --no-warn-script-location -I \

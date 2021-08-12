@@ -40,4 +40,12 @@ rm -f libsecp256k1.0.dylib
 cp libsecp256k1/libsecp256k1.0.dylib .
 rm -rf libsecp256k1/ ${LSECP256K1_FILE} ${LSECP256K1_FILE}.sha256
 
-brew install gettext
+brew install gettext libtool automake pkg-config
+
+if [[ -n $GITHUB_REF ]]; then
+    echo "Building ZBar dylib..."
+    rm -f libzbar.0.dylib
+    export MACOSX_DEPLOYMENT_TARGET=10.13
+    ./contrib/make_zbar.sh
+    rm -rf contrib/zbar/
+fi

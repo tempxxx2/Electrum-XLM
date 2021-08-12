@@ -30,6 +30,7 @@ hiddenimports += [
     'electrum_dash.qrscanner',
     'electrum_dash.websockets',
     'electrum_dash.gui.qt',
+    'electrum_dash.gui.qt.qrreader.qtmultimedia.camera_dialog',
     'PyQt5.sip',
     'PyQt5.QtPrintSupport',  # needed by Revealer
 
@@ -88,10 +89,8 @@ excludes += [
     'PyQt5.QtDesignerComponents',
     'PyQt5.QtHelp',
     'PyQt5.QtLocation',
-    'PyQt5.QtMultimedia',
     'PyQt5.QtMultimediaQuick_p',
     'PyQt5.QtMultimediaWidgets',
-    'PyQt5.QtNetwork',
     'PyQt5.QtNetworkAuth',
     'PyQt5.QtNfc',
     'PyQt5.QtOpenGL',

@@ -28,7 +28,7 @@ import gzip
 import json
 
 from .logging import get_logger
-from .util import inv_dict
+from .util import inv_dict, all_subclasses
 from . import bitcoin
 
 
@@ -67,6 +67,14 @@ CHUNK_SIZE = 2016
 
 class AbstractNet:
 
+    NET_NAME: str
+    TESTNET: bool
+    WIF_PREFIX: int
+    ADDRTYPE_P2PKH: int
+    ADDRTYPE_P2SH: int
+    GENESIS: str
+    BIP44_COIN_TYPE: int
+
     @classmethod
     def max_checkpoint(cls) -> int:
         return max(0, len(cls.CHECKPOINTS) * CHUNK_SIZE - 1)
@@ -78,6 +86,7 @@ class AbstractNet:
 
 class BitcoinMainnet(AbstractNet):
 
+    NET_NAME = "mainnet"
     TESTNET = False
     WIF_PREFIX = 204
     ADDRTYPE_P2PKH = 76
@@ -103,6 +112,7 @@ class BitcoinMainnet(AbstractNet):
 
 class BitcoinTestnet(AbstractNet):
 
+    NET_NAME = "testnet"
     TESTNET = True
     WIF_PREFIX = 239
     ADDRTYPE_P2PKH = 140
@@ -128,10 +138,13 @@ class BitcoinTestnet(AbstractNet):
 
 class BitcoinRegtest(BitcoinTestnet):
 
+    NET_NAME = "regtest"
     GENESIS = "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e"
     DEFAULT_SERVERS = read_json('servers_regtest.json', {})
     CHECKPOINTS = []
 
+
+NETS_LIST = tuple(all_subclasses(AbstractNet))
 
 # don't import net directly, import the module instead (so that net is singleton)
 net = BitcoinMainnet

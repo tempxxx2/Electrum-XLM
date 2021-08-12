@@ -1,5 +1,11 @@
-# Release 4.1.4.0 (merge 4.1.4 upstream changes)
+# Release 4.1.5.0
 
+ * Kivy/Android: fix paying bip70 invoices (regression) (90579ccf)
+ * fix: payment requests not saved if process is killed (6a049d99)
+ * Qt: allow restoring from SLIP39 seeds (#6917)
+ * Qt: rework QR code scanning on Windows and macOS (#7365)
+ * Qt: support smaller window sizes, decrease minimums (#7385)
+ * GUIs: add "funded or unused" filter option to Addresses tab (#5823)
  * CLI/RPC: fix "close_wallet" command (#7348)
  * Android: the binaries (APKs) prepared to be reproducible
  * AppImage: fix some startup issues by including libxcb deps (#7198)

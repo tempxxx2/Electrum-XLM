@@ -72,8 +72,11 @@ setup(
     extras_require=extras_require,
     packages=[
         'electrum_dash',
+        'electrum_dash.qrreader',
         'electrum_dash.gui',
         'electrum_dash.gui.qt',
+        'electrum_dash.gui.qt.qrreader',
+        'electrum_dash.gui.qt.qrreader.qtmultimedia',
         'electrum_dash.plugins',
     ] + [('electrum_dash.plugins.'+pkg) for pkg in find_packages('electrum_dash/plugins')],
     package_dir={

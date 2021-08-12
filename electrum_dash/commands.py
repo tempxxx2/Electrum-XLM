@@ -878,7 +878,6 @@ class Commands:
         expiration = int(expiration) if expiration else None
         req = wallet.make_payment_request(addr, amount, memo, expiration)
         wallet.add_payment_request(req)
-        wallet.save_db()
         return wallet.export_request(req)
 
     @command('w')
@@ -902,9 +901,7 @@ class Commands:
     @command('w')
     async def rmrequest(self, address, wallet: Abstract_Wallet = None):
         """Remove a payment request"""
-        result = wallet.remove_payment_request(address)
-        wallet.save_db()
-        return result
+        return wallet.remove_payment_request(address)
 
     @command('w')
     async def clear_requests(self, wallet: Abstract_Wallet = None):

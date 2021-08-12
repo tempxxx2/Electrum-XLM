@@ -900,7 +900,12 @@ class ChoiceLineDialog(WizardChoiceDialog):
 
 class ShowSeedDialog(WizardDialog):
     seed_text = StringProperty('')
-    message = _("If you forget your password or lose your device, your seed phrase will be the only way to recover your funds.")
+    message = (_("Write your seed phrase down on paper.") + " " +
+               _("The seed phrase will allow you to recover your wallet in case you forget your password or lose your device.") + "\n\n" +
+               _("WARNING") + ":\n" +
+               "- " + _("Never disclose your seed.") + "\n" +
+               "- " + _("Never type it on a website.") + "\n" +
+               "- " + _("Do not store it electronically."))
 
     def __init__(self, wizard, **kwargs):
         super(ShowSeedDialog, self).__init__(wizard, **kwargs)
@@ -1055,7 +1060,8 @@ class RestoreSeedDialog(WizardDialog):
             tis.focus = False
 
     def get_params(self, b):
-        return (self.get_text(), self.is_bip39, self.is_ext)
+        seed_type = 'bip39' if self.is_bip39 else 'electrum'
+        return (self.get_text(), seed_type, self.is_ext)
 
 
 class ConfirmSeedDialog(RestoreSeedDialog):

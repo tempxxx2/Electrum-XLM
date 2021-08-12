@@ -146,7 +146,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.network = None
         self.dash_net = None
         self.loop = None
-        self._loop_thread = None
         self.main_taskgroup = None
 
         self.mix_sessions_lock = asyncio.Lock()
@@ -263,7 +262,6 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         util.register_callback(self.on_network_status, ['status'])
         self.dash_net = network.dash_net
         self.loop = network.asyncio_loop
-        self._loop_thread = network._loop_thread
         asyncio.ensure_future(self.clean_keypairs_on_timeout())
         asyncio.ensure_future(self.cleanup_staled_denominate_wfls())
         asyncio.ensure_future(self.trigger_postponed_notifications())

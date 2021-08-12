@@ -37,6 +37,7 @@ hiddenimports += [
     'electrum_dash.qrscanner',
     'electrum_dash.websockets',
     'electrum_dash.gui.qt',
+    'electrum_dash.gui.qt.qrreader.qtmultimedia.camera_dialog',
     'PyQt5.sip',
     'PyQt5.QtPrintSupport',  # needed by Revealer
 
@@ -72,16 +73,11 @@ datas += collect_data_files('safetlib')
 datas += collect_data_files('btchip')
 datas += collect_data_files('keepkeylib')
 
-# Add the QR Scanner helper app
-if TRAVIS_TAG:
-    QRREADER_ZPATH = 'contrib/CalinsQRReader/build/Release/CalinsQRReader.app'
-    QRREADER_PATH = './contrib/CalinsQRReader/build/Release/CalinsQRReader.app'
-    datas += [(QRREADER_ZPATH, QRREADER_PATH)]
-
 # Add libusb so Trezor and Safe-T mini will work
 binaries = []
 binaries += [('../libusb-1.0.dylib', '.')]
 binaries += [('../libsecp256k1.0.dylib', '.')]
+binaries += [('../libzbar.0.dylib', '.')]
 
 # Workaround for "Retro Look":
 binaries += [b for b in collect_dynamic_libs('PyQt5') if 'macstyle' in b[0]]
@@ -98,10 +94,8 @@ excludes += [
     'PyQt5.QtDesignerComponents',
     'PyQt5.QtHelp',
     'PyQt5.QtLocation',
-    'PyQt5.QtMultimedia',
     'PyQt5.QtMultimediaQuick_p',
     'PyQt5.QtMultimediaWidgets',
-    'PyQt5.QtNetwork',
     'PyQt5.QtNetworkAuth',
     'PyQt5.QtNfc',
     'PyQt5.QtOpenGL',
