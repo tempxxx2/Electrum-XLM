@@ -103,7 +103,8 @@ class AddressSynchronizer(Logger):
         self.protx_manager = ProTxManager(self)
 
         self._addrs_with_coins_cache = set()
-        self._tx_deltas_cache = defaultdict(int)
+        self._tx_deltas_cache = defaultdict(int)        # txid -> delta
+        self._tx_deltas_related_txs = defaultdict(set)  # addr -> set(txids)
         self._get_addr_balance_cache = {}
 
         self.load_and_cleanup()
@@ -546,16 +547,31 @@ class AddressSynchronizer(Logger):
         if not is_added:
             return
         mine_addrs = set()
+        if not tx:
+            tx = self.db.get_transaction(txid)
+            if not tx:
+                return
         for txin in tx.inputs():
             addr = self.get_txin_address(txin)
+            if not addr:
+                prevout_hash = txin.prevout.txid.hex()
+                if (prevout_hash in self.unverified_tx
+                        or prevout_hash in self.db.verified_tx):
+                    self._tx_deltas_related_txs[prevout_hash].add(txid)
+                continue
             if self.is_mine(addr):
                 mine_addrs.add(addr)
         for o in tx.outputs():
             addr = o.address
+            if not addr:
+                continue
             if self.is_mine(addr):
                 mine_addrs.add(addr)
         for addr in mine_addrs:
             self._tx_deltas_cache[txid] += self.get_tx_delta(txid, addr)
+        related = self._tx_deltas_related_txs.pop(txid, [])
+        for rtxid in related:
+            self.update_tx_deltas_cache_on_tx(rtxid, None, is_added=True)
 
     def is_addr_with_coins(self, addr, local_height):
         addr_outputs = self.get_addr_outputs(addr)
@@ -600,6 +616,7 @@ class AddressSynchronizer(Logger):
                 self._history_local.clear()
                 self._get_addr_balance_cache = {}  # invalidate cache
                 self._tx_deltas_cache = defaultdict(int)
+                self._tx_deltas_related_txs = defaultdict(set)
                 self._addrs_with_coins_cache = set()
 
     def get_txpos(self, tx_hash, islock):
