@@ -192,7 +192,8 @@ class ShowPSKsSeedDlg(WindowModalDialog):
         vbox = QVBoxLayout(self)
         title = _('Your wallet generation seed is:')
         slayout = SeedLayout(title=title, seed=seed, msg=True,
-                             passphrase=passphrase)
+                             passphrase=passphrase,
+                             config=parent.mwin.config)
         vbox.addLayout(slayout)
         vbox.addLayout(Buttons(CloseButton(self)))
 
@@ -827,7 +828,7 @@ class PSDialog(QDialog, MessageBoxMixin):
 
         grid.addWidget(QLabel(_('Master Public Key')), 0, 0)
         mpk = psman.ps_keystore.get_master_public_key()
-        mpk_text = ShowQRTextEdit()
+        mpk_text = ShowQRTextEdit(config=self.mwin.config)
         mpk_text.setMaximumHeight(150)
         mpk_text.addCopyButton(self.mwin.app)
         mpk_text.setText(mpk)
@@ -1076,7 +1077,8 @@ class CreateSeedWizardPage(QWizardPage):
         self.parent.seed_text = \
             mnemonic.Mnemonic('en').make_seed(seed_type='standard')
         self.slayout = SeedLayout(seed=self.parent.seed_text, msg=True,
-                                  options=['ext'])
+                                  options=['ext'],
+                                  config=self.parent.mwin.config)
         self.main_widget.setLayout(self.slayout)
 
     def nextId(self):
@@ -1151,7 +1153,8 @@ class ConfirmSeedWizardPage(QWizardPage):
         self.layout.addWidget(self.main_widget)
 
         self.slayout = SeedLayout(is_seed=lambda x: x == self.parent.seed_text,
-                                  options=[], on_edit_cb=self.set_seed_ok)
+                                  options=[], on_edit_cb=self.set_seed_ok,
+                                  config=self.parent.mwin.config)
         self.main_widget.setLayout(self.slayout)
         self.seed_ok = self.slayout.is_seed(self.slayout.get_seed())
 
@@ -1219,7 +1222,8 @@ class EnterSeedWizardPage(QWizardPage):
         self.layout.addWidget(self.main_widget)
 
         self.slayout = SeedLayout(is_seed=mnemonic.is_seed,
-                                  options=['ext'], on_edit_cb=self.set_seed_ok)
+                                  options=['ext'], on_edit_cb=self.set_seed_ok,
+                                  config=self.parent.mwin.config)
         self.main_widget.setLayout(self.slayout)
         self.seed_ok = self.slayout.is_seed(self.slayout.get_seed())
 
@@ -1341,7 +1345,7 @@ class PSKeystoreWizard(QWizard):
 
     def __init__(self, parent):
         super(PSKeystoreWizard, self).__init__(parent)
-        self.gui = parent
+        self.mwin = parent
         self.wallet = parent.wallet
         self.seed_text = ''
         self.is_ext = False
