@@ -194,7 +194,14 @@ class TrezorClientBase(HardwareClientBase, Logger):
     def close(self):
         '''Called when Our wallet was closed or the device removed.'''
         self.logger.info("closing client")
-        self.clear_session()
+        wallet = getattr(self.handler.win, 'wallet', None)
+        no_lock_on_close = False
+        if wallet:
+            no_lock_on_close = wallet.db.get('trezor_no_lock_on_close', False)
+        if no_lock_on_close:
+            self.logger.info(f"clear session skipped: {self}")
+        else:
+            self.clear_session()
 
     @runs_in_hwd_thread
     def is_uptodate(self):

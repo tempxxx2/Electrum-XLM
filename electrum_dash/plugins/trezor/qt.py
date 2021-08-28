@@ -715,6 +715,18 @@ class SettingsDialog(WindowModalDialog):
         settings_layout.addLayout(settings_glayout)
         settings_layout.addStretch(1)
 
+        # Settings tab - Do not clear session on wallet close
+        wallet = window.wallet
+        no_sess_clear = wallet.db.get('trezor_no_lock_on_close', False)
+        no_sess_clear_cb = QCheckBox(_('Do not clear session on wallet close'))
+        no_sess_clear_cb.setChecked(no_sess_clear)
+
+        def on_no_sess_clear_state_changed(x):
+            no_sess_clear = (x == Qt.Checked)
+            wallet.db.put('trezor_no_lock_on_close', no_sess_clear)
+        no_sess_clear_cb.stateChanged.connect(on_no_sess_clear_state_changed)
+        settings_glayout.addWidget(no_sess_clear_cb, 8, 1, 1, -1)
+
         # Advanced tab
         advanced_tab = QWidget()
         advanced_layout = QVBoxLayout(advanced_tab)
