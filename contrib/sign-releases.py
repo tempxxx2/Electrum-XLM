@@ -299,7 +299,11 @@ class SignApp(object):
         self.count = kwargs.pop('count', None)
         self.dry_run = kwargs.pop('dry_run', False)
         self.no_ppa = kwargs.pop('no_ppa', False)
-        self.only_ppa = kwargs.pop('only_ppa', False)
+        self.release_ppa = False
+        self.only_ppa = self.release_ppa = \
+            kwargs.pop('build_release_ppa', False)
+        if not self.only_ppa:
+            self.only_ppa = kwargs.pop('only_ppa', False)
         self.verbose = kwargs.pop('verbose', False)
         self.jks_keystore = kwargs.pop('jks_keystore', False)
         self.jks_alias = kwargs.pop('jks_alias', False)
@@ -323,7 +327,13 @@ class SignApp(object):
 
         if self.config:
             self.repo = self.repo or self.config.get('repo', None)
-            self.ppa = self.ppa or self.config.get('ppa', None)
+            if self.release_ppa:
+                self.ppa = self.config.get('release_ppa', None)
+                if not self.ppa:
+                    print('"release-ppa" config option is required')
+                    sys.exit(1)
+            else:
+                self.ppa = self.ppa or self.config.get('ppa', None)
             self.token = self.token or self.config.get('token', None)
             self.keyid = self.keyid or self.config.get('keyid', None)
             self.count = self.count or self.config.get('count', None) \
@@ -735,6 +745,8 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
               help='Ask to enter passphrase')
 @click.option('-P', '--only-ppa', is_flag=True,
               help='Only make launchpad PPA (need --tag-name)')
+@click.option('--build-release-ppa', is_flag=True,
+              help='Make launchpad PPA on release-ppa config repo')
 @click.option('-r', '--repo',
               help='Repository in format username/reponame')
 @click.option('-s', '--sleep', type=int,
