@@ -27,6 +27,7 @@ import threading
 import stat
 import hashlib
 import base64
+import random
 import time
 import zlib
 from enum import IntEnum
@@ -59,7 +60,7 @@ class WalletStorage(Logger):
 
     def __init__(self, path):
         Logger.__init__(self)
-        self.write_attempts = 30  # count of write attempts on PermissionError
+        self.write_attempts = 2  # count of write attempts on PermissionError
         self.path = standardize_path(path)
         self._file_exists = bool(self.path and os.path.exists(self.path))
         self.logger.info(f"wallet path {self.path}")
@@ -103,7 +104,7 @@ class WalletStorage(Logger):
                 os.replace(temp_path, self.path)
             except PermissionError:
                 # file can be temporarily blocked by windows antivirus software
-                time.sleep(1)
+                time.sleep(1+0.1*random.random())
                 write_attempts -= 1
                 if write_attempts == 0:
                     raise
