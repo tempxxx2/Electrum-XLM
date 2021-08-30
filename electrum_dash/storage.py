@@ -104,7 +104,7 @@ class WalletStorage(Logger):
                 os.replace(temp_path, self.path)
             except PermissionError:
                 # file can be temporarily blocked by windows antivirus software
-                time.sleep(1+0.1*random.random())
+                time.sleep(0.9+0.2*random.random())
                 write_attempts -= 1
                 if write_attempts == 0:
                     raise
