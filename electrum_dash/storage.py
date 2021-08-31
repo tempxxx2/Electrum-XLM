@@ -27,6 +27,8 @@ import threading
 import stat
 import hashlib
 import base64
+import random
+import time
 import zlib
 from enum import IntEnum
 
@@ -58,6 +60,7 @@ class WalletStorage(Logger):
 
     def __init__(self, path):
         Logger.__init__(self)
+        self.write_attempts = 2  # count of write attempts on PermissionError
         self.path = standardize_path(path)
         self._file_exists = bool(self.path and os.path.exists(self.path))
         self.logger.info(f"wallet path {self.path}")
@@ -81,23 +84,37 @@ class WalletStorage(Logger):
     def write(self, data: str) -> None:
         s = self.encrypt_before_writing(data)
         temp_path = "%s.tmp.%s" % (self.path, os.getpid())
-        with open(temp_path, "w", encoding='utf-8') as f:
-            f.write(s)
-            f.flush()
-            os.fsync(f.fileno())
+        write_attempts = self.write_attempts
+        while write_attempts > 0:
+            with open(temp_path, "w", encoding='utf-8') as f:
+                f.write(s)
+                f.flush()
+                os.fsync(f.fileno())
 
-        try:
-            mode = os.stat(self.path).st_mode
-        except FileNotFoundError:
-            mode = stat.S_IREAD | stat.S_IWRITE
+            try:
+                mode = os.stat(self.path).st_mode
+            except FileNotFoundError:
+                mode = stat.S_IREAD | stat.S_IWRITE
 
-        # assert that wallet file does not exist, to prevent wallet corruption (see issue #5082)
-        if not self.file_exists():
-            assert not os.path.exists(self.path)
-        os.replace(temp_path, self.path)
-        os.chmod(self.path, mode)
-        self._file_exists = True
-        self.logger.info(f"saved {self.path}")
+            # assert that wallet file does not exist,
+            # to prevent wallet corruption (see issue #5082)
+            if not self.file_exists():
+                assert not os.path.exists(self.path)
+            try:
+                os.replace(temp_path, self.path)
+            except PermissionError:
+                # file can be temporarily blocked by windows antivirus software
+                time.sleep(0.9+0.2*random.random())
+                write_attempts -= 1
+                if write_attempts == 0:
+                    raise
+                self.logger.error(f"os.replace PermissionError {self.path}, "
+                                  f"left {write_attempts} write attempts")
+                continue
+            os.chmod(self.path, mode)
+            self._file_exists = True
+            self.logger.info(f"saved {self.path}")
+            break
 
     def file_exists(self) -> bool:
         return self._file_exists
