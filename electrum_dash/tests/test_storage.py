@@ -35,6 +35,7 @@ class TestWalletStorage(ElectrumTestCase):
     def test_write_with_permission_error_done(self):
         path = os.path.join(self.electrum_path, 'default_wallet')
         storage = WalletStorage(path)
+        storage.write_attempts = 2
         data = 'testdata'
         with patch('os.replace', new_callable=ReplaceWithPermissionErrorMock):
             storage.write(data)
@@ -44,7 +45,6 @@ class TestWalletStorage(ElectrumTestCase):
     def test_write_with_permission_error_fails(self):
         path = os.path.join(self.electrum_path, 'default_wallet')
         storage = WalletStorage(path)
-        storage.write_attempts = 1
         data = 'testdata'
         with patch('os.replace', new_callable=ReplaceWithPermissionErrorMock):
             with self.assertRaises(PermissionError):
