@@ -456,6 +456,7 @@ class Daemon(Logger):
                 self.current_wallet_path = path
             return wallet
         storage = WalletStorage(path)
+        storage.write_attempts = self.config.get('storage_write_attempts', 1)
         if not storage.file_exists():
             return
         if storage.is_encrypted():
