@@ -104,7 +104,7 @@ from .update_checker import UpdateCheck, UpdateCheckThread
 from .confirm_tx_dialog import ConfirmTxDialog
 from .transaction_dialog import PreviewTxDialog
 from .qrreader import scan_qrcode
-from .dash_qt import ExtraPayloadWidget, StorageWriteAttemptsDlg
+from .dash_qt import ExtraPayloadWidget
 from .privatesend_dialog import (find_ps_dialog, show_ps_dialog,
                                  hide_ps_dialog, protected_with_parent,
                                  show_ps_dialog_or_wizard)
@@ -842,8 +842,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         file_menu.addAction(_("&New/Restore"), self.new_wallet).setShortcut(QKeySequence.New)
         file_menu.addAction(_("&Save backup"), self.backup_wallet).setShortcut(QKeySequence.SaveAs)
         file_menu.addAction(_("Delete"), self.remove_wallet)
-        file_menu.addAction(_("Write attempts"),
-                               lambda: StorageWriteAttemptsDlg(self).exec_())
         file_menu.addSeparator()
         file_menu.addAction(_("&Quit"), self.close)
 

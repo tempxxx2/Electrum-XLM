@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, QRect, QPoint, QSize
 from PyQt5.QtWidgets import (QTabBar, QTextEdit, QStylePainter,
                              QStyleOptionTab, QStyle, QPushButton,
                              QVBoxLayout, QHBoxLayout, QLabel, QApplication,
-                             QCheckBox, QSpinBox)
+                             QCheckBox)
 
 from electrum_dash import constants
 from electrum_dash.dash_tx import SPEC_TX_NAMES
@@ -15,37 +15,7 @@ from electrum_dash.i18n import _
 from electrum_dash.network import deserialize_proxy
 from electrum_dash.version import ELECTRUM_VERSION
 
-from .util import WindowModalDialog, CloseButton, Buttons
-
-
-class StorageWriteAttemptsDlg(WindowModalDialog):
-
-    def __init__(self, parent):
-        super(StorageWriteAttemptsDlg, self).__init__(parent)
-        self.mwin = parent
-        self.setWindowTitle(_('Wallet file write attempts'))
-        self.setMinimumWidth(400)
-        vbox = QVBoxLayout(self)
-        self.wallet = parent.wallet
-        self.config = parent.config
-        msg = _('Value should be rised if the antivirus software'
-                ' sometimes blocks wallet write with permission'
-                ' errors.')
-        self.help_lb = QLabel(msg)
-        self.help_lb.setWordWrap(True)
-        vbox.addWidget(self.help_lb)
-        self.wr_attempts_sb = QSpinBox()
-        self.wr_attempts_sb.setMinimum(1)
-        self.wr_attempts_sb.setMaximum(30)
-        self.wr_attempts_sb.setValue(self.wallet.storage.write_attempts)
-        self.wr_attempts_sb.valueChanged.connect(self.on_wr_attempts_set_value)
-        vbox.addWidget(self.wr_attempts_sb)
-        vbox.addLayout(Buttons(CloseButton(self)))
-
-    def on_wr_attempts_set_value(self, write_attempts):
-        self.config.set_key('storage_write_attempts', write_attempts, True)
-        for win in self.mwin.gui_object.windows:
-           win.wallet.storage.write_attempts = write_attempts
+from .util import WindowModalDialog
 
 
 class TorWarnDialog(WindowModalDialog):

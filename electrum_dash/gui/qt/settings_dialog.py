@@ -167,6 +167,24 @@ class SettingsDialog(WindowModalDialog):
         colortheme_combo.currentIndexChanged.connect(on_colortheme)
         gui_widgets.append((colortheme_label, colortheme_combo))
 
+        # storage write attempts
+        wr_attempts_msg = _('Value should be rised if the antivirus software'
+                             ' sometimes blocks wallet write with permission'
+                             ' errors.')
+        wr_attempts_lb = HelpLabel(_('Wallet file write attempts') + ':',
+                                         wr_attempts_msg)
+        wr_attempts_sb = QSpinBox()
+        wr_attempts_sb.setMinimum(1)
+        wr_attempts_sb.setMaximum(30)
+        wr_attempts_sb.setValue(self.window.wallet.storage.write_attempts)
+
+        def on_wr_attempts_set_value(write_attempts):
+            self.config.set_key('storage_write_attempts', write_attempts, True)
+            for win in self.window.gui_object.windows:
+               win.wallet.storage.write_attempts = write_attempts
+        wr_attempts_sb.valueChanged.connect(on_wr_attempts_set_value)
+        gui_widgets.append((wr_attempts_lb, wr_attempts_sb))
+
         show_dip2_cb = QCheckBox(_('Show transaction type in wallet history'))
         def_dip2 = not self.window.wallet.psman.unsupported
         show_dip2_cb.setChecked(self.config.get('show_dip2_tx_type', def_dip2))
