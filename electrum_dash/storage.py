@@ -60,7 +60,7 @@ class WalletStorage(Logger):
 
     def __init__(self, path):
         Logger.__init__(self)
-        self.write_attempts = 2  # count of write attempts on PermissionError
+        self._write_attempts = 1  # count of write attempts on PermissionError
         self.path = standardize_path(path)
         self._file_exists = bool(self.path and os.path.exists(self.path))
         self.logger.info(f"wallet path {self.path}")
@@ -77,6 +77,22 @@ class WalletStorage(Logger):
         else:
             self.raw = ''
             self._encryption_version = StorageEncryptionVersion.PLAINTEXT
+
+    @property
+    def write_attempts(self):
+        try:
+            return max(1, int(self._write_attempts))
+        except Exception as e:
+            self.logger.info(f'get write_attempts error: {repr(e)}')
+            return 1
+
+    @write_attempts.setter
+    def write_attempts(self, write_attempts):
+        try:
+            self._write_attempts = max(1, int(write_attempts))
+        except Exception as e:
+            self._write_attempts = 1
+            self.logger.info(f'set write_attempts error: {repr(e)}')
 
     def read(self):
         return self.decrypted if self.is_encrypted() else self.raw
