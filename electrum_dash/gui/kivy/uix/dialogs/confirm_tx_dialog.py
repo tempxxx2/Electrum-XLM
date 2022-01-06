@@ -10,6 +10,7 @@ from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 from kivy.clock import Clock
 
+from electrum_dash.dash_ps_util import PSFeeTooHigh
 from electrum_dash.simple_config import FEERATE_WARNING_HIGH_FEE, FEE_RATIO_HIGH_WARNING
 from electrum_dash.gui.kivy.i18n import _
 from electrum_dash.plugin import run_hook
@@ -129,6 +130,10 @@ class ConfirmTxDialog(FeeSliderDialog, Factory.Popup):
             tx = self.make_tx()
         except NotEnoughFunds:
             self.warning = _("Not enough funds")
+            self.ids.ok_button.disabled = True
+            return
+        except PSFeeTooHigh as e:
+            self.warning = e.detailed_msg()
             self.ids.ok_button.disabled = True
             return
         except Exception as e:

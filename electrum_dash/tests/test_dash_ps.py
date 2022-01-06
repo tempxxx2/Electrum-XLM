@@ -23,7 +23,7 @@ from electrum_dash.dash_ps_util import (COLLATERAL_VAL, CREATE_COLLATERAL_VAL,
                                         FILTERED_TXID, FILTERED_ADDR,
                                         PSCoinRounds, ps_coin_rounds_str,
                                         calc_tx_size, calc_tx_fee, to_duffs,
-                                        MixingStats)
+                                        MixingStats, PSFeeTooHigh)
 from electrum_dash.dash_ps_wallet import (KPStates, KP_ALL_TYPES, KP_SPENDABLE,
                                           KP_PS_COINS, KP_PS_CHANGE,
                                           PSKsInternalAddressCorruption)
@@ -811,6 +811,25 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.state = PSStates.Mixing
         psman.keep_amount = 10
         assert psman.keep_amount == 5
+
+    def test_limit_spend_fee(self):
+        psman = self.wallet.psman
+        assert psman.limit_spend_fee == psman.DEFAULT_LIMIT_SPEND_FEE
+
+        psman.limit_spend_fee = False
+        assert psman.limit_spend_fee == False
+
+        psman.limit_spend_fee = ''
+        assert psman.limit_spend_fee == False
+
+        psman.limit_spend_fee = True
+        assert psman.limit_spend_fee == True
+
+        psman.limit_spend_fee = 'yes'
+        assert psman.limit_spend_fee == True
+
+        assert psman.limit_spend_fee_data()
+        assert psman.limit_spend_fee_data(full_txt=True)
 
     def test_keep_amount_on_abs_denoms_calc(self):
         cur_cnt = {}
@@ -3031,6 +3050,47 @@ class PSWalletTestCase(TestCaseForTestnet):
                               min_rounds=2)
         assert min(test_fees) == 1000
         assert max(test_fees) == 100011
+
+    def test_make_unsigned_transaction_high_fees(self):
+        C_RNDS = PSCoinRounds.COLLATERAL
+        w = self.wallet
+        psman = w.psman
+        coro = psman.find_untracked_ps_txs(log=False)
+        asyncio.get_event_loop().run_until_complete(coro)
+        spend_to = 'yiXJV2PodX4uuadFtt6e7wMTNkydHpp8ns'
+
+        def prepare_outputs(amount):
+            amount_duffs = to_duffs(amount)
+            return [PartialTxOutput.from_address_and_value(spend_to,
+                                                           amount_duffs)]
+
+        coins = w.get_spendable_coins(None, min_rounds=2)
+        coins_d0 = [c for c in coins if c.value_sats() == 100001]       # 38
+        coins_d1 = [c for c in coins if c.value_sats() == 1000010]      # 21
+        coins_d2 = [c for c in coins if c.value_sats() == 10000100]     # 16
+        coins_d3 = [c for c in coins if c.value_sats() == 100001000]    # 2
+
+        coins = coins_d3[:]
+        outputs = prepare_outputs(1.5)
+        with self.assertRaises(PSFeeTooHigh):
+            tx = w.make_unsigned_transaction(coins=coins, outputs=outputs,
+                                             min_rounds=2)
+
+        psman.limit_spend_fee = False
+        tx = w.make_unsigned_transaction(coins=coins, outputs=outputs,
+                                         min_rounds=2)
+        assert tx.get_fee() == 50002000
+
+        psman.limit_spend_fee = True
+        outputs = prepare_outputs(1.51)
+        coins = coins_d3[:1] + coins_d2[:9]
+        with self.assertRaises(PSFeeTooHigh):
+            tx = w.make_unsigned_transaction(coins=coins, outputs=outputs,
+                                             min_rounds=2)
+        psman.limit_spend_fee = False
+        tx = w.make_unsigned_transaction(coins=coins, outputs=outputs,
+                                         min_rounds=2)
+        assert tx.get_fee() == 9001600
 
     def test_double_spend_warn(self):
         psman = self.wallet.psman

@@ -1274,11 +1274,12 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
             tx_type=0,
             extra_payload=b'') -> PartialTransaction:
 
+        psman = self.psman
         if min_rounds is not None:
             if no_ps_data:
-                self.psman.check_min_rounds(coins, 0)
+                psman.check_min_rounds(coins, 0)
             else:
-                self.psman.check_min_rounds(coins, min_rounds)
+                psman.check_min_rounds(coins, min_rounds)
         if not coins:  # any bitcoin tx must have at least 1 input by consensus
             raise NotEnoughFunds()
         if any([c.already_has_some_signatures() for c in coins]):
@@ -1327,14 +1328,14 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
                                           tx_type=tx_type,
                                           extra_payload=extra_payload)
             elif no_ps_data:
-                coin_chooser = coinchooser.get_coin_chooser_privatesend()
+                coin_chooser = coinchooser.get_coin_chooser_privatesend(psman)
                 tx = coin_chooser.make_tx(coins=coins, outputs=outputs[:],
                                           fee_estimator_vb=fee_estimator,
                                           min_rounds=0,
                                           tx_type=tx_type,
                                           extra_payload=extra_payload)
             else:
-                coin_chooser = coinchooser.get_coin_chooser_privatesend()
+                coin_chooser = coinchooser.get_coin_chooser_privatesend(psman)
                 tx = coin_chooser.make_tx(coins=coins, outputs=outputs[:],
                                           fee_estimator_vb=fee_estimator,
                                           min_rounds=min_rounds,

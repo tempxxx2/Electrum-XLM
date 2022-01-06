@@ -55,6 +55,7 @@ from electrum_dash import (keystore, ecc, constants, util, bitcoin, commands,
                            paymentrequest)
 from electrum_dash.base_crash_reporter import BaseCrashReporter
 from electrum_dash.bitcoin import COIN, is_address
+from electrum_dash.dash_ps_util import PSFeeTooHigh
 from electrum_dash.dash_tx import DashTxError, ProTxBase, SPEC_TX_NAMES
 from electrum_dash.plugin import run_hook, BasePlugin
 from electrum_dash.i18n import _
@@ -483,6 +484,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         e = exc_info[1]
         if isinstance(e, UserCancelled):
             pass
+        elif isinstance(e, PSFeeTooHigh):
+            self.show_error(e.detailed_msg())
         elif isinstance(e, UserFacingException):
             self.show_error(str(e))
         else:

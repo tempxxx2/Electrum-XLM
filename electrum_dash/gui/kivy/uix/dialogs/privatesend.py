@@ -352,6 +352,12 @@ Builder.load_string('''
                 title: root.gather_mix_stat_text + self.value
                 description: root.gather_mix_stat_help
                 action: root.toggle_gather_mix_stat
+            CardSeparator
+            SettingsItem:
+                value: ': ON' if root.limit_fee else ': OFF'
+                title: root.limit_fee_text + self.value
+                description: root.limit_fee_help
+                action: root.toggle_limit_fee
 
 
 <DenomsCalcMethodPopup@Popup>
@@ -726,6 +732,7 @@ class PSMixingTab(BoxLayout):
     group_history = BooleanProperty()
     subscribe_spent = BooleanProperty()
     allow_others = BooleanProperty()
+    limit_fee = BooleanProperty()
     gather_mix_stat = BooleanProperty()
     is_fiat_dn_balance = False
     is_fiat_ps_balance = False
@@ -778,6 +785,9 @@ class PSMixingTab(BoxLayout):
         self.allow_others_text = psman.allow_others_data()
         self.allow_others_help = psman.allow_others_data(full_txt=True)
 
+        self.limit_fee_text = psman.limit_spend_fee_data()
+        self.limit_fee_help = psman.limit_spend_fee_data(full_txt=True)
+
         self.gather_mix_stat_text = psman.gather_mix_stat_data()
         self.gather_mix_stat_help = psman.gather_mix_stat_data(full_txt=True)
 
@@ -803,6 +813,7 @@ class PSMixingTab(BoxLayout):
         self.group_history = psman.group_history
         self.subscribe_spent = psman.subscribe_spent
         self.allow_others = psman.allow_others
+        self.limit_fee = psman.limit_spend_fee
         self.gather_mix_stat = psman.gather_mix_stat
 
     def show_warn_electrumx(self, *args):
@@ -933,6 +944,10 @@ class PSMixingTab(BoxLayout):
             d = Question(q, on_q_answered)
             d.size_hint = (0.9, 0.9)
             d.open()
+
+    def toggle_limit_fee(self, *args):
+        self.psman.limit_spend_fee = not self.psman.limit_spend_fee
+        self.limit_fee = self.psman.limit_spend_fee
 
     def toggle_gather_mix_stat(self, *args):
         psman = self.psman
