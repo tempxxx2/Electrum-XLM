@@ -10,7 +10,7 @@ import asyncio
 from typing import TYPE_CHECKING, Optional, Union, Callable, Sequence
 
 from electrum_dash.dash_ps_util import (PSPossibleDoubleSpendError,
-                                        PSSpendToPSAddressesError)
+                                        PSSpendToPSAddressesError, PSStates)
 from electrum_dash.storage import WalletStorage, StorageReadWriteError
 from electrum_dash.wallet_db import WalletDB
 from electrum_dash.wallet import Wallet, InternalAddressCorruption, Abstract_Wallet
@@ -806,6 +806,28 @@ class ElectrumWindow(App, Logger):
         self._dash_net_dialog.update()
         self._dash_net_dialog.open()
 
+    def on_privatesend_button(self, *args, **kwargs):
+        w = self.wallet
+        psman = w.psman
+        if psman.enabled:
+            if psman.state == PSStates.Ready:
+                need_new_kp, prev_kp_state = psman.check_need_new_keypairs()
+                if need_new_kp:
+                    def on_success(password):
+                        psman.start_mixing(password)
+
+                    def on_failure():
+                        psman.keypairs_state = prev_kp_state
+
+                    self.protected(_('Start mixing'),
+                                   on_success, (), on_failure)
+                else:
+                    psman.start_mixing(None)
+            elif psman.state == PSStates.Mixing:
+                psman.stop_mixing()
+        else:
+            self.privatesend_dialog()
+
     def privatesend_dialog(self):
         if self.wallet.psman.unsupported:
             from .uix.dialogs.privatesend import PSDialogUnsupportedPS as psdlg
@@ -821,7 +843,7 @@ class ElectrumWindow(App, Logger):
         elif name == 'dash_net':
             self.dash_net_dialog()
         elif name == 'privatesend':
-            self.privatesend_dialog()
+            self.on_privatesend_button()
         elif name == 'wallets':
             self.wallets_dialog()
         elif name == 'status':
