@@ -22,13 +22,15 @@
 # ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import attr
+
 from collections import defaultdict
 from math import floor, log10
 from typing import NamedTuple, List, Callable, Optional, Sequence, Union, Dict, Tuple
 from decimal import Decimal
 
 from .bitcoin import sha256, COIN, is_address
-from .dash_ps_util import PS_DENOMS_VALS
+from .dash_ps_util import PS_DENOMS_VALS, PSFeeTooHigh
 from .transaction import Transaction, TxOutput, PartialTransaction, PartialTxInput, PartialTxOutput
 from .util import NotEnoughFunds
 from .logging import Logger
@@ -512,9 +514,21 @@ class CoinChooserPrivacy(CoinChooserRandom):
         return penalty
 
 
+@attr.s
+class PSTxCandidate:
+    tx = attr.ib(type=PartialTransaction)
+    fee = attr.ib(type=int)
+    estimated_fee = attr.ib(type=int)
+    use_ps_rounds = attr.ib(type=int)
+    use_repeated_txids = attr.ib(type=bool)
+
+
 class CoinChooserPrivateSend:
 
-    def make_tx(self, coins, outputs, fee_estimator_vb,
+    def __init__(self, psman):
+        self.psman = psman
+
+    def make_tx(self, *, coins, outputs, fee_estimator_vb,
                 min_rounds, tx_type=0, extra_payload=b''):
         base_tx = PartialTransaction.from_io([], outputs[:], tx_type=tx_type,
                                              extra_payload=extra_payload)
@@ -524,26 +538,34 @@ class CoinChooserPrivateSend:
         if not all_coins:
             raise NotEnoughFunds()
         max_rounds = max([c.ps_rounds for c in all_coins])
-        tx = None
+        txs = []
         use_repeated_txids = False
         use_ps_rounds = min_rounds
         while not (use_repeated_txids and use_ps_rounds > max_rounds):
             coins = self.select_coins(all_coins, use_ps_rounds,
                                       use_repeated_txids)
-            tx = self.select_candidate_tx(coins, base_tx, fee_estimator_vb,
-                                          use_repeated_txids)
-            if tx:
-                break
+            txs += self.select_candidate_txs(coins, base_tx, fee_estimator_vb,
+                                             use_ps_rounds, use_repeated_txids)
             if use_ps_rounds <= max_rounds:
                 use_ps_rounds += 1
             if use_ps_rounds > max_rounds and not use_repeated_txids:
                 use_repeated_txids = True
                 use_ps_rounds = min_rounds
-
-        if not tx:
+        if not txs:
             raise NotEnoughFunds()
+        if self.psman.limit_spend_fee:
+            max_fee_overhead = PS_DENOMS_VALS[0]
         else:
-            return tx
+            max_fee_overhead = PS_DENOMS_VALS[-1] - 1
+        txs = sorted(list(txs), key=lambda x: (x.fee,
+                                               x.use_ps_rounds,
+                                               x.use_repeated_txids))
+        fee = txs[0].fee
+        txs = list(filter(lambda x:
+                          x.fee - x.estimated_fee <= max_fee_overhead, txs))
+        if not txs:
+            raise PSFeeTooHigh(self.psman, fee)
+        return txs[0].tx
 
     def select_coins(self, coins, max_rounds, use_repeated_txids):
         coins = list(filter(lambda x: x.ps_rounds <= max_rounds, coins))
@@ -559,17 +581,23 @@ class CoinChooserPrivateSend:
             used_txids.append(txid)
         return selected
 
-    def select_candidate_tx(self, coins, base_tx, fee_estimator_vb,
-                            use_repeated_txids):
+    def select_candidate_txs(self, coins, base_tx, fee_estimator_vb,
+                             use_ps_rounds, use_repeated_txids):
         spent_amount = base_tx.output_value()
         selected = []
         if sum([c.value_sats() for c in coins]) < spent_amount:
-            return
+            return []
         coins = sorted(coins, key=lambda x: x.value_sats(), reverse=True)
         skip_value = 0
-        tx = backup_tx = None
+        inputs_val = 0
+        txs = []
         for c in coins:
-            if c.value_sats() == skip_value:
+            val = c.value_sats()
+            if val == skip_value:
+                continue
+            if inputs_val + val <= spent_amount:
+                inputs_val += val
+                selected.append(c)
                 continue
             tx = PartialTransaction.from_io(base_tx.inputs()[:],
                                             base_tx.outputs()[:],
@@ -580,33 +608,19 @@ class CoinChooserPrivateSend:
             estimated_fee = fee_estimator_vb(tx.estimated_size())
             fee = input_value - spent_amount
             if fee < estimated_fee:
+                inputs_val += val
                 selected.append(c)
                 continue
             elif fee - estimated_fee >= PS_DENOMS_VALS[0]:
-                skip_value = c.value_sats()
-                backup_tx = tx
-                tx = PartialTransaction.from_io(base_tx.inputs()[:],
-                                                base_tx.outputs()[:],
-                                                tx_type=base_tx.tx_type,
-                                                extra_payload=base_tx.extra_payload)
-                tx.add_inputs(selected)
-                input_value = tx.input_value()
-                estimated_fee = fee_estimator_vb(tx.estimated_size())
-                fee = input_value - spent_amount
+                txs.append(PSTxCandidate(tx, fee, estimated_fee, use_ps_rounds,
+                                         use_repeated_txids))
+                skip_value = val
                 continue
             else:
+                txs.append(PSTxCandidate(tx, fee, estimated_fee, use_ps_rounds,
+                                         use_repeated_txids))
                 break
-            selected.append(c)
-
-        fee_overhead = fee - estimated_fee
-        if tx and fee >= estimated_fee and fee_overhead <= PS_DENOMS_VALS[0]:
-            return tx
-        elif use_repeated_txids and backup_tx:
-            fee = backup_tx.input_value() - spent_amount
-            estimated_fee = fee_estimator_vb(backup_tx.estimated_size())
-            fee_overhead = fee - estimated_fee
-            if fee_overhead <= PS_DENOMS_VALS[0]:
-                return backup_tx
+        return txs
 
 
 COIN_CHOOSERS = {
@@ -633,5 +647,5 @@ def get_coin_chooser(config):
     return coinchooser
 
 
-def get_coin_chooser_privatesend():
-    return CoinChooserPrivateSend()
+def get_coin_chooser_privatesend(psman):
+    return CoinChooserPrivateSend(psman)

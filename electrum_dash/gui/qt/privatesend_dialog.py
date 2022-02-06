@@ -607,6 +607,17 @@ class PSDialog(QDialog, MessageBoxMixin):
         i = grid.rowCount()
         grid.addWidget(allow_others_cb, i, 0, 1, -1)
 
+        # limit_spend_fee
+        limit_fee_cb = QCheckBox(psman.limit_spend_fee_data(full_txt=True))
+        limit_fee_cb.setChecked(psman.limit_spend_fee)
+
+        def on_limit_fee_state_changed(x):
+            psman.limit_spend_fee = (x == Qt.Checked)
+        limit_fee_cb.stateChanged.connect(on_limit_fee_state_changed)
+
+        i = grid.rowCount()
+        grid.addWidget(limit_fee_cb, i, 0, 1, -1)
+
         # final tab setup
         i = grid.rowCount()
         grid.setRowStretch(i, 1)

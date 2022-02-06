@@ -133,6 +133,33 @@ def calc_tx_fee(in_cnt, out_cnt, fee_per_kb, max_size=False):
     return round(calc_tx_size(in_cnt, out_cnt, max_size) * fee_per_kb / 1000)
 
 
+class PSFeeTooHigh(Exception):
+    def __init__(self, psman, fee):
+        self.psman = psman
+        self.fee = fee
+
+    def __str__(self):
+        return ''.join([
+            _('PrivateSend transaction fee is too high'),
+            f': {self.fee} duffs'
+        ])
+
+    def detailed_msg(self):
+        limit_spend_fee_txt = self.psman.limit_spend_fee_data(full_txt=True)
+        return ''.join([
+            _('PrivateSend transaction fee is too high'),
+            f': {self.fee} duffs',
+            '\n\n',
+            _('Possible cause is a small count of a small denoms.'
+              ' Another one is a coins selected from the coin control'
+              ' and small output amount specefied'
+              ' (PS transactions have no change).'),
+            '\n\n',
+            _('If you planed to spend that many fee, then you can disable'
+              ' "{}" option.').format(limit_spend_fee_txt)
+        ])
+
+
 class PSCoinRounds(IntEnum):
     '''PS related coin types'''
     MINUSINF = -1e9     # For sorting/selecting by rounds non PS related coins
@@ -576,6 +603,7 @@ class PSOptsMixin:
     MAX_PRIVATESEND_SESSIONS = 10
 
     DEFAULT_GROUP_HISTORY = True        # Group txs in history views
+    DEFAULT_LIMIT_SPEND_FEE = True      # Limit PrivateSend transactions fee
     DEFAULT_NOTIFY_PS_TXS = False       # GUI notify on PS txs arrival
     DEFAULT_SUBSCRIBE_SPENT = False     # on server subscribe to spent ps addrs
     DEFAULT_ALLOW_OTHERS = False        # Allow spend other ps coins as regular
@@ -745,6 +773,26 @@ class PSOptsMixin:
             return _('Group PrivateSend mixing transactions in wallet history')
         else:
             return _('Group PrivateSend transactions')
+
+    @property
+    def limit_spend_fee(self):
+        '''Limit PrivateSend spending transactions fee'''
+        return self.wallet.db.get_ps_data('limit_spend_fee',
+                                          self.DEFAULT_LIMIT_SPEND_FEE)
+
+    @limit_spend_fee.setter
+    def limit_spend_fee(self, limit_spend_fee):
+        '''Set if PS txs should be grouped in tx history'''
+        if self.limit_spend_fee == limit_spend_fee:
+            return
+        self.wallet.db.set_ps_data('limit_spend_fee', bool(limit_spend_fee))
+
+    def limit_spend_fee_data(self, full_txt=False):
+        '''Str data for UI limit_spend_fee preference'''
+        if full_txt:
+            return _('Limit PrivateSend spending transactions fee')
+        else:
+            return _('Limit PrivateSend fee')
 
     @property
     def notify_ps_txs(self):
