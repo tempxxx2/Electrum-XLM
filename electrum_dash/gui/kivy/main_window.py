@@ -843,6 +843,8 @@ class ElectrumWindow(App, Logger):
         elif name == 'dash_net':
             self.dash_net_dialog()
         elif name == 'privatesend':
+            self.privatesend_dialog()
+        elif name == 'privatesend_btn':
             self.on_privatesend_button()
         elif name == 'wallets':
             self.wallets_dialog()
