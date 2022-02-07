@@ -36,6 +36,13 @@ Builder.load_string('''
         orientation: 'vertical'
         spacing: '12dp'
         padding: '12dp'
+        id: top_box_layout
+        Button:
+            text: _('Digits only password')
+            id: digits_only_pw_btn
+            size_hint: 1, None
+            height: '48dp'
+            on_release: root.digits_only_pw_dlg()
         BoxLayout:
             size_hint: 1, None
             orientation: 'horizontal'
@@ -115,6 +122,17 @@ Builder.load_string('''
     BoxLayout:
         size_hint: 1, 1
         orientation: 'vertical'
+        id: top_box_layout
+        Widget:
+            id: before_extended_pw_btn
+            size_hint: 1, None
+            height: '12dp'
+        Button:
+            text: _('Extended password')
+            id: extended_pw_btn
+            size_hint: 1, None
+            height: '48dp'
+            on_release: root.extended_pw_dlg()
         Widget:
             size_hint: 1, 0.05
         Label:
@@ -192,6 +210,16 @@ class AbstractPasswordDialog(Factory.Popup):
         self.level = 1 if is_change and not has_password else 0
         self.basename = basename
         self.update_screen()
+        self.switch_dialog = False
+        if not isinstance(self, (OpenWalletDialog,
+                                 OpenWalletDigitsPasswordDialog)):
+            if 'digits_only_pw_btn' in self.ids:
+                top_box = self.ids.top_box_layout
+                top_box.remove_widget(self.ids.digits_only_pw_btn)
+            if 'extended_pw_btn' in self.ids:
+                top_box = self.ids.top_box_layout
+                top_box.remove_widget(self.ids.before_extended_pw_btn)
+                top_box.remove_widget(self.ids.extended_pw_btn)
 
     def update_screen(self):
         self.clear_password()
@@ -212,6 +240,8 @@ class AbstractPasswordDialog(Factory.Popup):
             return False
 
     def on_dismiss(self):
+        if self.switch_dialog:
+            return False
         if self.level == 1 and self.allow_disable and self.on_success:
             self.on_success(self.pw, None)
             return False
@@ -325,7 +355,7 @@ class ChangePasswordDialog(PasswordDialog):
             has_password=wallet.has_password())
 
 
-class OpenWalletDialog(PasswordDialog):
+class BaseOpenWalletDialog(AbstractPasswordDialog):
     """This dialog will let the user choose another wallet file if they don't remember their the password"""
 
     def __init__(self, app, path, callback):
@@ -373,3 +403,37 @@ class OpenWalletDialog(PasswordDialog):
                 self.pw_check = wallet.check_password
             self.message = (self.enter_pw_message if self.require_password
                             else _('Wallet not encrypted'))
+
+
+class OpenWalletDialog(BaseOpenWalletDialog, PasswordDialog):
+
+    def __init__(self, app, path, callback, **kwargs):
+        self.path = path
+        BaseOpenWalletDialog.__init__(self, app, path, callback, **kwargs)
+
+    def digits_only_pw_dlg(self):
+        self.switch_dialog = True
+        self.app.electrum_config.set_key('kivy_digints_only_pw', True, True)
+        Clock.schedule_once(lambda dt: self.dismiss(), 0.1)
+        d = OpenWalletDigitsPasswordDialog(self.app, self.path, self.callback)
+        d.open()
+
+
+class OpenWalletDigitsPasswordDialog(BaseOpenWalletDialog, PincodeDialog):
+
+    enter_pw_message = _('Enter your password')
+    enter_new_pw_message = _('Enter new password')
+    confirm_new_pw_message = _('Confirm new password')
+    wrong_password_message = _('Wrong password')
+    allow_disable = False
+
+    def __init__(self, app, path, callback, **kwargs):
+        self.path = path
+        BaseOpenWalletDialog.__init__(self, app, path, callback, **kwargs)
+
+    def extended_pw_dlg(self):
+        self.switch_dialog = True
+        self.app.electrum_config.set_key('kivy_digints_only_pw', False, True)
+        Clock.schedule_once(lambda dt: self.dismiss(), 0.1)
+        d = OpenWalletDialog(self.app, self.path, self.callback)
+        d.open()

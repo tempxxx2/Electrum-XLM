@@ -40,7 +40,9 @@ from kivy.clock import Clock
 from kivy.factory import Factory
 from kivy.metrics import inch
 from kivy.lang import Builder
-from .uix.dialogs.password_dialog import OpenWalletDialog, ChangePasswordDialog, PincodeDialog, PasswordDialog
+from .uix.dialogs.password_dialog import (ChangePasswordDialog, PincodeDialog,
+                                          PasswordDialog, OpenWalletDialog,
+                                          OpenWalletDigitsPasswordDialog)
 from .uix.dialogs.choice_dialog import ChoiceDialog
 
 ## lazy imports for factory so that widgets can be used in kv
@@ -718,7 +720,10 @@ class ElectrumWindow(App, Logger):
             storage.check_password(self.password)
             self.on_open_wallet(self.password, storage)
             return
-        d = OpenWalletDialog(self, path, self.on_open_wallet)
+        if self.electrum_config.get('kivy_digints_only_pw', False):
+            d = OpenWalletDigitsPasswordDialog(self, path, self.on_open_wallet)
+        else:
+            d = OpenWalletDialog(self, path, self.on_open_wallet)
         d.open()
 
     def on_open_wallet(self, password, storage):
