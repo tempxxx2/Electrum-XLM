@@ -345,6 +345,17 @@ class HistoryScreen(CScreen):
         if selected_node is not None:
             history_card.layout_manager.select_node(selected_node)
 
+    def quick_scan(self, *args, **kwargs):
+        app = self.app
+        app.switch_to('send')
+        Clock.schedule_once(lambda dt: app.scan_qr(on_complete=app.on_qr), 0.1)
+
+    def quick_receive(self, *args, **kwargs):
+        app = self.app
+        app.switch_to('receive')
+        receive_screen = app.tabs.ids.receive_screen
+        Clock.schedule_once(lambda dt: receive_screen.new_request(), 0.1)
+
 
 class SendScreen(CScreen, Logger):
 

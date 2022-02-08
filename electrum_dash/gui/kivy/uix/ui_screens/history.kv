@@ -121,6 +121,20 @@
             bold: True
             size_hint: 1, 0.25
             on_release: app.is_fiat = not app.is_fiat if app.fx.is_enabled() else False
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: 1, None
+            height: '48dp'
+            Button:
+                text: _('Quick Scan')
+                size_hint: 0.5, None
+                height: '48dp'
+                on_release: root.quick_scan()
+            Button:
+                text: _('Quick Receive')
+                size_hint: 0.5, None
+                height: '48dp'
+                on_release: root.quick_receive()
         HistoryRecycleView:
             id: history_container
             scroll_type: ['bars', 'content']
