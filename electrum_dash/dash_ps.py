@@ -107,6 +107,7 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         self.state_lock = threading.Lock()
         self.states = s = PSStates
         self.mixing_running_states = [s.StartMixing, s.Mixing, s.StopMixing]
+        self.mixing_transit_states = [s.StartMixing, s.StopMixing]
         self.no_clean_history_states = [s.Initializing, s.Errored,
                                         s.StartMixing, s.Mixing, s.StopMixing,
                                         s.FindingUntracked]
@@ -233,6 +234,10 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
     def state(self):
         '''Current state of PSManager (dash_ps_util.PSStates enum)'''
         return self._state
+
+    @property
+    def in_transit(self):
+        return self.state in self.mixing_transit_states
 
     @property
     def is_waiting(self):
