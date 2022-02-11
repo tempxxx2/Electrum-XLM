@@ -1244,8 +1244,8 @@ class PSDialog(Popup):
                 val = sum(wallet.get_balance(include_ps=False,
                                              min_rounds=psman.mix_rounds))
                 ps_balance = self.app.format_amount_and_units(val)
-                self.ps_balance = ps_balance
-                self.mix_prog = psman.mixing_progress()
+                self.mixing_tab.ps_balance = ps_balance
+                self.mixing_tab.mix_prog = psman.mixing_progress()
                 self.info_tab.update()
                 self.denoms_tab.denoms_w.update_denoms_cnt()
         elif event in ['ps-reserved-changes', 'ps-keypairs-changes']:
