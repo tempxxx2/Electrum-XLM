@@ -949,8 +949,6 @@ class ElectrumWindow(App, Logger):
 
     def on_ps_event(self, event, *args):
         psman = self.wallet.psman
-        is_mixing = (psman.state in psman.mixing_running_states)
-        is_waiting = psman.is_waiting if is_mixing else False
         if event == 'ps-data-changes':
             wallet = args[0]
             if wallet == self.wallet:
@@ -963,7 +961,7 @@ class ElectrumWindow(App, Logger):
                        'ps-keypairs-changes']:
             wallet, msg, msg_type = (*args, None, None)[:3]
             if wallet == self.wallet:
-                self.update_ps_btn(is_mixing, is_waiting)
+                self.update_ps_btn()
                 if msg:
                     if msg_type and msg_type.startswith('inf'):
                         self.show_info(msg)
@@ -1053,9 +1051,9 @@ class ElectrumWindow(App, Logger):
             self.show_info(f'Created New Collateral workflow with'
                            f' txids: {", ".join(wfl.tx_order)}')
 
-    def update_ps_btn(self, is_mixing, is_waiting):
+    def update_ps_btn(self):
         ps_button = self.root.ids.ps_button
-        ps_button.icon = self.ps_icon(active=is_mixing, is_waiting=is_waiting)
+        ps_button.icon = self.ps_icon()
 
     @profiler
     def load_wallet(self, wallet: 'Abstract_Wallet'):
@@ -1213,13 +1211,16 @@ class ElectrumWindow(App, Logger):
     def app_icon(self):
         return ATLAS_ICON % ('logo-testnet' if self.testnet else 'logo')
 
-    def ps_icon(self, active=False, is_waiting=False):
-        if not active:
-            icon = 'privatesend'
-        elif not is_waiting:
-            icon = 'privatesend_active'
-        else:
-            icon = 'privatesend_waiting'
+    def ps_icon(self):
+        icon = 'privatesend'
+        if self.wallet:
+            psman = self.wallet.psman
+            if psman.in_transit:
+                icon = 'privatesend_hg'
+            elif psman.is_waiting:
+                icon = 'privatesend_waiting'
+            elif psman.state in psman.mixing_running_states:
+                icon = 'privatesend_active'
         return ATLAS_ICON % icon
 
     def on_pause(self):
