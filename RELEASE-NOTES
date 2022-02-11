@@ -1,3 +1,23 @@
+# Release 4.1.5.1
+
+ * trezor plugin: allow skip session clear on wallet close #292
+ * storage: more write attempts, write attempts GUI #293, #296
+ * simple_config.py: fix FEERATE_STATIC_VALUES not to be less 1000 #295
+ * Kivy: make the PS shield button simply start mixing #310
+ * PrivateSend: optionally allow ps coinchooser to spend high fees #311
+ * Kivy: allow switch to digits only password dialog #313
+ * Kivy: add "Quick Scan", "Quick Receive" to main screen #314
+ * Kivy: fix PrivateSend mixing progress refresh #315
+ * PrivateSend: add PS button icon for stopping/starting states #316
+ * Enable auto crash reports (copy to clipboard mode) #319
+ * Add PayServer HTML/JS to electrum_dash/www #321
+ * Qt: add warning on possible lags on HW devices #322
+ * PrivateSend: fix freeze coins/addresses functionality #324
+ * Kivy: unite Dash network static peers setttings #325
+ * Kivy: use popups for Tx sending/error messages #326
+ * Network: allow blacklist electrum servers #327
+
+
 # Release 4.1.5.0
 
  * Kivy/Android: fix paying bip70 invoices (regression) (90579ccf)
