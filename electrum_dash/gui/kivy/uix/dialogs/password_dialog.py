@@ -211,8 +211,9 @@ class AbstractPasswordDialog(Factory.Popup):
         self.basename = basename
         self.update_screen()
         self.switch_dialog = False
-        if not isinstance(self, (OpenWalletDialog,
-                                 OpenWalletDigitsPasswordDialog)):
+        if (not isinstance(self, (OpenWalletDialog,
+                                 OpenWalletDigitsPasswordDialog))
+                or isinstance(self, OpenWalletDialogNoDigits)):
             if 'digits_only_pw_btn' in self.ids:
                 top_box = self.ids.top_box_layout
                 top_box.remove_widget(self.ids.digits_only_pw_btn)
@@ -403,6 +404,12 @@ class BaseOpenWalletDialog(AbstractPasswordDialog):
                 self.pw_check = wallet.check_password
             self.message = (self.enter_pw_message if self.require_password
                             else _('Wallet not encrypted'))
+        if (isinstance(self, OpenWalletDigitsPasswordDialog)
+                and not self.require_password):
+            self.switch_dialog = True
+            Clock.schedule_once(lambda dt: self.dismiss(), 0.1)
+            d = OpenWalletDialogNoDigits(self.app, self.path, self.callback)
+            d.open()
 
 
 class OpenWalletDialog(BaseOpenWalletDialog, PasswordDialog):
@@ -417,6 +424,10 @@ class OpenWalletDialog(BaseOpenWalletDialog, PasswordDialog):
         Clock.schedule_once(lambda dt: self.dismiss(), 0.1)
         d = OpenWalletDigitsPasswordDialog(self.app, self.path, self.callback)
         d.open()
+
+
+class OpenWalletDialogNoDigits(OpenWalletDialog):
+    pass
 
 
 class OpenWalletDigitsPasswordDialog(BaseOpenWalletDialog, PincodeDialog):
