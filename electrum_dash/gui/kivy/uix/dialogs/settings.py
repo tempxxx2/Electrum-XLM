@@ -3,6 +3,7 @@ from kivy.factory import Factory
 from kivy.properties import ObjectProperty, BooleanProperty
 from kivy.lang import Builder
 
+from electrum_dash.base_crash_reporter import BaseCrashReporter
 from electrum_dash.util import base_units_list
 from electrum_dash.i18n import languages
 from electrum_dash.gui.kivy.i18n import _
@@ -13,6 +14,7 @@ from electrum_dash.gui import messages
 from electrum_dash.gui.kivy import KIVY_GUI_PATH
 
 from .choice_dialog import ChoiceDialog
+from .crash_reporter import ExceptionHook
 
 Builder.load_string('''
 #:import partial functools.partial
@@ -87,6 +89,12 @@ Builder.load_string('''
                     title: _('Password')
                     description: _('Change your password') if app._use_single_password else _("Change your password for this wallet.")
                     action: root.change_password
+                CardSeparator
+                SettingsItem:
+                    status: _('Yes') if app.use_crash_reports else _('No')
+                    title: _('Automated Crash Reports') + ': ' + self.status
+                    description: _('Activate automated crash reports')
+                    action: root.trigger_auto_crash_reports
 
                 # disabled: there is currently only one coin selection policy
                 #CardSeparator
@@ -242,3 +250,9 @@ class SettingsDialog(Factory.Popup):
         self.config.set_key('show_dip2_tx_type', show_dip2, True)
         if self.app.history_screen:
             self.app.history_screen.update(reload_history=False)
+
+    def trigger_auto_crash_reports(self, dt):
+        app = self.app
+        app.use_crash_reports = use_acr = not app.use_crash_reports
+        self.config.set_key(BaseCrashReporter.config_key, use_acr, True)
+        ExceptionHook.show_need_restart_msg(app)

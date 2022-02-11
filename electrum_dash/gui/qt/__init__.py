@@ -423,7 +423,7 @@ class ElectrumGui(Logger):
         self.app.aboutToQuit.connect(self._cleanup_before_exit)
         signal.signal(signal.SIGINT, lambda *args: self.app.quit())
         # hook for crash reporter
-        Exception_Hook.maybe_setup(config=self.config)
+        Exception_Hook.maybe_setup(config=self.config, electrum_gui=self)
         # first-start network-setup
         try:
             self.init_network()

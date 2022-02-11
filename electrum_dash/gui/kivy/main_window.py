@@ -9,6 +9,7 @@ import threading
 import asyncio
 from typing import TYPE_CHECKING, Optional, Union, Callable, Sequence
 
+from electrum_dash.base_crash_reporter import BaseCrashReporter
 from electrum_dash.dash_ps_util import (PSPossibleDoubleSpendError,
                                         PSSpendToPSAddressesError, PSStates)
 from electrum_dash.storage import WalletStorage, StorageReadWriteError
@@ -120,6 +121,7 @@ class ElectrumWindow(App, Logger):
     fiat_balance = StringProperty('')
     is_fiat = BooleanProperty(False)
     blockchain_forkpoint = NumericProperty(0)
+    use_crash_reports = BooleanProperty(False)
 
     auto_connect = BooleanProperty(False)
     def on_auto_connect(self, instance, x):
@@ -383,6 +385,7 @@ class ElectrumWindow(App, Logger):
         self.language = config.get('language', 'en')
         self.network = network = kwargs.get('network', None)  # type: Network
         self.tor_auto_on_bp = self.electrum_config.get('tor_auto_on', True)
+        self.use_crash_reports = config.get(BaseCrashReporter.config_key, True)
         if self.network:
             self.num_blocks = self.network.get_local_height()
             self.num_nodes = len(self.network.get_interfaces())

@@ -55,8 +55,8 @@ Builder.load_string('''
             orientation: 'horizontal'
             Button:
                 height: '48dp'
-                text: 'Send'
-                on_release: root.send_report()
+                text: 'Copy'
+                on_release: root.copy_report()
             Button:
                 text: 'Never'
                 on_release: root.show_never()
@@ -116,6 +116,11 @@ class CrashReporter(BaseCrashReporter, Factory.Popup):
                               size_hint=(3/4, 3/4))
         popup.open()
 
+    def copy_report(self):
+        text_report = self.text_report()
+        self.main_window._clipboard.copy(text_report)
+        self.main_window.show_info(_('Bug report copied to clipboard'))
+
     def send_report(self):
         try:
             loop = self.main_window.network.asyncio_loop
@@ -156,7 +161,10 @@ class CrashReporter(BaseCrashReporter, Factory.Popup):
         currentActivity.startActivity(browserIntent)
 
     def show_never(self):
-        self.main_window.electrum_config.set_key(BaseCrashReporter.config_key, False)
+        app = self.main_window
+        app.electrum_config.set_key(BaseCrashReporter.config_key, False, True)
+        app.use_crash_reports = False
+        ExceptionHook.show_need_restart_msg(self.main_window)
         self.dismiss()
 
     def get_user_description(self):
@@ -179,7 +187,8 @@ class ExceptionHook(base.ExceptionHandler, Logger):
         base.ExceptionHandler.__init__(self)
         Logger.__init__(self)
         self.main_window = main_window
-        if not main_window.electrum_config.get(BaseCrashReporter.config_key, default=False):
+        if not main_window.electrum_config.get(BaseCrashReporter.config_key,
+                                               default=True):
             return
         # For exceptions in Kivy:
         base.ExceptionManager.add_handler(self)
@@ -198,3 +207,8 @@ class ExceptionHook(base.ExceptionHandler, Logger):
         # Open in main thread:
         Clock.schedule_once(lambda _: e.open(), 0)
         return base.ExceptionManager.PASS
+
+    @classmethod
+    def show_need_restart_msg(cls, app):
+        app.show_info(_('Please restart Dash Electrum to activate'
+                        ' new crash reporter settings'))
