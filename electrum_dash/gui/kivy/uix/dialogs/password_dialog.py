@@ -404,7 +404,7 @@ class BaseOpenWalletDialog(AbstractPasswordDialog):
                 self.pw_check = wallet.check_password
             self.message = (self.enter_pw_message if self.require_password
                             else _('Wallet not encrypted'))
-        if (isinstance(self, OpenWalletDigitsPasswordDialog)
+        if (type(self) in (OpenWalletDialog, OpenWalletDigitsPasswordDialog)
                 and not self.require_password):
             self.switch_dialog = True
             Clock.schedule_once(lambda dt: self.dismiss(), 0.1)
