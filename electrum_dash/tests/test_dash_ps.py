@@ -3548,7 +3548,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 2
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [0, 3, 109, 218, 15]
+        cache_results = [0, 3, 54, 218, 15]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()
@@ -3559,7 +3559,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 2
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [0, 3, 186, 673, 45]
+        cache_results = [0, 3, 54, 673, 45]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()
@@ -3570,7 +3570,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 10
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [5, 3, 186, 4740, 300]
+        cache_results = [5, 3, 54, 4740, 300]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()
@@ -3635,7 +3635,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 2
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [0, 1, 55, 111, 8]
+        cache_results = [0, 1, 0, 111, 8]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()
@@ -3646,7 +3646,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 2
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [0, 1, 132, 458, 31]
+        cache_results = [0, 1, 0, 458, 31]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()
@@ -3657,7 +3657,7 @@ class PSWalletTestCase(TestCaseForTestnet):
         psman.keep_amount = 10
         psman.state = PSStates.Mixing
         psman._cache_keypairs(password=None)
-        cache_results = [5, 1, 132, 3715, 230]
+        cache_results = [5, 1, 0, 3715, 230]
         for i, cache_type in enumerate(KP_ALL_TYPES):
             assert len(psman._keypairs_cache[cache_type]) == cache_results[i]
         psman._cleanup_all_keypairs_cache()

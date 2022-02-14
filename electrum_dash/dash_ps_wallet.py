@@ -231,7 +231,7 @@ class KeyPairsMixin:
             utxos = w.get_utxos(None,
                                 excluded_addresses=frozen_addresses,
                                 mature_only=True)
-            utxos = [utxo for utxo in utxos if not w.is_frozen_coin(utxo)]
+            utxos = [u for u in utxos if not w.is_frozen_coin(u)]
             utxos = self.filter_out_hw_ks_coins(utxos)
             for c in utxos:
                 if c.address not in self._keypairs_cache[KP_SPENDABLE]:
@@ -247,8 +247,11 @@ class KeyPairsMixin:
                     return True, prev_kp_state
 
             # check spendable ps coins keys (already saved denoms/collateral)
-            for c in self.filter_out_hw_ks_coins(
-                    w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL)):
+            utxos = w.get_utxos(None,
+                                excluded_addresses=frozen_addresses,
+                                min_rounds=PSCoinRounds.COLLATERAL)
+            utxos = [u for u in utxos if not w.is_frozen_coin(u)]
+            for c in self.filter_out_hw_ks_coins(utxos):
                 ps_rounds = c.ps_rounds
                 if ps_rounds >= self.mix_rounds:
                     continue
@@ -385,8 +388,13 @@ class KeyPairsMixin:
         w = self.wallet
         cached = 0
         ps_spendable_cache = self._keypairs_cache[KP_PS_SPENDABLE]
-        for c in self.filter_out_hw_ks_coins(
-                w.get_utxos(None, min_rounds=PSCoinRounds.COLLATERAL)):
+        with w._freeze_lock:
+            frozen_addresses = w._frozen_addresses.copy()
+        utxos = w.get_utxos(None,
+                            excluded_addresses=frozen_addresses,
+                            min_rounds=PSCoinRounds.COLLATERAL)
+        utxos = [u for u in utxos if not w.is_frozen_coin(u)]
+        for c in self.filter_out_hw_ks_coins(utxos):
             if self.state != PSStates.Mixing:
                 self._cleanup_unfinished_keypairs_cache()
                 return

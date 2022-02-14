@@ -1356,10 +1356,14 @@ class PSUtilsMixin:
     def get_biggest_denoms_by_min_round(self):
         '''Select non minimal denoms sorted by minimum rounds/maximum value'''
         w = self.wallet
+        with w._freeze_lock:
+            frozen_addresses = w._frozen_addresses.copy()
         coins = w.get_utxos(None,
+                            excluded_addresses=frozen_addresses,
                             mature_only=True, confirmed_funding_only=True,
                             consider_islocks=True, min_rounds=0)
         coins = [c for c in coins if c.value_sats() > MIN_DENOM_VAL]
+        coins = [c for c in coins if not w.is_frozen_coin(c)]
         coins = self.filter_out_hw_ks_coins(coins)
         return sorted(coins, key=lambda x: (x.ps_rounds, -x.value_sats()))
 

@@ -564,15 +564,14 @@ class AddressList(MyTreeView):
                 menu.addAction(_("View on block explorer"),
                                lambda: webopen(addr_URL))
 
-            if not is_ps:
-                def set_frozen_state(addrs, state):
-                    self.parent.set_frozen_state_of_addresses(addrs, state)
-                if not self.wallet.is_frozen_address(addr):
-                    menu.addAction(_("Freeze"),
-                                   lambda: set_frozen_state([addr], True))
-                else:
-                    menu.addAction(_("Unfreeze"),
-                                   lambda: set_frozen_state([addr], False))
+            def set_frozen_state(addrs, state):
+                self.parent.set_frozen_state_of_addresses(addrs, state)
+            if not self.wallet.is_frozen_address(addr):
+                menu.addAction(_("Freeze"),
+                               lambda: set_frozen_state([addr], True))
+            else:
+                menu.addAction(_("Unfreeze"),
+                               lambda: set_frozen_state([addr], False))
 
         coins = self.wallet.get_spendable_coins(addrs)
         if coins:

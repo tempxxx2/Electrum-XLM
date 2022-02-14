@@ -629,9 +629,13 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         w = self.wallet
         for outpoint, ps_collateral in w.db.get_ps_collaterals().items():
             addr, value = ps_collateral
+            with w._freeze_lock:
+                frozen_addresses = w._frozen_addresses.copy()
             utxos = w.get_utxos([addr], min_rounds=PSCoinRounds.COLLATERAL,
+                                excluded_addresses=frozen_addresses,
                                 confirmed_funding_only=True,
                                 consider_islocks=True)
+            utxos = [u for u in utxos if not w.is_frozen_coin(u)]
             utxos = self.filter_out_hw_ks_coins(utxos)
             inputs = []
             for utxo in utxos:
@@ -995,10 +999,14 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
         oaddr = self.reserve_addresses(1, data=uuid)[0]
         if not coins:
             # try select minimal denom utxo with mimial rounds
+            with w._freeze_lock:
+                frozen_addresses = w._frozen_addresses.copy()
             coins = w.get_utxos(None, mature_only=True,
+                                excluded_addresses=frozen_addresses,
                                 confirmed_funding_only=True,
                                 consider_islocks=True, min_rounds=0)
             coins = [c for c in coins if c.value_sats() == MIN_DENOM_VAL]
+            coins = [c for c in coins if not w.is_frozen_coin(c)]
             coins = self.filter_out_hw_ks_coins(coins)
             if not coins:
                 raise NotEnoughFunds()
@@ -1286,8 +1294,12 @@ class PSManager(Logger, PSKeystoreMixin, PSDataMixin, PSOptsMixin,
                 else:
                     txin0 = copy.deepcopy(tx.inputs()[0])
                     txin0_addr = w.get_txin_address(txin0)
+                    with w._freeze_lock:
+                        frozen_addresses = w._frozen_addresses.copy()
                     utxos = w.get_utxos([txin0_addr],
+                                        excluded_addresses=frozen_addresses,
                                         min_rounds=PSCoinRounds.OTHER)
+                    utxos = [u for u in utxos if not w.is_frozen_coin(u)]
                     change_outpoint = None
                     for change_idx, o in enumerate(tx.outputs()):
                         if o.address == txin0_addr:
