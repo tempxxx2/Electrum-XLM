@@ -164,6 +164,18 @@ Builder.load_string('''
             id: err_label
             size_hint: 1, 0.2
             color: [1, 0, 0, 1]
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint_y: 0.3
+            Label:
+                size_hint_x: 0.7
+                text: _('Use Static Peers')
+                text_size: self.width, None
+                size: self.texture_size
+            CheckBox:
+                id: cb
+                size_hint_x: 0.3
+                on_active: root.toggle_use_static_peers()
         Button:
             size_hint: 1, 0.2
             text: _('Set')
@@ -326,13 +338,9 @@ Builder.load_string('''
                 CardSeparator
                 SettingsItem:
                     value: ': ON' if root.use_static_peers else ': OFF'
-                    title: _('Use Static Peers') + self.value
+                    peers: ' (' + root.static_peers + ')'
+                    title: _('Static Peers') + self.value + self.peers
                     description: _('Use static peers list instead random one')
-                    action: root.toggle_use_static_peers
-                CardSeparator
-                SettingsItem:
-                    title: _('Static Peers') + ': ' + root.static_peers
-                    description: _('List of static peers to use')
                     action: root.change_static_peers
                 CardSeparator
                 SettingsItem:
@@ -493,7 +501,19 @@ class StaticPeersPopup(Factory.Popup):
     def __init__(self, dn_dlg):
         Factory.Popup.__init__(self)
         self.dn_dlg = dn_dlg
+        cb = self.ids.cb
+        cb.active = dn_dlg.use_static_peers
         self.edit.text = dn_dlg.dash_net.dash_peers_as_str()
+
+    def toggle_use_static_peers(self):
+        dn_dlg = self.dn_dlg
+        cb = self.ids.cb
+        if cb.active != dn_dlg.use_static_peers:
+            use_sp = not dn_dlg.use_static_peers
+            dn_dlg.config.set_key('dash_use_static_peers', use_sp, True)
+            dn_dlg.use_static_peers = use_sp
+            net = dn_dlg.net
+            net.run_from_another_thread(net.dash_net.set_parameters())
 
     def dismiss(self, dash_peers=None):
         if dash_peers is None:
@@ -777,13 +797,6 @@ class DashNetDialog(Factory.Popup):
 
     def change_max_peers(self, *args):
         MaxPeersPopup(self).open()
-
-    def toggle_use_static_peers(self, *args):
-        use_static_peers = not self.config.get('dash_use_static_peers', False)
-        self.use_static_peers = use_static_peers
-        self.config.set_key('dash_use_static_peers', use_static_peers, True)
-        net = self.net
-        net.run_from_another_thread(net.dash_net.set_parameters())
 
     def change_static_peers(self, *args):
         StaticPeersPopup(self).open()
