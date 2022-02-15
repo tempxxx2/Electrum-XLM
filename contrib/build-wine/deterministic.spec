@@ -58,6 +58,7 @@ datas = [
     ('electrum_dash/*.json', 'electrum_dash'),
     ('electrum_dash/locale', 'electrum_dash/locale'),
     ('electrum_dash/wordlist', 'electrum_dash/wordlist'),
+    ('electrum_dash/www', 'electrum_dash/www'),
     ('electrum_dash/gui/icons', 'electrum_dash/gui/icons'),
     ('C:\\zbarw', '.'),
 ]

@@ -403,7 +403,8 @@ def verify_cert_chain(chain):
             root = ca_list[f]
             x509_chain.append(root)
         else:
-            raise Exception("Supplied CA Not Found in Trusted CA Store.")
+            if not constants.net.TESTNET:
+                raise Exception("Supplied CA Not Found in Trusted CA Store.")
     # verify the chain of signatures
     cert_num = len(x509_chain)
     for i in range(1, cert_num):
