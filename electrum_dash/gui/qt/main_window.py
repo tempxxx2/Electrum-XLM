@@ -2037,8 +2037,58 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             lambda x: self._conf_dlg_after_bg_update(conf_dlg,
                                                      external_keypairs))
 
+    def _check_hw_wallets_txin_cnt(self, conf_dlg):
+        keystore = self.wallet.db.get('keystore')
+        ks_type = keystore.get('type', 'unknown') if keystore else 'unknown'
+        hw_type = keystore.get('hw_type', 'unknown') if keystore else 'unknown'
+        if not ks_type == 'hardware' or not hw_type == 'ledger':
+            return True
+        ks_utxo_cnt = len([c for c in self.wallet.get_utxos()
+                           if not c.is_ps_ks])
+        hw_txin_cnt = len([c for c in conf_dlg.tx.inputs()
+                           if not c.is_ps_ks])
+        need_warn = False
+        if ks_utxo_cnt <= 100:
+            if hw_txin_cnt > 10:
+                need_warn = True
+        elif ks_utxo_cnt <= 200:
+            if hw_txin_cnt > 5:
+                need_warn = True
+        elif ks_utxo_cnt <= 300:
+            if hw_txin_cnt > 3:
+                need_warn = True
+        elif hw_txin_cnt > 1:
+                need_warn = True
+        if not need_warn:
+            return True
+        cb = QCheckBox(_("Don't show this again."))
+        def on_cb(x):
+            self.config.set_key('hw_no_lags_warn', True, True)
+        cb.stateChanged.connect(on_cb)
+        msg = '\n'.join([
+            _('Warning') + ':',
+            _('You have a big count of UTXOs on your HW device.'),
+            _('Total count of HW UTXOs is: {}.').format(ks_utxo_cnt),
+            _('Transaction inputs count from HW is: {}.').format(hw_txin_cnt),
+            _('You can encounter a big lags on HW device reaction.'),
+            '',
+            _('If this happens then try to spend coins partially,'
+              ' by enabling "Coins" tab from "View" main menu,'
+              ' and selecting coins to spend.'),
+            '',
+            _('Another thing to try is temporarily disable timeouts'
+              ' on device. (Security -> [PIN lock, Screen saver])'),
+            '',
+            _('Do you want to continue with this number of inputs?')
+        ])
+        return self.question(msg, checkbox=cb)
+
     def _conf_dlg_after_bg_update(self, conf_dlg, external_keypairs):
         conf_dlg.update()
+        hw_no_lags_warn = self.config.get('hw_no_lags_warn', False)
+        if not hw_no_lags_warn:
+            if not self._check_hw_wallets_txin_cnt(conf_dlg):
+                return
         if conf_dlg.not_enough_funds:
             self._on_conf_dlg_not_enough_funds(conf_dlg, external_keypairs)
         else:
