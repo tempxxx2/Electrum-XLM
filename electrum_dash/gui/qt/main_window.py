@@ -946,7 +946,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         help_menu.addSeparator()
         help_menu.addAction(_("&Documentation"), lambda: webopen("https://docs.dash.org/en/stable/wallets/index.html#dash-electrum-wallet")).setShortcut(QKeySequence.HelpContents)
         self._auto_crash_reports = QAction(_("&Automated Crash Reports"), self, checkable=True)
-        self._auto_crash_reports.setChecked(self.config.get(BaseCrashReporter.config_key, default=False))
+        self._auto_crash_reports.setChecked(self.config.get(BaseCrashReporter.config_key, default=True))
         self._auto_crash_reports.triggered.connect(self.auto_crash_reports)
         help_menu.addAction(self._auto_crash_reports)
         if not constants.net.TESTNET:
@@ -959,6 +959,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def auto_crash_reports(self, state):
         self.config.set_key(BaseCrashReporter.config_key, state, True)
+        for w in self.gui_object.windows:
+            w._auto_crash_reports.setChecked(state)
         Exception_Hook.show_need_restart_msg(self)
 
     def donate_to_server(self):

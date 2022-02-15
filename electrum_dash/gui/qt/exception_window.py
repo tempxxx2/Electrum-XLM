@@ -26,9 +26,11 @@ import html
 from typing import TYPE_CHECKING, Optional, Set
 
 from PyQt5.QtCore import QObject
+from PyQt5.QtGui import QCursor
 import PyQt5.QtCore as QtCore
 from PyQt5.QtWidgets import (QWidget, QLabel, QPushButton, QTextEdit,
-                             QMessageBox, QHBoxLayout, QVBoxLayout)
+                             QMessageBox, QHBoxLayout, QVBoxLayout,
+                             QApplication, QToolTip)
 
 from electrum_dash.i18n import _
 from electrum_dash.base_crash_reporter import BaseCrashReporter
@@ -84,10 +86,9 @@ class Exception_Window(BaseCrashReporter, QWidget, MessageBoxMixin, Logger):
 
         buttons = QHBoxLayout()
 
-        report_button = QPushButton(_('Send Bug Report'))
-        report_button.clicked.connect(self.send_report)
-        report_button.setIcon(read_QIcon("tab_send.png"))
-        buttons.addWidget(report_button)
+        copy_button = QPushButton(_('Copy Bug Report'))
+        copy_button.clicked.connect(self.copy_report)
+        buttons.addWidget(copy_button)
 
         never_button = QPushButton(_('Never'))
         never_button.clicked.connect(self.show_never)
@@ -101,6 +102,13 @@ class Exception_Window(BaseCrashReporter, QWidget, MessageBoxMixin, Logger):
 
         self.setLayout(main_box)
         self.show()
+
+    def copy_report(self):
+        text_report = self.text_report()
+        app = QApplication.instance()
+        app.clipboard().setText(text_report)
+        QToolTip.showText(QCursor.pos(), _("Bug report copied to clipboard"),
+                          self)
 
     def send_report(self):
         def on_success(response):
@@ -133,6 +141,10 @@ class Exception_Window(BaseCrashReporter, QWidget, MessageBoxMixin, Logger):
     def show_never(self):
         self.config.set_key(BaseCrashReporter.config_key, False)
         Exception_Hook.show_need_restart_msg(self)
+        app = QApplication.instance()
+        electrum_gui = Exception_Hook._INSTANCE.electrum_gui
+        for w in electrum_gui.windows:
+            w._auto_crash_reports.setChecked(False)
         self.close()
 
     def closeEvent(self, event):
@@ -164,22 +176,26 @@ class Exception_Hook(QObject, Logger):
 
     _INSTANCE = None  # type: Optional[Exception_Hook]  # singleton
 
-    def __init__(self, *, config: 'SimpleConfig'):
+    def __init__(self, *, config: 'SimpleConfig', electrum_gui):
         QObject.__init__(self)
         Logger.__init__(self)
         assert self._INSTANCE is None, "Exception_Hook is supposed to be a singleton"
         self.config = config
+        self.electrum_gui = electrum_gui
         self.wallet_types_seen = set()  # type: Set[str]
 
         sys.excepthook = self.handler
         self._report_exception.connect(_show_window)
 
     @classmethod
-    def maybe_setup(cls, *, config: 'SimpleConfig', wallet: 'Abstract_Wallet' = None) -> None:
-        if not config.get(BaseCrashReporter.config_key, default=False):
+    def maybe_setup(cls, *, config: 'SimpleConfig',
+                            electrum_gui=None,
+                            wallet: 'Abstract_Wallet' = None) -> None:
+        if not config.get(BaseCrashReporter.config_key, default=True):
             return
         if not cls._INSTANCE:
-            cls._INSTANCE = Exception_Hook(config=config)
+            cls._INSTANCE = Exception_Hook(config=config,
+                                           electrum_gui=electrum_gui)
         if wallet:
             cls._INSTANCE.wallet_types_seen.add(wallet.wallet_type)
 

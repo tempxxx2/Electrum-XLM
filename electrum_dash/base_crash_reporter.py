@@ -73,6 +73,21 @@ class BaseCrashReporter(Logger):
         response = asyncio.run_coroutine_threadsafe(coro, asyncio_loop).result(timeout)
         return response
 
+    def text_report(self):
+        r = self.get_traceback_info()
+        r.update(self.get_additional_info())
+        return '\n'.join([f'OS: {r["os"]}',
+                          f'Locale: {r["locale"]}',
+                          f'Python version: {r["python_version"]}',
+                          f'App version: {r["app_version"]}',
+                          f'Wallet type: {r["wallet_type"]}',
+                          f'Description: {r["description"]}\n',
+                          f'Traceback: {r["stack"]}',
+                          f'Exception string: {r["exc_string"]}',
+                          f'Exception file: {r["id"]["file"]}',
+                          f'Exception name: {r["id"]["name"]}',
+                          f'Exception type: {r["id"]["type"]}'])
+
     async def do_post(self, proxy, url, data):
         async with make_aiohttp_session(proxy) as session:
             async with session.post(url, data=data, raise_for_status=True) as resp:
