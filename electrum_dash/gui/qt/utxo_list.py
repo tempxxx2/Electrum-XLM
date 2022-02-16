@@ -555,10 +555,6 @@ class UTXOList(MyTreeView):
                 return
             self.add_copy_menu(menu, idx)
 
-            if ps_rounds is not None:
-                menu.exec_(self.viewport().mapToGlobal(position))
-                return
-
             # "Freeze coin"
             set_frozen_state_c = self.parent.set_frozen_state_of_coins
             if not w.is_frozen_coin(utxo):
@@ -585,11 +581,6 @@ class UTXOList(MyTreeView):
                 menu.addSeparator()
         elif len(coins) > 1:  # multiple items selected
             # multiple items selected
-            ps_rounds = set([utxo.ps_rounds for utxo in coins])
-            if ps_rounds != {None}:
-                menu.exec_(self.viewport().mapToGlobal(position))
-                return
-
             menu.addSeparator()
             addrs = set([utxo.address for utxo in coins])
             is_coin_frozen = [w.is_frozen_coin(utxo) for utxo in coins]
