@@ -12,6 +12,45 @@ from kivy.uix.button import Button
 
 
 Builder.load_string('''
+<AppInfoDialog@Popup>
+    title: ''
+    auto_dismiss: False
+    size_hint: 0.9, None
+    height: 192 + max(msg_label.height, 64)
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint: 1, 1
+        padding: '10dp'
+        BoxLayout:
+            size_hint: 1, None
+            height: max(msg_label.height, 64)
+            spacing: '10dp'
+            orientation: 'horizontal'
+            Image:
+                id: img
+                source: ''
+                size_hint: None, None
+                pos_hint: {'top': 1}
+                width: 64
+                height: 64
+                allow_stretch: True
+            Label:
+                id: msg_label
+                text_size: self.width, None
+                height: self.texture_size[1]
+                markup: True
+                on_ref_press:
+                    import webbrowser
+                    webbrowser.open(args[1])
+        Widget:
+            size_hint: 1, None
+            height: '48dp'
+        Button:
+            size_hint: 1, None
+            height: '48dp'
+            pos_hint: {'bottom': 1}
+            text: _('OK')
+            on_release: root.dismiss()
 
 
 <TorWarnDialog@Popup>
@@ -76,6 +115,18 @@ Builder.load_string('''
                 text: _('Close wallet')
                 on_release: root.close_wallet()
 ''')
+
+
+class AppInfoDialog(Factory.Popup):
+
+    def __init__(self, msg, is_err=False):
+        Factory.Popup.__init__(self)
+        self.title = _('Error') if is_err else _('Information')
+        img_path = 'atlas://electrum_dash/gui/kivy/theming/atlas/light'
+        img = self.ids.img
+        img.source = f'{img_path}/error' if is_err else f'{img_path}/info'
+        msg_label = self.ids.msg_label
+        msg_label.text = msg
 
 
 class TorWarnDialog(Factory.Popup):
