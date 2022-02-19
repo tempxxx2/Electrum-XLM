@@ -1,14 +1,19 @@
 import os
+from enum import IntEnum
+from functools import partial
 
 from kivy.clock import Clock
 from kivy.factory import Factory
 from kivy.lang import Builder
-
-from electrum_dash.gui.kivy.i18n import _
-from electrum_dash.network import deserialize_proxy
-
 from kivy.properties import BooleanProperty
 from kivy.uix.button import Button
+
+from electrum_dash import util
+from electrum_dash.network import deserialize_proxy
+from electrum_dash.interface import PREFERRED_NETWORK_PROTOCOL
+
+from electrum_dash.gui.kivy.i18n import _
+from electrum_dash.gui.kivy.uix.dialogs.question import Question
 
 
 Builder.load_string('''
@@ -45,6 +50,55 @@ Builder.load_string('''
         Widget:
             size_hint: 1, None
             height: '48dp'
+        Button:
+            size_hint: 1, None
+            height: '48dp'
+            pos_hint: {'bottom': 1}
+            text: _('OK')
+            on_release: root.dismiss()
+
+
+<ElectrumServersTab@BoxLayout>
+    orientation: 'vertical'
+    title: ''
+    Label:
+        padding: '10dp', '10dp'
+        text: root.title
+        size_hint: 1, None
+        text_size: self.width, None
+        height: self.texture_size[1]
+    ScrollView:
+        GridLayout:
+            id: content
+            cols: 1
+            size_hint: 1, None
+            height: self.minimum_height
+            padding: '10dp'
+
+
+<ElectrumServersDialog@Popup>
+    title: 'Electrum Servers'
+    tabs: tabs
+    connected_tab_header: connected_tab_header
+    connected_tab: connected_tab_header.content
+    other_tab_header: other_tab_header
+    other_tab: other_tab_header.content
+    blacklist_tab_header: blacklist_tab_header
+    blacklist_tab: blacklist_tab_header.content
+    BoxLayout:
+        orientation: 'vertical'
+        TabbedPanel:
+            id: tabs
+            do_default_tab: False
+            TabbedPanelHeader:
+                id: connected_tab_header
+                text: _('Connected')
+            TabbedPanelHeader:
+                id: other_tab_header
+                text: _('Other')
+            TabbedPanelHeader:
+                id: blacklist_tab_header
+                text: _('Blacklist')
         Button:
             size_hint: 1, None
             height: '48dp'
@@ -127,6 +181,136 @@ class AppInfoDialog(Factory.Popup):
         img.source = f'{img_path}/error' if is_err else f'{img_path}/info'
         msg_label = self.ids.msg_label
         msg_label.text = msg
+
+
+class ExServersTabs(IntEnum):
+    CONNECTED = 0
+    OTHER = 1
+    BLACKLIST = 2
+
+
+class ElectrumServersTab(Factory.BoxLayout):
+
+    def __init__(self, servers_dlg, tab_type):
+        super(ElectrumServersTab, self).__init__()
+        self.servers_dlg = servers_dlg
+        self.app = servers_dlg.app
+        self.tab_type = tab_type
+        if tab_type == ExServersTabs.CONNECTED:
+            self.title = _('Connected servers')
+        elif tab_type == ExServersTabs.OTHER:
+            self.title = _('Other known servers')
+        elif tab_type == ExServersTabs.BLACKLIST:
+            self.title = _('Blacklist')
+        self.update()
+
+    def update(self):
+        c = self.ids.content
+        c.clear_widgets()
+        n = self.app.network
+        if not n:
+            return
+        use_tor = n.proxy_is_tor(n.proxy) if n.proxy else False
+        blacklist = n.blacklist
+        blacklist_servers = list(blacklist.keys())
+        if self.tab_type == ExServersTabs.CONNECTED:
+            for i in n.interfaces.copy():
+                title = i.net_addr_str()
+                if i == n.interface.server:
+                    descr = _('Server for addresses and transactions')
+                else:
+                    descr = ''
+                cs = Factory.CardSeparator()
+                c.add_widget(cs)
+                si = Factory.SettingsItem(title=title, description=descr)
+                si.action = partial(self.server_action, title)
+                c.add_widget(si)
+        elif self.tab_type == ExServersTabs.OTHER:
+            connected_hosts = set([i.host for i in n.interfaces])
+            protocol = PREFERRED_NETWORK_PROTOCOL
+            for _host, d in sorted(n.get_servers().items()):
+                if _host in connected_hosts:
+                    continue
+                if _host.endswith('.onion') and not use_tor:
+                    continue
+                port = d.get(protocol)
+                title = ''
+                if port:
+                    title = f'{_host}:{port}'
+                    if title in blacklist_servers:
+                        continue
+                descr = ''
+                cs = Factory.CardSeparator()
+                c.add_widget(cs)
+                si = Factory.SettingsItem(title=title, description=descr)
+                si.action = partial(self.server_action, title)
+                c.add_widget(si)
+        elif self.tab_type == ExServersTabs.BLACKLIST:
+            for title in blacklist_servers:
+                descr = str(blacklist[title][0])
+                descr = f'Info: {descr}' if descr else ''
+                cs = Factory.CardSeparator()
+                c.add_widget(cs)
+                si = Factory.SettingsItem(title=title, description=descr)
+                si.action = partial(self.server_action, title)
+                c.add_widget(si)
+
+    def server_action(self, server_str, dt):
+        if self.tab_type in [ExServersTabs.CONNECTED, ExServersTabs.OTHER]:
+            q = _('Blacklist {}').format(server_str)
+            action = self.servers_dlg.blacklist_server
+        else:
+            q = _('Unblacklist {}').format(server_str)
+            action = self.servers_dlg.unblacklist_server
+        def on_want_action(b):
+            if b:
+                action(server_str)
+        d = Question(q, on_want_action)
+        d.open()
+
+
+class ElectrumServersDialog(Factory.Popup):
+
+    def __init__(self, app):
+        Factory.Popup.__init__(self)
+
+        self.app = app
+        self.network = app.network
+        self.connected_tab_header.content = \
+            ElectrumServersTab(self, ExServersTabs.CONNECTED)
+        self.other_tab_header.content = \
+            ElectrumServersTab(self, ExServersTabs.OTHER)
+        self.blacklist_tab_header.content = \
+            ElectrumServersTab(self, ExServersTabs.BLACKLIST)
+        self.tabs.switch_to(self.connected_tab_header)
+
+    def open(self):
+        super(ElectrumServersDialog, self).open()
+        util.register_callback(self.on_net_callback, ['network_updated'])
+
+    def dismiss(self):
+        super(ElectrumServersDialog, self).dismiss()
+        util.unregister_callback(self.on_net_callback)
+
+    def on_net_callback(self, event, *args):
+        Clock.schedule_once(lambda dt: self.on_net_event(event, *args))
+
+    def on_net_event(self, event, *args):
+        if event == 'network_updated':
+            self.update()
+
+    def update(self):
+        self.connected_tab.update()
+        self.other_tab.update()
+        self.blacklist_tab.update()
+
+    def blacklist_server(self, server_str):
+        self.network.add_blacklist_server(server_str)
+        self.update()
+
+    def unblacklist_server(self, server_str):
+        self.network.remove_blacklist_server(server_str)
+        self.update()
 
 
 class TorWarnDialog(Factory.Popup):

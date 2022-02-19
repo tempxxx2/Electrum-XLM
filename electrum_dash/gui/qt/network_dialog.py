@@ -97,6 +97,7 @@ class NodesListWidget(QTreeWidget):
         CONNECTED_SERVER = 1
         DISCONNECTED_SERVER = 2
         TOPLEVEL = 3
+        BLACKLIST = 4
 
     def __init__(self, parent):
         QTreeWidget.__init__(self)
@@ -114,12 +115,22 @@ class NodesListWidget(QTreeWidget):
         if item_type == self.ItemType.CONNECTED_SERVER:
             server = item.data(0, self.SERVER_ADDR_ROLE)  # type: ServerAddr
             menu.addAction(_("Use as server"), lambda: self.parent.follow_server(server))
+            server_str = server.net_addr_str()
+            menu.addAction(_('Blacklist'),
+                           lambda: self.parent.blacklist_server(server_str))
         elif item_type == self.ItemType.DISCONNECTED_SERVER:
             server = item.data(0, self.SERVER_ADDR_ROLE)  # type: ServerAddr
             def func():
                 self.parent.server_e.setText(server.net_addr_str())
                 self.parent.set_server()
             menu.addAction(_("Use as server"), func)
+            server_str = server.net_addr_str()
+            menu.addAction(_('Blacklist'),
+                           lambda: self.parent.blacklist_server(server_str))
+        elif item_type == self.ItemType.BLACKLIST:
+            server_str = item.data(0, self.SERVER_ADDR_ROLE)  # type: str
+            menu.addAction(_('Unblacklist'),
+                           lambda: self.parent.unblacklist_server(server_str))
         elif item_type == self.ItemType.CHAIN:
             chain_id = item.data(0, self.CHAIN_ID_ROLE)
             menu.addAction(_("Follow this branch"), lambda: self.parent.follow_branch(chain_id))
@@ -141,6 +152,8 @@ class NodesListWidget(QTreeWidget):
 
     def update(self, *, network: Network, servers: dict, use_tor: bool):
         self.clear()
+        blacklist = self.parent.network.blacklist
+        blacklist_servers = list(blacklist.keys())
 
         # connected servers
         connected_servers_item = QTreeWidgetItem([_("Connected nodes"), ''])
@@ -179,19 +192,35 @@ class NodesListWidget(QTreeWidget):
                 continue
             port = d.get(protocol)
             if port:
+                if f'{_host}:{port}' in blacklist_servers:
+                    continue
                 server = ServerAddr(_host, port, protocol=protocol)
                 item = QTreeWidgetItem([server.net_addr_str(), ""])
                 item.setData(0, self.ITEMTYPE_ROLE, self.ItemType.DISCONNECTED_SERVER)
                 item.setData(0, self.SERVER_ADDR_ROLE, server)
                 disconnected_servers_item.addChild(item)
 
+        # blacklist servers
+        blacklist_servers_item = QTreeWidgetItem([_('Blacklist'), ''])
+        blacklist_servers_item.setData(0, self.ITEMTYPE_ROLE,
+                                     self.ItemType.TOPLEVEL)
+        for server in blacklist_servers:
+            msg = str(blacklist[server][0])
+            msg = f'  -  Info: {msg}' if msg else ''
+            item = QTreeWidgetItem([f'{server}{msg}', ''])
+            item.setData(0, self.ITEMTYPE_ROLE, self.ItemType.BLACKLIST)
+            item.setData(0, self.SERVER_ADDR_ROLE, server)
+            blacklist_servers_item.addChild(item)
+
         self.addTopLevelItem(connected_servers_item)
         self.addTopLevelItem(disconnected_servers_item)
+        self.addTopLevelItem(blacklist_servers_item)
 
         connected_servers_item.setExpanded(True)
         for i in range(connected_servers_item.childCount()):
             connected_servers_item.child(i).setExpanded(True)
         disconnected_servers_item.setExpanded(True)
+        blacklist_servers_item.setExpanded(True)
 
         # headers
         h = self.header()
@@ -284,7 +313,7 @@ class NetworkChoiceLayout(object):
         grid = QGridLayout(blockchain_tab)
         msg =  ' '.join([
             _("Dash Electrum connects to several nodes in order to download block headers and find out the longest blockchain."),
-            _("This blockchain is used to verify the transactions sent by your transaction server.")
+            _("This blockchain is used to verify the transactions sent by your transaction server."),
         ])
         self.status_label = QLabel('')
         grid.addWidget(QLabel(_('Status') + ':'), 0, 0)
@@ -408,6 +437,14 @@ class NetworkChoiceLayout(object):
 
     def follow_server(self, server: ServerAddr):
         self.network.run_from_another_thread(self.network.follow_chain_given_server(server))
+        self.update()
+
+    def blacklist_server(self, server_str):
+        self.network.add_blacklist_server(server_str)
+        self.update()
+
+    def unblacklist_server(self, server_str):
+        self.network.remove_blacklist_server(server_str)
         self.update()
 
     def accept(self):
