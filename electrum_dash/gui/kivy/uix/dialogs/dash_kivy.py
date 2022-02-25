@@ -210,50 +210,67 @@ class ElectrumServersTab(Factory.BoxLayout):
         n = self.app.network
         if not n:
             return
-        use_tor = n.proxy_is_tor(n.proxy) if n.proxy else False
+        if self.tab_type == ExServersTabs.CONNECTED:
+            self.update_connected()
+        elif self.tab_type == ExServersTabs.OTHER:
+            self.update_other()
+        elif self.tab_type == ExServersTabs.BLACKLIST:
+            self.update_blacklist()
+
+    def update_connected(self):
+        c = self.ids.content
+        n = self.app.network
+        for i in n.interfaces.copy():
+            title = i.net_addr_str()
+            if i == n.interface.server:
+                descr = _('Server for addresses and transactions')
+            else:
+                descr = ''
+            cs = Factory.CardSeparator()
+            c.add_widget(cs)
+            si = Factory.SettingsItem(title=title, description=descr)
+            si.action = partial(self.server_action, title)
+            c.add_widget(si)
+
+    def update_other(self):
+        c = self.ids.content
+        n = self.app.network
         blacklist = n.blacklist
         blacklist_servers = list(blacklist.keys())
-        if self.tab_type == ExServersTabs.CONNECTED:
-            for i in n.interfaces.copy():
-                title = i.net_addr_str()
-                if i == n.interface.server:
-                    descr = _('Server for addresses and transactions')
-                else:
-                    descr = ''
-                cs = Factory.CardSeparator()
-                c.add_widget(cs)
-                si = Factory.SettingsItem(title=title, description=descr)
-                si.action = partial(self.server_action, title)
-                c.add_widget(si)
-        elif self.tab_type == ExServersTabs.OTHER:
-            connected_hosts = set([i.host for i in n.interfaces])
-            protocol = PREFERRED_NETWORK_PROTOCOL
-            for _host, d in sorted(n.get_servers().items()):
-                if _host in connected_hosts:
+        use_tor = n.proxy_is_tor(n.proxy) if n.proxy else False
+        connected_hosts = set([i.host for i in n.interfaces])
+        protocol = PREFERRED_NETWORK_PROTOCOL
+        for _host, d in sorted(n.get_servers().items()):
+            if _host in connected_hosts:
+                continue
+            if _host.endswith('.onion') and not use_tor:
+                continue
+            port = d.get(protocol)
+            title = ''
+            if port:
+                title = f'{_host}:{port}'
+                if title in blacklist_servers:
                     continue
-                if _host.endswith('.onion') and not use_tor:
-                    continue
-                port = d.get(protocol)
-                title = ''
-                if port:
-                    title = f'{_host}:{port}'
-                    if title in blacklist_servers:
-                        continue
-                descr = ''
-                cs = Factory.CardSeparator()
-                c.add_widget(cs)
-                si = Factory.SettingsItem(title=title, description=descr)
-                si.action = partial(self.server_action, title)
-                c.add_widget(si)
-        elif self.tab_type == ExServersTabs.BLACKLIST:
-            for title in blacklist_servers:
-                descr = str(blacklist[title][0])
-                descr = f'Info: {descr}' if descr else ''
-                cs = Factory.CardSeparator()
-                c.add_widget(cs)
-                si = Factory.SettingsItem(title=title, description=descr)
-                si.action = partial(self.server_action, title)
-                c.add_widget(si)
+            descr = ''
+            cs = Factory.CardSeparator()
+            c.add_widget(cs)
+            si = Factory.SettingsItem(title=title, description=descr)
+            si.action = partial(self.server_action, title)
+            c.add_widget(si)
+
+    def update_blacklist(self):
+        c = self.ids.content
+        n = self.app.network
+        blacklist = n.blacklist
+        blacklist_servers = list(blacklist.keys())
+        for title in blacklist_servers:
+            descr = str(blacklist[title][0])
+            descr = f'Info: {descr}' if descr else ''
+            cs = Factory.CardSeparator()
+            c.add_widget(cs)
+            si = Factory.SettingsItem(title=title, description=descr)
+            si.action = partial(self.server_action, title)
+            c.add_widget(si)
 
     def server_action(self, server_str, dt):
         if self.tab_type in [ExServersTabs.CONNECTED, ExServersTabs.OTHER]:
