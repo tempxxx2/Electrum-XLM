@@ -57,7 +57,7 @@ from .uix.dialogs import InfoBubble, crash_reporter
 from .uix.dialogs import OutputList, OutputItem
 from .uix.dialogs import TopLabel, RefLabel
 from .uix.dialogs.question import Question
-from .uix.dialogs.dash_kivy import TorWarnDialog
+from .uix.dialogs.dash_kivy import AppInfoDialog, TorWarnDialog
 from .uix.dialogs.warn_dialog import WarnDialog
 from .uix.dialogs.question import Question
 
@@ -1328,6 +1328,14 @@ class ElectrumWindow(App, Logger):
             pos = (win.center[0], win.center[1] - (info_bubble.height/2))
         info_bubble.show(pos, duration, width, modal=modal, exit=exit)
 
+    def show_info_dlg(self, msg):
+        d = AppInfoDialog(msg)
+        d.open()
+
+    def show_error_dlg(self, msg):
+        d = AppInfoDialog(msg, is_err=True)
+        d.open()
+
     def tx_dialog(self, tx):
         from .uix.dialogs.tx_dialog import TxDialog
         d = TxDialog(self, tx)
@@ -1392,20 +1400,22 @@ class ElectrumWindow(App, Logger):
 
     def broadcast(self, tx, pr=None):
         def on_complete(ok, msg):
+            self.info_bubble.hide()
             if ok:
-                self.show_info(_('Payment sent.'))
+                self.show_info_dlg(_('Payment sent.') + f' TxID: {msg}')
                 if self.send_screen:
                     self.send_screen.do_clear()
             else:
                 msg = msg or ''
-                self.show_error(msg)
+                self.show_error_dlg(msg)
 
         if self.network and self.network.is_connected():
             self.show_info(_('Sending'))
             threading.Thread(target=self._broadcast_thread, args=(tx, pr, on_complete)).start()
         else:
-            self.show_info(_('Cannot broadcast transaction') +
-                           ':\n' + _('Electrum network not connected'))
+            self.info_bubble.hide()
+            self.show_error_dlg(_('Cannot broadcast transaction') +
+                                ':\n' + _('Electrum network not connected'))
 
     def description_dialog(self, screen):
         from .uix.dialogs.label_dialog import LabelDialog

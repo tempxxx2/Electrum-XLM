@@ -551,12 +551,14 @@ class SendScreen(CScreen, Logger):
         self.save_invoice_ext(invoice.id, invoice_ext)
         self.save_invoice(invoice)
         def on_success(tx):
+            self.app.info_bubble.hide()
             if tx.is_complete():
                 self.app.broadcast(tx, pr)
             else:
                 self.app.tx_dialog(tx, pr)
         def on_failure(error):
-            self.app.show_error(error)
+            self.app.info_bubble.hide()
+            self.app.show_error_dlg(error)
         if self.app.wallet.can_sign(tx):
             self.app.show_info("Signing...")
             self.app.sign_tx(tx, password, on_success, on_failure)
