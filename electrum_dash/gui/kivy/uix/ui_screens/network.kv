@@ -13,7 +13,8 @@ Popup:
                 SettingsItem:
                     value: _("{} connections.").format(app.num_nodes) if app.num_nodes else _("Not connected")
                     title: _("Status") + ': ' + self.value
-                    description: _("Connections with Dash Electrum servers")
+                    description: _("Connections with Dash Electrum servers") + ' / '  + _('Blacklist')
+                    action: lambda x: app.electrum_servers_dlg()
 
                 CardSeparator
                 SettingsItem:

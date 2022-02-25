@@ -57,7 +57,8 @@ from .uix.dialogs import InfoBubble, crash_reporter
 from .uix.dialogs import OutputList, OutputItem
 from .uix.dialogs import TopLabel, RefLabel
 from .uix.dialogs.question import Question
-from .uix.dialogs.dash_kivy import AppInfoDialog, TorWarnDialog
+from .uix.dialogs.dash_kivy import (AppInfoDialog, TorWarnDialog,
+                                    ElectrumServersDialog)
 from .uix.dialogs.warn_dialog import WarnDialog
 from .uix.dialogs.question import Question
 
@@ -871,6 +872,10 @@ class ElectrumWindow(App, Logger):
         else:
             popup = Builder.load_file(KIVY_GUI_PATH + f'/uix/ui_screens/{name}.kv')
             popup.open()
+
+    def electrum_servers_dlg(self):
+        d = ElectrumServersDialog(self)
+        d.open()
 
     @profiler
     def init_ui(self):

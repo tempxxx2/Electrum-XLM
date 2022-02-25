@@ -290,6 +290,9 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
 
         self.daemon = daemon
 
+        # Electrum servers blacklist
+        self.blacklist = config.get('electrum_blacklist', {})
+
         # Autodetect and enable Tor proxy on Network init
         if self.config.get('tor_auto_on', True):
             tor_detected = self.detect_tor_proxy()
@@ -578,6 +581,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         recent_servers = [s for s in recent_servers if s.protocol in self._allowed_protocols]
         if len(connected_servers & set(recent_servers)) < NUM_STICKY_SERVERS:
             for server in recent_servers:
+                if self.check_server_blacklisted(server):
+                    continue
                 if server in connected_servers:
                     continue
                 if not self._can_retry_addr(server, now=now):
@@ -588,6 +593,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         servers = list(set(filter_protocol(hostmap, allowed_protocols=self._allowed_protocols)) - connected_servers)
         random.shuffle(servers)
         for server in servers:
+            if self.check_server_blacklisted(server):
+                continue
             if not self._can_retry_addr(server, now=now):
                 continue
             return server
@@ -774,6 +781,9 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
     @ignore_exceptions  # do not kill outer taskgroup
     @log_exceptions
     async def _run_new_interface(self, server: ServerAddr):
+        if self.check_server_blacklisted(server):
+            self.logger.info(f"couldn't launch iface {server} -- Blacklisted")
+            return
         if (server in self.interfaces
                 or server in self._connecting_ifaces
                 or server in self._closing_ifaces):
@@ -890,7 +900,11 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             raise  # pass-through
         except aiorpcx.jsonrpc.CodeMessageError as e:
             self.logger.info(f"broadcast_transaction error [DO NOT TRUST THIS MESSAGE]: {repr(e)}")
-            raise TxBroadcastServerReturnedError(self.sanitize_tx_broadcast_response(e.message)) from e
+            sanitized_msg = self.sanitize_tx_broadcast_response(e.message)
+            if sanitized_msg in self.blacklist_errors:
+                server_str = self.interface.server.net_addr_str()
+                self.add_blacklist_server(server_str, sanitized_msg)
+            raise TxBroadcastServerReturnedError(sanitized_msg) from e
         except BaseException as e:  # intentional BaseException for sanity!
             self.logger.info(f"broadcast_transaction error2 [DO NOT TRUST THIS MESSAGE]: {repr(e)}")
             send_exception_to_crash_reporter(e)
@@ -906,6 +920,32 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             self.logger.info(f'error: could not broadcast {name} {tx.txid()}, {str(e)}')
         else:
             self.logger.info(f'success: broadcasting {name} {tx.txid()}')
+
+    @property
+    def blacklist_errors(self):
+        return ['tx-txlock-conflict']
+
+    def add_blacklist_server(self, server_str, msg='', time=0):
+        if server_str in self.blacklist:
+            self.logger.info(f'Blacklist add {server_str}:'
+                             f' already in blacklist')
+            return
+        self.blacklist.update({server_str: (msg, time)})
+        self.logger.info(f'Blacklist add {server_str}: msg="{msg}",'
+                          ' time={time}')
+        self.config.set_key('electrum_blacklist', self.blacklist, True)
+
+    def remove_blacklist_server(self, server_str):
+        if not server_str in self.blacklist:
+            self.logger.info(f'Blacklist remove {server_str}: not found')
+            return
+        msg, time = self.blacklist.pop(server_str, ('', 0))
+        self.logger.info(f'Blacklist remove {server_str}: msg="{msg}",'
+                         f' time={time}')
+
+    def check_server_blacklisted(self, server):
+        server_str = server.net_addr_str()
+        return server_str in self.blacklist
 
     @staticmethod
     def sanitize_tx_broadcast_response(server_msg) -> str:
@@ -1403,6 +1443,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         # if auto_connect is not set, or still no main interface, retry current
         if not self.is_connected() and not self.is_connecting():
             if self._can_retry_addr(self.default_server, urgent=True):
+                if self.check_server_blacklisted(self.default_server):
+                    return
                 await self.switch_to_interface(self.default_server)
 
     async def _maintain_sessions(self):
@@ -1417,6 +1459,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             with self.interfaces_lock: interfaces = list(self.interfaces.values())
             random.shuffle(interfaces)
             for iface in interfaces:
+                if self.check_server_blacklisted(iface.server):
+                    await self._close_interface(iface)
                 if not self.check_interface_against_healthy_spread_of_connected_servers(iface):
                     self.logger.info(f"disconnecting from {iface.server}. too many connected "
                                      f"servers already in bucket {iface.bucket_based_on_ipaddress()}")
