@@ -222,7 +222,7 @@ class ElectrumServersTab(Factory.BoxLayout):
         n = self.app.network
         for i in n.interfaces.copy():
             title = i.net_addr_str()
-            if i == n.interface.server:
+            if n.interface and i == n.interface.server:
                 descr = _('Server for addresses and transactions')
             else:
                 descr = ''
