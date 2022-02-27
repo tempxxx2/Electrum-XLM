@@ -719,15 +719,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def ukraine_info(self):
         info_uri = 'https://my.kuna.io/en/kunaid-ukraine'
-        info = (f'Feb 24th at 4AM Russian Federation'
+        info = (f'On Feb 24th at 4AM Russian Federation'
                 f' launched an all-in offensive against'
-                f' peacefull Ukrainian cities.'
+                f' peacefull Ukrainian cities and citizens.'
                 f'<br/><br/>'
                 f'Dash Electrum team lives in Ukraine and loves Ukraine.'
-                f' You can help our fight again Russian invasion'
+                f' You can help our fight against Russian invasion'
                 f' by donating at: '
                 f'<p><a href="{info_uri}">{info_uri}</a></p>'
-                f'<p>Slava Ukraini!  Geroyam Slava!</p>')
+                f'<p>Slava Ukraini!  Heroiam Slava!</p>')
         self.show_message(info, title='Dash Electrum | Ukraine info',
                           rich_text=True)
 
@@ -954,7 +954,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
-        help_menu.addAction('Ukrainians info', self.ukraine_info)
+        help_menu.addAction('Help Ukraine', self.ukraine_info)
         help_menu.addAction(_("&About"), self.show_about)
         help_menu.addAction(_("&Check for updates"), self.show_update_check)
         help_menu.addAction(_("&Official website"), lambda: webopen("https://electrum.dash.org"))
