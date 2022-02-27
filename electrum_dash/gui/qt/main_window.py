@@ -719,7 +719,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def ukraine_info(self):
         info_uri = 'https://my.kuna.io/en/kunaid-ukraine'
-        info = (f'On Feb 24th at 4AM Russian Federation'
+        info = (f'On Feb 24th at 4AM, Russian Federation'
                 f' launched an all-in offensive against'
                 f' peacefull Ukrainian cities and citizens.'
                 f'<br/><br/>'
