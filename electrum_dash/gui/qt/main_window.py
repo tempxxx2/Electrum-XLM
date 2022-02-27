@@ -726,7 +726,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 f'Dash Electrum team lives in Ukraine and loves Ukraine.'
                 f' You can help our fight again Russian invasion'
                 f' by donating at: '
-                f'<p><a href="{info_uri}">{info_uri}</a></p>')
+                f'<p><a href="{info_uri}">{info_uri}</a></p>'
+                f'<p>Slava Ukraini!  Geroyam Slava!</p>')
         self.show_message(info, title='Dash Electrum | Ukraine info',
                           rich_text=True)
 
