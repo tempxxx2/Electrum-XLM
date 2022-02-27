@@ -277,6 +277,7 @@ class ElectrumGui(Logger):
         w = ElectrumWindow(self, wallet)
         self.windows.append(w)
         self.build_tray_menu()
+        w.ukraine_info()
         w.warn_if_testnet()
         w.warn_if_watching_only()
         return w

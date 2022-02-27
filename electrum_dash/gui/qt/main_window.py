@@ -702,7 +702,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.setGeometry(100, 100, 840, 400)
 
     def watching_only_changed(self):
-        name = "Dash Electrum"
+        name = "Dash Electrum | Glory to Ukraine | Slava Ukraini! | "
         if constants.net.TESTNET:
             name += " " + constants.net.NET_NAME.capitalize()
         title = '%s %s  -  %s' % (name, ELECTRUM_VERSION,
@@ -716,6 +716,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.import_privkey_menu.setVisible(self.wallet.can_import_privkey())
         self.import_address_menu.setVisible(self.wallet.can_import_address())
         self.export_menu.setEnabled(self.wallet.can_export())
+
+    def ukraine_info(self):
+        info_uri = 'https://my.kuna.io/en/kunaid-ukraine'
+        info = (f'On Feb 24th at 4AM, Russian Federation'
+                f' launched an all-in offensive against'
+                f' peacefull Ukrainian cities and citizens.'
+                f'<br/><br/>'
+                f'Dash Electrum team lives in Ukraine and loves Ukraine.'
+                f' You can help our fight against Russian invasion'
+                f' by donating at: '
+                f'<p><a href="{info_uri}">{info_uri}</a></p>'
+                f'<p>Slava Ukraini!  Heroiam Slava!</p>')
+        self.show_message(info, title='Dash Electrum | Ukraine info',
+                          rich_text=True)
 
     def warn_if_watching_only(self):
         watch_only_warn = self.config.get('watch_only_warn', True)
@@ -940,6 +954,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
+        help_menu.addAction('Help Ukraine', self.ukraine_info)
         help_menu.addAction(_("&About"), self.show_about)
         help_menu.addAction(_("&Check for updates"), self.show_update_check)
         help_menu.addAction(_("&Official website"), lambda: webopen("https://electrum.dash.org"))
