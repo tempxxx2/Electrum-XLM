@@ -1093,6 +1093,19 @@ class ElectrumWindow(App, Logger):
         self.use_change = self.wallet.use_change
         self.electrum_config.save_last_wallet(wallet)
         self.request_focus_for_main_view()
+        info_uri = 'https://my.kuna.io/en/kunaid-ukraine'
+        info = (f'On Feb 24th at 4AM, Russian Federation'
+                f' launched an all-in offensive against'
+                f' peacefull Ukrainian cities and citizens.'
+                f'\n\n'
+                f'Dash Electrum team lives in Ukraine and loves Ukraine.'
+                f' You can help our fight against Russian invasion'
+                f' by donating at: '
+                f'\n\n'
+                f'[color=6666ff][ref={info_uri}]{info_uri}[/ref][/color]'
+                f'\n\n'
+                f'Slava Ukraini!  Heroiam Slava!')
+        self.show_info_dlg(info, title='Dash Electrum | Ukraine info')
 
     def request_focus_for_main_view(self):
         if platform != 'android':
@@ -1333,8 +1346,10 @@ class ElectrumWindow(App, Logger):
             pos = (win.center[0], win.center[1] - (info_bubble.height/2))
         info_bubble.show(pos, duration, width, modal=modal, exit=exit)
 
-    def show_info_dlg(self, msg):
+    def show_info_dlg(self, msg, *, title=None):
         d = AppInfoDialog(msg)
+        if title is not None:
+            d.title = title
         d.open()
 
     def show_error_dlg(self, msg):
