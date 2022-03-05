@@ -306,6 +306,14 @@ class SettingsDialog(WindowModalDialog):
         outrounding_cb.stateChanged.connect(on_outrounding)
         tx_widgets.append((outrounding_cb, None))
 
+        save_bef_send_cb = QCheckBox(_('Save local transaction before send'))
+        save_bef_send = self.config.get('save_tx_before_send', False)
+        save_bef_send_cb.setChecked(save_bef_send)
+        def on_save_bef_send(x):
+            self.config.set_key('save_tx_before_send', bool(x))
+        save_bef_send_cb.stateChanged.connect(on_save_bef_send)
+        tx_widgets.append((save_bef_send_cb, None))
+
         block_explorers = sorted(util.block_explorer_info().keys())
         BLOCK_EX_CUSTOM_ITEM = _("Custom URL")
         if BLOCK_EX_CUSTOM_ITEM in block_explorers:  # malicious translation?

@@ -2259,12 +2259,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
     def broadcast_transaction(self, tx: Transaction,
                               pr: Optional[paymentrequest.PaymentRequest]):
 
+        need_broadcast = True if not pr or pr.need_broadcast_tx else False
+        save_bef_send = self.config.get('save_tx_before_send', False)
+        err_msg_info = ''
+        if need_broadcast and save_bef_send:
+            self.wallet.add_transaction(tx)
+            self.need_update.set()
+            err_msg_info = '\n\n' + _('Transaction is saved to local history')
         def broadcast_thread():
             # non-GUI thread
             if pr and pr.has_expired():
                 self.payment_request = None
                 return False, _("Invoice has expired")
-            need_broadcast = True if not pr or pr.need_broadcast_tx else False
             txid = tx.txid()
             try:
                 if need_broadcast:
@@ -2274,9 +2280,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                     self.logger.info(f'Do not broadcast: {txid}, send bip70'
                                      f' Payment msg to: {pr.payment_url}')
             except TxBroadcastError as e:
-                return False, e.get_message_for_gui()
+                err_msg = e.get_message_for_gui()
+                return False, f'{err_msg}{err_msg_info}'
             except BestEffortRequestFailed as e:
-                return False, repr(e)
+                err_msg = repr(e)
+                return False, f'{err_msg}{err_msg_info}'
             # success
             if pr:
                 self.payment_request = None
