@@ -1,3 +1,10 @@
+# Release 4.1.5.2
+
+ * sign_releases: build PPA in docker container #333
+ * Qt: add option to save local transaction before send #334
+ * network: remove tx-txlock-conflict from blacklist errors #335
+
+
 # Release 4.1.5.1
 
  * trezor plugin: allow skip session clear on wallet close #292
