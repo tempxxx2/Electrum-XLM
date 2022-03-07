@@ -923,7 +923,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
 
     @property
     def blacklist_errors(self):
-        return ['tx-txlock-conflict']
+        return []
 
     def add_blacklist_server(self, server_str, msg='', time=0):
         if server_str in self.blacklist:
