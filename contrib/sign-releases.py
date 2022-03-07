@@ -101,7 +101,7 @@ import hashlib
 import tempfile
 import json
 import zipfile
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, CalledProcessError, Popen, PIPE, getoutput
 from functools import cmp_to_key
 from time import localtime, strftime
 
@@ -131,6 +131,8 @@ HOME_DIR = os.path.expanduser('~')
 CONFIG_NAME = '.sign-releases'
 SEARCH_COUNT = 1
 SHA_FNAME = 'SHA256SUMS.txt'
+MAIN_PATH = os.path.dirname(os.path.realpath(__file__))
+BUILD_PPA_PATH = os.path.join(MAIN_PATH, 'build-linux', 'ppa', 'build_ppa.sh')
 
 # make_ppa related definitions
 PPA_SERIES = {
@@ -287,7 +289,6 @@ class ChdirTemporaryDirectory(object):
 class SignApp(object):
     def __init__(self, **kwargs):
         """Get app settings from options, from curdir git, from config file"""
-        ask_passphrase = kwargs.pop('ask_passphrase', None)
         self.sign_drafts = kwargs.pop('sign_drafts', False)
         self.force = kwargs.pop('force', False)
         self.tag_name = kwargs.pop('tag_name', None)
@@ -386,10 +387,9 @@ class SignApp(object):
 
         self.uid = ', '.join(keylist[0].get('uids', ['No uid found']))
 
-        if ask_passphrase:
-            while not self.passphrase:
-                self.read_passphrase()
-        elif not self.check_key():
+        if self.keyid:
+            if getoutput('ps aux | grep gpg-agent | grep -v grep'):
+                getoutput('gpg-connect-agent reloadagent /bye')
             while not self.passphrase:
                 self.read_passphrase()
 
@@ -610,6 +610,17 @@ class SignApp(object):
                 gh_release_edit(repo, tag, name=version)
                 gh_release_edit(repo, tag, body=changes)
 
+            print(f'Exporting GPG keys for {self.keyid}, {self.uid}')
+            pubk = self.gpg.export_keys([self.keyid],
+                                        passphrase=self.passphrase)
+            with open(os.open('pub.gpg', os.O_CREAT | os.O_WRONLY, 0o600),
+                      'w') as f:
+                f.write(pubk)
+            privk = self.gpg.export_keys([self.keyid], True,
+                                         passphrase=self.passphrase)
+            with open(os.open('priv.gpg', os.O_CREAT | os.O_WRONLY, 0o600),
+                      'w') as f:
+                f.write(privk)
             os.chdir(sdist_dir)
             print('  Making PPAs for series: %s' % (', '.join(series)))
             now_formatted = strftime('%a, %d %b %Y %H:%M:%S %z', localtime())
@@ -634,10 +645,17 @@ class SignApp(object):
 
                 print('  Make %s ppa, Signing with key: %s, %s' %
                     (ppa_version, self.keyid, self.uid))
+                _env = os.environ.copy()
+                _env.update({'KEYID': self.keyid})
                 if self.verbose:
-                    check_call(['debuild', '-S'])
+                    p = Popen(['/bin/bash', BUILD_PPA_PATH], stdin=PIPE,
+                              env=_env)
                 else:
-                    check_call(['debuild', '-S'], stdout=FNULL)
+                    p = Popen(['/bin/bash', BUILD_PPA_PATH], stdin=PIPE,
+                              stdout=FNULL, env=_env)
+                p.stdin.write(f'{self.passphrase}\n'.encode('utf-8'))
+                p.stdin.flush()
+                p.wait()
                 print('  Upload %s ppa to %s' % (ppa_version, self.ppa))
                 if self.dry_run:
                     print('  Dry run:  dput ppa:%s %s' % (self.ppa, ppa_chgs))
@@ -645,6 +663,9 @@ class SignApp(object):
                     check_call(['dput', ('ppa:%s' % self.ppa), ppa_chgs],
                          stdout=FNULL)
                 print('\n')
+            os.chdir('..')
+            os.unlink('pub.gpg')
+            os.unlink('priv.gpg')
 
     def search_and_sign_unsinged(self):
         """Search through last 'count' releases with assets without
@@ -741,8 +762,6 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
               help='Do not make launchpad PPA')
 @click.option('-n', '--dry-run', is_flag=True,
               help='Do not uload signed files')
-@click.option('-p', '--ask-passphrase', is_flag=True,
-              help='Ask to enter passphrase')
 @click.option('-P', '--only-ppa', is_flag=True,
               help='Only make launchpad PPA (need --tag-name)')
 @click.option('--build-release-ppa', is_flag=True,
