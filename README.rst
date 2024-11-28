@@ -16,7 +16,8 @@ If you came here from `https://electrum-dash.org`
 
 ❗❗❗ DON'T ATTEMPT TO RUN ANY SOFTWARE FROM THIS WEBSITE! ❗❗❗
 
-DASH has no control over electrum-dash.org domain and it is currently being used for distribution of FAKE and MALICIOUS software that will hijack your keys and seed phrase!
+DASH has no control over electrum-dash.org domain and it is currently being used
+for distribution of FAKE and MALICIOUS software thatwill hijack your keys and seed phrase!
 
 If you download and run the software from this website, YOUR KEYS AND SEED PHRASE WILL BE LEAKED TO SCAMMERS 🚨
 
