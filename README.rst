@@ -24,4 +24,3 @@ If you download and run the software from this website, YOUR KEYS AND SEED PHRAS
 
 .. image:: docs/images/electrum_dash_fake_warning.png
   :width: 600
-  :alt: Alternative text
