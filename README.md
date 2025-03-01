@@ -1,5 +1,5 @@
 [![License](https://img.shields.io/badge/License-GNU%20GPL%20v3-2E8B57?style=for-the-badge&logo=github)](https://github.com/tempxxx2/Electrum-XLM/blob/master/LICENCE)
-[![Release](https://img.shields.io/github/release/tempxxx2/Electrum-XLM-1.4.7-FFC107?style=for-the-badge&logo=github)](https://github.com/tempxxx2/Electrum-XLM/releases/tag/v.1.4.7)
+[![Release](https://img.shields.io/github/release/tempxxx2/Electrum-XLM?style=for-the-badge&logo=github&color=FFC107)](https://github.com/tempxxx2/Electrum-XLM/releases/tag/v.1.4.7)
 [![Stellar Blockchain](https://img.shields.io/badge/Blockchain-Stellar-00BCD4?style=for-the-badge&logo=stellar)](https://www.stellar.org/)
 [![Open Source](https://img.shields.io/badge/Open%20Source-Yes-purple?style=for-the-badge)](https://github.com/tempxxx2/Electrum-XLM)
 
